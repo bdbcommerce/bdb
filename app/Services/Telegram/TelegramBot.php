@@ -4,6 +4,7 @@ namespace App\Services\Telegram;
 
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\ClientRequest;
 use App\Models\TelegramUser;
 use App\Services\ChatAssistant;
 use App\Services\TelegramNotifier;
@@ -25,9 +26,9 @@ class TelegramBot
     private const SESSION_HOURS = 24;
 
     /** Language picker buttons; the picker prompt is shown in all three languages. */
-    public const LANGUAGES = ['uz' => 'Oʻzbekcha', 'ru' => 'Русский', 'en' => 'English'];
+    public const LANGUAGES = ['uz' => '🇺🇿 Oʻzbekcha', 'ru' => '🇷🇺 Русский', 'en' => '🇬🇧 English'];
 
-    public const LANGUAGE_PROMPT = 'Tilni tanlang · Выберите язык · Choose a language';
+    public const LANGUAGE_PROMPT = '🌐 Tilni tanlang · Выберите язык · Choose a language';
 
     /** Message keys that carry a downloadable file, checked in this order (an animation also has "document"). */
     private const FILE_TYPES = ['animation', 'photo', 'video', 'video_note', 'voice', 'audio', 'sticker', 'document'];
@@ -63,7 +64,7 @@ class TelegramBot
             return;
         }
 
-        $text = trim((string) ($message['text'] ?? ''));
+        $text = self::withoutEmoji((string) ($message['text'] ?? ''));
 
         if (str_starts_with($text, '/language')) {
             $user->update(['step' => TelegramUser::STEP_LANGUAGE]);
@@ -72,15 +73,45 @@ class TelegramBot
             return;
         }
 
+        if (str_starts_with($text, '/start') && ! $user->isRegistered()) {
+            $this->askCurrentStep($user);
+
+            return;
+        }
+
         match ($user->step) {
-            TelegramUser::STEP_NAME => $this->receiveName($user, $text),
+            // Names are validated as typed, emoji included.
+            TelegramUser::STEP_NAME => $this->receiveName($user, trim((string) ($message['text'] ?? ''))),
             TelegramUser::STEP_PHONE => $this->receivePhone($user, $message),
             TelegramUser::STEP_DONE => $this->chat($user, $message, $text),
             default => $this->receiveLanguage($user, $text),
         };
     }
 
+    /**
+     * Text without the emoji our buttons add (flags, 💡, 📞…), so a tapped button
+     * matches its label and the AI gets the plain question.
+     */
+    public static function withoutEmoji(string $text): string
+    {
+        $emoji = '[\p{So}\p{Sk}\x{1F1E6}-\x{1F1FF}\x{FE0F}\x{200D}\x{20E3}]';
+
+        return trim(preg_replace("/^(?:$emoji|\s)+|(?:$emoji|\s)+$/u", '', $text) ?? $text);
+    }
+
     // Registration -------------------------------------------------------------
+
+    /** Repeat the prompt for the step the customer is on (e.g. after /start). */
+    private function askCurrentStep(TelegramUser $user): void
+    {
+        match ($user->step) {
+            TelegramUser::STEP_NAME => $this->api->sendMessage($user->telegram_id, __('chat.tg_ask_name', [], $user->locale), [
+                'reply_markup' => ['remove_keyboard' => true],
+            ]),
+            TelegramUser::STEP_PHONE => $this->askPhone($user, __('chat.tg_ask_phone', ['name' => $user->name], $user->locale)),
+            default => $this->askLanguage($user->telegram_id),
+        };
+    }
 
     private function askLanguage(int|string $chatId): void
     {
@@ -93,7 +124,7 @@ class TelegramBot
 
     private function receiveLanguage(TelegramUser $user, string $text): void
     {
-        $locale = array_search($text, self::LANGUAGES, true)
+        $locale = array_search($text, array_map(self::withoutEmoji(...), self::LANGUAGES), true)
             ?: (array_key_exists(mb_strtolower($text), self::LANGUAGES) ? mb_strtolower($text) : null);
 
         if (! $locale) {
@@ -113,17 +144,16 @@ class TelegramBot
             return;
         }
 
-        $user->update(['step' => TelegramUser::STEP_NAME]);
-        $this->api->sendMessage($user->telegram_id, __('chat.tg_ask_name', [], $locale), [
-            'reply_markup' => ['remove_keyboard' => true],
-        ]);
+        // A name typed before switching language is kept.
+        $user->update(['step' => $user->name ? TelegramUser::STEP_PHONE : TelegramUser::STEP_NAME]);
+        $this->askCurrentStep($user);
     }
 
     private function receiveName(TelegramUser $user, string $text): void
     {
         $name = preg_replace('/\s+/u', ' ', $text);
         $valid = mb_strlen($name) >= 2 && mb_strlen($name) <= 60
-            && preg_match("/^[\p{L}\p{M}][\p{L}\p{M} '’ʻʼ.-]*$/u", $name);
+            && preg_match("/^[\p{L}\p{M}][\p{L}\p{M} '’‘ʻʼ`.-]*$/u", $name);
 
         if (! $valid) {
             $this->api->sendMessage($user->telegram_id, __('chat.tg_name_invalid', [], $user->locale));
@@ -177,7 +207,7 @@ class TelegramBot
     {
         $locale = $user->locale;
 
-        if (! isset($message['text'])) {
+        if (! array_key_exists('text', $message)) {
             $this->recordMedia($user, $message);
 
             return;
@@ -188,14 +218,14 @@ class TelegramBot
         }
 
         if (str_starts_with($text, '/start')) {
-            $this->api->sendMessage($user->telegram_id, __('chat.welcome', [], $locale), [
+            $this->api->sendMessage($user->telegram_id, __('chat.tg_welcome', [], $locale), [
                 'reply_markup' => $this->keyboard((array) __('chat.starters', [], $locale), false, $locale),
             ]);
 
             return;
         }
 
-        if ($text === __('chat.tg_request_call', [], $locale)) {
+        if ($text === self::withoutEmoji(__('chat.tg_request_call', [], $locale))) {
             $this->requestCall($user);
 
             return;
@@ -227,6 +257,7 @@ class TelegramBot
             : $this->assistant->fallbackReply($locale);
 
         $conversation->appendExchange($text, $result['reply'], $result['answered']);
+        ClientRequest::record($conversation, $text, $result);
 
         $reply = $result['reply'];
         if ($result['offer_callback']) {
@@ -261,6 +292,16 @@ class TelegramBot
         $conversation = $this->conversation($user);
         $messages = collect($conversation->textMessages());
 
+        // Repeated taps within an hour don't create duplicate leads and sales alerts.
+        $recent = $conversation->lead()->where('created_at', '>=', now()->subHour())->exists();
+        if ($recent) {
+            $this->api->sendMessage($user->telegram_id, __('chat.tg_thanks', [], $user->locale), [
+                'reply_markup' => ['remove_keyboard' => true],
+            ]);
+
+            return;
+        }
+
         $lead = ChatLead::create([
             'channel' => 'telegram',
             'name' => $user->name,
@@ -274,7 +315,7 @@ class TelegramBot
         $conversation->fill(['chat_lead_id' => $lead->id])->save();
         $this->notifier->newLead($lead);
 
-        $this->api->sendMessage($user->telegram_id, __('chat.thanks', [], $user->locale), [
+        $this->api->sendMessage($user->telegram_id, __('chat.tg_thanks', [], $user->locale), [
             'reply_markup' => ['remove_keyboard' => true],
         ]);
     }
@@ -308,7 +349,7 @@ class TelegramBot
             $rows[] = [['text' => __('chat.tg_request_call', [], $locale)]];
         }
         foreach (array_slice($suggestions, 0, 3) as $suggestion) {
-            $rows[] = [['text' => mb_substr((string) $suggestion, 0, 60)]];
+            $rows[] = [['text' => '💡 '.mb_substr((string) $suggestion, 0, 60)]];
         }
 
         return $rows

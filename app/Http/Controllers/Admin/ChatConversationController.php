@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
+use App\Services\ChatAssistant;
 use App\Services\Telegram\TelegramApi;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class ChatConversationController extends Controller
 {
@@ -23,8 +26,8 @@ class ChatConversationController extends Controller
 
     public function index(Request $request)
     {
-        $filter = array_key_exists($request->query('filter'), self::FILTERS) ? $request->query('filter') : 'all';
-        $channel = array_key_exists($request->query('channel'), ChatConversation::CHANNELS) ? $request->query('channel') : null;
+        $filter = is_string($f = $request->query('filter')) && array_key_exists($f, self::FILTERS) ? $f : 'all';
+        $channel = is_string($ch = $request->query('channel')) && array_key_exists($ch, ChatConversation::CHANNELS) ? $ch : null;
 
         $conversations = ChatConversation::query()
             ->with('telegramUser')
@@ -57,7 +60,10 @@ class ChatConversationController extends Controller
     {
         abort_unless($chatConversation->channel === 'telegram' && $chatConversation->external_id, 404);
 
-        $text = trim($request->validate(['message' => ['required', 'string', 'max:4000']])['message']);
+        $text = trim($request->validate(
+            ['message' => ['required', 'string', 'max:4000', 'not_regex:/\[TO FILL/i']],
+            ['message.not_regex' => 'Replace the [TO FILL: …] placeholders with real information before sending.'],
+        )['message']);
 
         if (! $api->sendMessage($chatConversation->external_id, $text)) {
             return back()->withInput()->with('telegram_error',
@@ -67,6 +73,29 @@ class ChatConversationController extends Controller
         $chatConversation->appendAdminMessage($text, $request->user()->name);
 
         return redirect()->route('admin.chat-conversations.show', $chatConversation)->with('success', 'Message sent to the customer.');
+    }
+
+    /** An AI-drafted reply for the admin to edit before sending (JSON). */
+    public function suggest(ChatConversation $chatConversation, ChatAssistant $assistant)
+    {
+        abort_unless($chatConversation->channel === 'telegram' && $chatConversation->external_id, 404);
+
+        $history = collect($chatConversation->textMessages())
+            ->map(fn (array $m) => ['role' => $m['role'] === 'user' ? 'user' : 'assistant', 'content' => $m['content']])
+            ->slice(-12)
+            ->values()
+            ->all();
+        while ($history && $history[0]['role'] !== 'user') {
+            array_shift($history);
+        }
+
+        $reply = $history && config('services.gemini.key')
+            ? $assistant->suggestStaffReply($history, $chatConversation->locale)
+            : null;
+
+        return $reply
+            ? response()->json(['reply' => $reply])
+            : response()->json(['message' => 'The AI could not suggest a reply right now.'], 422);
     }
 
     /** Shows a file a Telegram customer sent, fetched from Telegram on demand. */
@@ -83,8 +112,11 @@ class ChatConversationController extends Controller
         return response($file['body'], 200, [
             'Content-Type' => $type,
             // Pictures, video and audio open in the browser; anything else is downloaded.
-            'Content-Disposition' => (preg_match('#^(image|video|audio)/#', $type) ? 'inline' : 'attachment')
-                .'; filename="'.addslashes($file['name']).'"',
+            'Content-Disposition' => HeaderUtils::makeDisposition(
+                preg_match('#^(image|video|audio)/#', $type) ? HeaderUtils::DISPOSITION_INLINE : HeaderUtils::DISPOSITION_ATTACHMENT,
+                $name = str_replace(['/', '\\', '%'], '_', preg_replace('/[\x00-\x1F\x7F]/', '', $file['name'])) ?: 'file',
+                Str::ascii($name) !== '' ? preg_replace('/[^\x20-\x7E]/', '_', Str::ascii($name)) : 'file',
+            ),
             'Cache-Control' => 'private, max-age=86400',
             'X-Content-Type-Options' => 'nosniff',
             // Never run anything a customer uploaded (e.g. an HTML or SVG document).

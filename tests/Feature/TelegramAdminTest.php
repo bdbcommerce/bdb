@@ -222,6 +222,23 @@ class TelegramAdminTest extends TestCase
         $this->assertStringStartsWith('attachment', $response->headers->get('Content-Disposition'));
     }
 
+    public function test_file_names_are_safe_in_the_download_header(): void
+    {
+        Http::fake([
+            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => "documents/счёт \"O'zbek\"\r\nX-Evil: 1.pdf"]]),
+            'api.telegram.org/file/*' => Http::response('%PDF', 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertOk();
+        $disposition = $response->headers->get('Content-Disposition');
+
+        $this->assertStringStartsWith('attachment; filename=', $disposition);
+        $this->assertStringNotContainsString("\r", $disposition);
+        $this->assertStringNotContainsString("\n", $disposition);
+        $this->assertStringContainsString("filename*=utf-8''", $disposition);
+        $this->assertNull($response->headers->get('X-Evil'));
+    }
+
     public function test_missing_media_returns_404(): void
     {
         Http::fake(['api.telegram.org/*' => Http::response(['ok' => false, 'description' => 'file is too big'], 400)]);

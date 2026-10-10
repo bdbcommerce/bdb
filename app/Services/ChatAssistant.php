@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Article;
 use App\Models\Brand;
+use App\Models\ClientRequest;
 use App\Models\CompanyInfo;
 use App\Models\Customer;
 use App\Models\Industry;
@@ -34,25 +35,191 @@ class ChatAssistant
             'suggestions' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
             'offer_callback' => ['type' => 'BOOLEAN'],
             'answered' => ['type' => 'BOOLEAN'],
+            // For the admin "Client requests" inbox:
+            'knowledge_id' => ['type' => 'INTEGER'],
+            'topic' => ['type' => 'STRING'],
+            'category' => ['type' => 'STRING'],
         ],
-        'required' => ['reply', 'suggestions', 'offer_callback', 'answered'],
-        'propertyOrdering' => ['reply', 'suggestions', 'offer_callback', 'answered'],
+        'required' => ['reply', 'suggestions', 'offer_callback', 'answered', 'knowledge_id', 'topic', 'category'],
+        'propertyOrdering' => ['reply', 'suggestions', 'offer_callback', 'answered', 'knowledge_id', 'topic', 'category'],
     ];
+
+    /** Categories the AI tags a question with: knowledge types plus non-request kinds. */
+    public static function categories(): array
+    {
+        return [...array_keys(KnowledgeEntry::TYPES), 'other', ...ClientRequest::SKIPPED_CATEGORIES];
+    }
 
     /**
      * @param  array<int, array{role: string, content: string}>  $history  roles: user|assistant
      * @param  bool  $brief  one or two short sentences (Telegram)
-     * @return array{reply: string, suggestions: array<int, string>, offer_callback: bool, answered: bool}
+     * @return array{reply: string, suggestions: array<int, string>, offer_callback: bool, answered: bool, knowledge_id: int|null, topic: string|null, category: string|null}
      */
     public function reply(array $history, string $locale, ?string $pageTitle = null, bool $brief = false): array
+    {
+        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief), $history, self::REPLY_SCHEMA);
+
+        if (! is_array($data) || empty($data['reply'])) {
+            return $this->fallbackReply($locale);
+        }
+
+        $category = (string) ($data['category'] ?? '');
+
+        return [
+            'reply' => $brief ? self::shorten((string) $data['reply'], self::BRIEF_MAX) : (string) $data['reply'],
+            'suggestions' => array_slice(array_map('strval', $data['suggestions'] ?? []), 0, 3),
+            'offer_callback' => (bool) ($data['offer_callback'] ?? false),
+            'answered' => (bool) ($data['answered'] ?? true),
+            'knowledge_id' => ($id = (int) ($data['knowledge_id'] ?? 0)) > 0 ? $id : null,
+            'topic' => ClientRequest::normalizeTopic($data['topic'] ?? null),
+            'category' => in_array($category, self::categories(), true) ? $category : 'other',
+        ];
+    }
+
+    /** @return array{reply: string, suggestions: array<int, string>, offer_callback: bool, answered: bool, knowledge_id: null, topic: null, category: null} */
+    public function fallbackReply(string $locale): array
+    {
+        return [
+            'reply' => __('chat.error', [], $locale),
+            'suggestions' => [],
+            'offer_callback' => true,
+            'answered' => false,
+            'knowledge_id' => null,
+            'topic' => null,
+            'category' => null,
+        ];
+    }
+
+    /**
+     * Draft a knowledge base entry (uz/ru/en) that answers customer questions, for an admin to review.
+     * Uses only website data; facts it lacks are left as [TO FILL: …] placeholders.
+     *
+     * @param  array<int, string>  $questions
+     * @return array{type: string, question: array<string, string>, answer: array<string, string>, keywords: string}|null
+     */
+    public function draftKnowledge(array $questions): ?array
+    {
+        $types = implode(', ', array_keys(KnowledgeEntry::TYPES));
+        $asked = implode("\n", array_map(fn ($q) => '- '.$q, array_slice($questions, 0, 15)));
+
+        $system = <<<PROMPT
+        You help staff of BDB, an automatic identification (AIDC) company in Uzbekistan, write knowledge base entries
+        that the website and Telegram AI assistant will use to answer customers.
+
+        Customers asked these questions, which the assistant could not answer:
+        {$asked}
+
+        Write ONE entry that answers them:
+        - question_uz / question_ru / question_en: one clear general question in Uzbek (Latin script), Russian and English.
+        - answer_uz / answer_ru / answer_en: a short, friendly answer (1-4 sentences) in each language.
+        - Use only facts from the WEBSITE DATA below. Where a fact is missing (price, stock, terms, a model, a date),
+          write a placeholder in square brackets, e.g. [TO FILL: delivery time to the regions]. Never invent facts.
+        - type: one of {$types}.
+        - keywords: comma-separated search words in all three languages.
+
+        WEBSITE DATA
+        {$this->knowledge('en')}
+        PROMPT;
+
+        $data = $this->generate($system, [['role' => 'user', 'content' => 'Draft the entry.']], [
+            'type' => 'OBJECT',
+            'properties' => array_fill_keys(
+                ['type', 'question_uz', 'question_ru', 'question_en', 'answer_uz', 'answer_ru', 'answer_en', 'keywords'],
+                ['type' => 'STRING'],
+            ),
+            'required' => ['type', 'question_uz', 'question_ru', 'question_en', 'answer_uz', 'answer_ru', 'answer_en', 'keywords'],
+        ], temperature: 0.3, maxTokens: 2048);
+
+        if (! is_array($data) || empty($data['answer_en'])) {
+            return null;
+        }
+
+        return [
+            'type' => array_key_exists($data['type'] ?? '', KnowledgeEntry::TYPES) ? $data['type'] : 'faq',
+            'question' => ['uz' => (string) $data['question_uz'], 'ru' => (string) $data['question_ru'], 'en' => (string) $data['question_en']],
+            'answer' => ['uz' => (string) $data['answer_uz'], 'ru' => (string) $data['answer_ru'], 'en' => (string) $data['answer_en']],
+            'keywords' => mb_substr((string) $data['keywords'], 0, 255),
+        ];
+    }
+
+    /**
+     * Which of these customer questions does the knowledge entry answer?
+     *
+     * @param  array<int, string>  $questions  id => question
+     * @return array<int, int> ids of the answered questions
+     */
+    public function matchQuestions(KnowledgeEntry $entry, array $questions): array
+    {
+        if ($questions === []) {
+            return [];
+        }
+
+        $list = collect($questions)->map(fn ($q, $id) => "#{$id}: ".mb_substr($q, 0, 300))->implode("\n");
+        $system = <<<PROMPT
+        A BDB staff member wrote this knowledge base entry:
+        Q: {$entry->getTranslation('question', 'en', true)} / {$entry->getTranslation('question', 'ru', true)}
+        A: {$entry->getTranslation('answer', 'en', true)}
+
+        Customer questions (any language):
+        {$list}
+
+        Return the ids of the questions this entry fully answers. Leave out questions it only touches on.
+        PROMPT;
+
+        $data = $this->generate($system, [['role' => 'user', 'content' => 'Which ids are answered?']], [
+            'type' => 'OBJECT',
+            'properties' => ['answered_ids' => ['type' => 'ARRAY', 'items' => ['type' => 'INTEGER']]],
+            'required' => ['answered_ids'],
+        ], temperature: 0.0);
+
+        return array_values(array_intersect(array_map('intval', (array) ($data['answered_ids'] ?? [])), array_keys($questions)));
+    }
+
+    /**
+     * A reply a staff member can edit and send to a Telegram customer, from the conversation so far.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history  roles: user|assistant (assistant = Belgi or staff)
+     */
+    public function suggestStaffReply(array $history, string $locale): ?string
+    {
+        $language = self::LANGUAGES[$locale] ?? 'English';
+        $system = <<<PROMPT
+        You draft a reply for a BDB staff member to send to a customer in Telegram.
+        BDB is an automatic identification (AIDC) company in Uzbekistan. The conversation so far is below
+        (assistant turns are the AI assistant or staff).
+
+        - Write in {$language}, as a polite human from the BDB team, 1-3 short sentences, plain text.
+        - Use only facts from the WEBSITE DATA. For anything missing (price, stock, delivery time), put a
+          placeholder for the staff member to fill, e.g. [TO FILL: price], instead of inventing it.
+
+        WEBSITE DATA
+        {$this->knowledge($locale)}
+        PROMPT;
+
+        $history[] = ['role' => 'user', 'content' => '(Staff: draft the next reply to the customer.)'];
+        $data = $this->generate($system, $history, [
+            'type' => 'OBJECT',
+            'properties' => ['reply' => ['type' => 'STRING']],
+            'required' => ['reply'],
+        ], temperature: 0.4);
+
+        return filled($data['reply'] ?? null) ? trim((string) $data['reply']) : null;
+    }
+
+    /**
+     * One structured Gemini call. Never throws: returns null on any failure.
+     *
+     * @param  array<int, array{role: string, content: string}>  $contents  roles: user|assistant
+     */
+    private function generate(string $system, array $contents, array $schema, float $temperature = 0.2, int $maxTokens = 1024): ?array
     {
         $model = config('services.gemini.model');
 
         $generationConfig = [
-            'temperature' => 0.2,
-            'maxOutputTokens' => 1024,
+            'temperature' => $temperature,
+            'maxOutputTokens' => $maxTokens,
             'responseMimeType' => 'application/json',
-            'responseSchema' => self::REPLY_SCHEMA,
+            'responseSchema' => $schema,
         ];
         if (str_contains($model, 'flash')) {
             $generationConfig['thinkingConfig'] = ['thinkingBudget' => 0];
@@ -62,49 +229,29 @@ class ChatAssistant
             $response = Http::timeout(25)
                 ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
                 ->post(sprintf(self::ENDPOINT, $model), [
-                    'system_instruction' => ['parts' => [['text' => $this->systemPrompt($locale, $pageTitle, $brief)]]],
+                    'system_instruction' => ['parts' => [['text' => $system]]],
                     'contents' => array_map(fn (array $m) => [
                         'role' => $m['role'] === 'assistant' ? 'model' : 'user',
                         'parts' => [['text' => $m['content']]],
-                    ], $history),
+                    ], $contents),
                     'generationConfig' => $generationConfig,
                 ]);
         } catch (ConnectionException $e) {
-            // Timeout or network failure: answer with the callback offer instead of a 500.
-            Log::warning('Gemini chat request failed', ['error' => $e->getMessage()]);
+            // Timeout or network failure: callers fall back instead of a 500.
+            Log::warning('Gemini request failed', ['error' => $e->getMessage()]);
 
-            return $this->fallbackReply($locale);
+            return null;
         }
 
         if ($response->failed()) {
-            Log::warning('Gemini chat request failed', ['status' => $response->status(), 'body' => $response->body()]);
+            Log::warning('Gemini request failed', ['status' => $response->status(), 'body' => $response->body()]);
 
-            return $this->fallbackReply($locale);
+            return null;
         }
 
         $data = json_decode((string) $response->json('candidates.0.content.parts.0.text'), true);
 
-        if (! is_array($data) || empty($data['reply'])) {
-            return $this->fallbackReply($locale);
-        }
-
-        return [
-            'reply' => $brief ? self::shorten((string) $data['reply'], self::BRIEF_MAX) : (string) $data['reply'],
-            'suggestions' => array_slice(array_map('strval', $data['suggestions'] ?? []), 0, 3),
-            'offer_callback' => (bool) ($data['offer_callback'] ?? false),
-            'answered' => (bool) ($data['answered'] ?? true),
-        ];
-    }
-
-    /** @return array{reply: string, suggestions: array<int, string>, offer_callback: bool, answered: bool} */
-    public function fallbackReply(string $locale): array
-    {
-        return [
-            'reply' => __('chat.error', [], $locale),
-            'suggestions' => [],
-            'offer_callback' => true,
-            'answered' => false,
-        ];
+        return is_array($data) ? $data : null;
     }
 
     public static function forgetKnowledge(): void
@@ -127,7 +274,11 @@ class ChatAssistant
             return $m[0];
         }
 
-        return rtrim(preg_replace('/\s+\S*$/u', '', $cut), ' ,;:-').'…';
+        // Otherwise cut at a word, leaving room for the ellipsis; one huge "word" (a URL) is cut hard.
+        $cut = mb_substr($text, 0, $max - 1);
+        $words = rtrim(preg_replace('/\s+\S*$/u', '', $cut), ' ,;:-');
+
+        return ($words !== '' && $words !== $cut ? $words : $cut).'…';
     }
 
     private function systemPrompt(string $locale, ?string $pageTitle, bool $brief = false): string
@@ -136,6 +287,7 @@ class ChatAssistant
         $length = $brief
             ? 'At most 2 short sentences and under '.self::BRIEF_MAX.' characters in total. Plain text, no markdown, no lists.'
             : '1-4 short sentences, plain text, no markdown.';
+        $categories = implode(', ', self::categories());
         $page = $pageTitle ? "The visitor is currently on the page \"{$pageTitle}\"." : '';
 
         return <<<PROMPT
@@ -154,6 +306,9 @@ class ChatAssistant
         - suggestions: 0-3 short follow-up questions the visitor might tap next (max 6 words each), answerable from the website data.
         - offer_callback: true when the visitor wants a quote, prices, a demo, to buy, or to talk to a person.
         - answered: false when the visitor asked about BDB, its products or services and the website data did not contain the answer; true otherwise (including greetings and off-topic questions you declined).
+        - knowledge_id: the [#number] of the knowledge base entry your answer is based on, or 0 if none.
+        - topic: what the visitor's LAST message asks about, as a short generic English phrase of 2-6 words in lowercase (e.g. "zebra printer price", "delivery to samarkand"). Similar questions must get the same topic.
+        - category: one of {$categories}. Use greeting for hello/thanks/small talk and off_topic for questions unrelated to BDB.
 
         {$page}
 
@@ -188,7 +343,7 @@ class ChatAssistant
                 foreach ($entries as $type => $items) {
                     $lines[] = '### '.(KnowledgeEntry::TYPES[$type] ?? $type);
                     foreach ($items as $entry) {
-                        $lines[] = 'Q: '.$t($entry, 'question');
+                        $lines[] = "Q [#{$entry->id}]: ".$t($entry, 'question');
                         $lines[] = 'A: '.$t($entry, 'answer');
                         if ($entry->keywords) {
                             $lines[] = 'Keywords: '.$entry->keywords;
@@ -215,11 +370,18 @@ class ChatAssistant
                 $lines[] = "\n## Customers ({$base}/customers)\n".$customers;
             }
 
-            $articles = Article::published()->limit(8)->get();
+            // Published articles are knowledge too: title, link and the start of the text.
+            $articles = Article::published()->with('category')->limit(40)->get();
             if ($articles->isNotEmpty()) {
-                $lines[] = "\n## Recent news ({$base}/news)";
+                $lines[] = "\n## Articles ({$base}/news)";
                 foreach ($articles as $article) {
-                    $lines[] = '- '.$t($article, 'title').': '.mb_substr($t($article, 'excerpt'), 0, 250);
+                    $slug = $article->getTranslation('slug', $locale, true);
+                    $categorySlug = $article->category?->getTranslation('slug', $locale, true);
+                    $lines[] = '### '.$t($article, 'title');
+                    if ($slug && $categorySlug) {
+                        $lines[] = 'Link: '.route('site.news.show', ['locale' => $locale, 'categorySlug' => $categorySlug, 'slug' => $slug]);
+                    }
+                    $lines[] = mb_substr(trim($t($article, 'excerpt').' '.$t($article, 'content')), 0, 900);
                 }
             }
 

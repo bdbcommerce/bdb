@@ -85,14 +85,46 @@
                 <p role="alert" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{{ session('telegram_error') }}</p>
             @endif
             <form method="POST" action="{{ route('admin.chat-conversations.reply', $conversation) }}"
-                  class="border-t border-slate-200 pt-4 mt-2 space-y-2">
+                  class="border-t border-slate-200 pt-4 mt-2 space-y-2"
+                  x-data="{
+                      message: @js(old('message', '')),
+                      loading: false,
+                      error: '',
+                      async suggest() {
+                          this.loading = true; this.error = '';
+                          try {
+                              const res = await fetch(@js(route('admin.chat-conversations.suggest', $conversation)), {
+                                  method: 'POST',
+                                  headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                              });
+                              const data = await res.json();
+                              if (res.ok) { this.message = data.reply; this.$nextTick(() => this.$refs.message.focus()); }
+                              else { this.error = data.message || 'The AI could not suggest a reply.'; }
+                          } catch (e) {
+                              this.error = 'The AI could not suggest a reply.';
+                          } finally {
+                              this.loading = false;
+                          }
+                      },
+                  }">
                 @csrf
-                <label for="reply-message" class="block text-sm font-medium text-slate-700">Message the customer in Telegram</label>
-                <textarea id="reply-message" name="message" rows="3" maxlength="4000" required
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <label for="reply-message" class="block text-sm font-medium text-slate-700">Message the customer in Telegram</label>
+                    <button type="button" @click="suggest()" :disabled="loading"
+                            class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50
+                                   focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                        <svg class="w-4 h-4" :class="{ 'animate-pulse': loading }" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/>
+                        </svg>
+                        <span x-text="loading ? 'Thinking…' : 'Suggest reply'">Suggest reply</span>
+                    </button>
+                </div>
+                <textarea id="reply-message" name="message" rows="3" maxlength="4000" required x-ref="message" x-model="message"
                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                           placeholder="Sent from the bot to {{ $conversation->telegramUser?->name ?? 'the customer' }}">{{ old('message') }}</textarea>
+                <p x-show="error" x-text="error" x-cloak role="alert" class="text-xs text-red-700"></p>
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-xs text-slate-400">The customer sees it as a message from the bot. It is not checked by the AI.</p>
+                    <p class="text-xs text-slate-400">The customer sees it as a message from the bot. Check AI suggestions and replace any [TO FILL: …] before sending.</p>
                     <button type="submit"
                             class="bg-slate-900 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-slate-700 transition-colors">
                         Send

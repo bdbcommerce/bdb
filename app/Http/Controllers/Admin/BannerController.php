@@ -10,6 +10,7 @@ class BannerController extends Controller
     public function index()
     {
         $banners = Banner::orderBy('sort_order')->get();
+
         return view('admin.banners.index', compact('banners'));
     }
 
@@ -29,6 +30,7 @@ class BannerController extends Controller
             \Storage::disk('public')->delete($banner->image);
         }
         $banner->delete();
+
         return redirect()->route('admin.banners.index')->with('success', 'Banner deleted.');
     }
 }

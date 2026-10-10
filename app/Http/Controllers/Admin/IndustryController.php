@@ -11,6 +11,7 @@ class IndustryController extends Controller
     public function index()
     {
         $industries = Industry::orderBy('sort_order')->get();
+
         return view('admin.industries.index', compact('industries'));
     }
 
@@ -53,17 +54,18 @@ class IndustryController extends Controller
     public function destroy(Industry $industry)
     {
         $industry->delete();
+
         return redirect()->route('admin.industries.index')->with('success', 'Industry deleted.');
     }
 
     private function prepareData(Request $request): array
     {
         return [
-            'name'        => ['uz' => $request->name_uz, 'ru' => $request->name_ru, 'en' => $request->name_en],
+            'name' => ['uz' => $request->name_uz, 'ru' => $request->name_ru, 'en' => $request->name_en],
             'description' => ['uz' => $request->description_uz, 'ru' => $request->description_ru, 'en' => $request->description_en],
-            'icon'        => $request->input('icon'),
-            'sort_order'  => $request->integer('sort_order', 0),
-            'is_active'   => $request->boolean('is_active'),
+            'icon' => $request->input('icon'),
+            'sort_order' => $request->integer('sort_order', 0),
+            'is_active' => $request->boolean('is_active'),
         ];
     }
 }

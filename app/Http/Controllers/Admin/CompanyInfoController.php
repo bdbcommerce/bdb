@@ -12,6 +12,7 @@ class CompanyInfoController extends Controller
     public function edit()
     {
         $info = CompanyInfo::instance();
+
         return view('admin.company-info.edit', compact('info'));
     }
 
@@ -39,16 +40,16 @@ class CompanyInfoController extends Controller
                 'ru' => $request->input('about_ru'),
                 'en' => $request->input('about_en'),
             ],
-            'phone'             => $request->input('phone'),
-            'email'             => $request->input('email'),
-            'telegram'          => $request->input('telegram'),
-            'instagram'         => $request->input('instagram'),
-            'facebook'          => $request->input('facebook'),
-            'youtube'           => $request->input('youtube'),
-            'linkedin'          => $request->input('linkedin'),
-            'map_embed'         => $request->input('map_embed'),
-            'google_analytics'  => $request->input('google_analytics'),
-            'yandex_metrika'    => $request->input('yandex_metrika'),
+            'phone' => $request->input('phone'),
+            'email' => $request->input('email'),
+            'telegram' => $request->input('telegram'),
+            'instagram' => $request->input('instagram'),
+            'facebook' => $request->input('facebook'),
+            'youtube' => $request->input('youtube'),
+            'linkedin' => $request->input('linkedin'),
+            'map_embed' => $request->input('map_embed'),
+            'google_analytics' => $request->input('google_analytics'),
+            'yandex_metrika' => $request->input('yandex_metrika'),
         ]);
 
         return back()->with('success', 'Company information updated.');
@@ -57,6 +58,7 @@ class CompanyInfoController extends Controller
     public function generateSitemap()
     {
         Artisan::call('sitemap:generate');
+
         return back()->with('success', 'sitemap.xml generated successfully.');
     }
 }

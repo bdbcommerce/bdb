@@ -13,25 +13,45 @@ class BannerForm extends Component
     public ?Banner $banner = null;
 
     public string $badgeUz = '';
+
     public string $badgeRu = '';
+
     public string $badgeEn = '';
+
     public string $titleUz = '';
+
     public string $titleRu = '';
+
     public string $titleEn = '';
+
     public string $subtitleUz = '';
+
     public string $subtitleRu = '';
+
     public string $subtitleEn = '';
+
     public string $pointsUz = '';
+
     public string $pointsRu = '';
+
     public string $pointsEn = '';
+
     public string $buttonTextUz = '';
+
     public string $buttonTextRu = '';
+
     public string $buttonTextEn = '';
+
     public string $buttonUrl = '';
+
     public bool $showAiButton = true;
+
     public bool $isActive = true;
+
     public int $sortOrder = 0;
+
     public $image;
+
     public ?string $existingImage = null;
 
     public function mount(?int $bannerId = null): void
@@ -39,22 +59,22 @@ class BannerForm extends Component
         if ($bannerId) {
             $this->banner = Banner::findOrFail($bannerId);
             foreach (['uz', 'ru', 'en'] as $lc) {
-                $this->{'badge'.ucfirst($lc)}  = $this->banner->getTranslation('badge', $lc, false) ?? '';
+                $this->{'badge'.ucfirst($lc)} = $this->banner->getTranslation('badge', $lc, false) ?? '';
                 $this->{'points'.ucfirst($lc)} = $this->banner->getTranslation('points', $lc, false) ?? '';
             }
             $this->showAiButton = $this->banner->show_ai_button;
-            $this->titleUz     = $this->banner->getTranslation('title', 'uz', false) ?? '';
-            $this->titleRu     = $this->banner->getTranslation('title', 'ru', false) ?? '';
-            $this->titleEn     = $this->banner->getTranslation('title', 'en', false) ?? '';
-            $this->subtitleUz  = $this->banner->getTranslation('subtitle', 'uz', false) ?? '';
-            $this->subtitleRu  = $this->banner->getTranslation('subtitle', 'ru', false) ?? '';
-            $this->subtitleEn  = $this->banner->getTranslation('subtitle', 'en', false) ?? '';
+            $this->titleUz = $this->banner->getTranslation('title', 'uz', false) ?? '';
+            $this->titleRu = $this->banner->getTranslation('title', 'ru', false) ?? '';
+            $this->titleEn = $this->banner->getTranslation('title', 'en', false) ?? '';
+            $this->subtitleUz = $this->banner->getTranslation('subtitle', 'uz', false) ?? '';
+            $this->subtitleRu = $this->banner->getTranslation('subtitle', 'ru', false) ?? '';
+            $this->subtitleEn = $this->banner->getTranslation('subtitle', 'en', false) ?? '';
             $this->buttonTextUz = $this->banner->getTranslation('button_text', 'uz', false) ?? '';
             $this->buttonTextRu = $this->banner->getTranslation('button_text', 'ru', false) ?? '';
             $this->buttonTextEn = $this->banner->getTranslation('button_text', 'en', false) ?? '';
-            $this->buttonUrl   = $this->banner->button_url ?? '';
-            $this->isActive    = $this->banner->is_active;
-            $this->sortOrder   = $this->banner->sort_order;
+            $this->buttonUrl = $this->banner->button_url ?? '';
+            $this->isActive = $this->banner->is_active;
+            $this->sortOrder = $this->banner->sort_order;
             $this->existingImage = $this->banner->image;
         }
     }
@@ -62,10 +82,10 @@ class BannerForm extends Component
     public function save(): void
     {
         $this->validate([
-            'titleUz'  => 'required|string|max:255',
-            'titleRu'  => 'required|string|max:255',
-            'titleEn'  => 'required|string|max:255',
-            'image'    => $this->banner ? 'nullable|image|max:4096' : 'nullable|image|max:4096',
+            'titleUz' => 'required|string|max:255',
+            'titleRu' => 'required|string|max:255',
+            'titleEn' => 'required|string|max:255',
+            'image' => $this->banner ? 'nullable|image|max:4096' : 'nullable|image|max:4096',
             // Full URL or a site path like /contact (the locale prefix is added on the site).
             'buttonUrl' => ['nullable', 'max:500', 'regex:#^(https?://|/)#'],
         ]);
@@ -79,16 +99,16 @@ class BannerForm extends Component
         }
 
         $data = [
-            'badge'       => ['uz' => $this->badgeUz, 'ru' => $this->badgeRu, 'en' => $this->badgeEn],
-            'title'       => ['uz' => $this->titleUz, 'ru' => $this->titleRu, 'en' => $this->titleEn],
-            'subtitle'    => ['uz' => $this->subtitleUz, 'ru' => $this->subtitleRu, 'en' => $this->subtitleEn],
-            'points'      => ['uz' => $this->pointsUz, 'ru' => $this->pointsRu, 'en' => $this->pointsEn],
+            'badge' => ['uz' => $this->badgeUz, 'ru' => $this->badgeRu, 'en' => $this->badgeEn],
+            'title' => ['uz' => $this->titleUz, 'ru' => $this->titleRu, 'en' => $this->titleEn],
+            'subtitle' => ['uz' => $this->subtitleUz, 'ru' => $this->subtitleRu, 'en' => $this->subtitleEn],
+            'points' => ['uz' => $this->pointsUz, 'ru' => $this->pointsRu, 'en' => $this->pointsEn],
             'button_text' => ['uz' => $this->buttonTextUz, 'ru' => $this->buttonTextRu, 'en' => $this->buttonTextEn],
-            'button_url'  => $this->buttonUrl ?: null,
+            'button_url' => $this->buttonUrl ?: null,
             'show_ai_button' => $this->showAiButton,
-            'image'       => $imagePath,
-            'is_active'   => $this->isActive,
-            'sort_order'  => $this->sortOrder,
+            'image' => $imagePath,
+            'is_active' => $this->isActive,
+            'sort_order' => $this->sortOrder,
         ];
 
         if ($this->banner) {

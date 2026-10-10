@@ -21,7 +21,7 @@ class SitePagesTest extends TestCase
 
     private function t(string $value): array
     {
-        return ['uz' => $value . ' uz', 'ru' => $value . ' ru', 'en' => $value . ' en'];
+        return ['uz' => $value.' uz', 'ru' => $value.' ru', 'en' => $value.' en'];
     }
 
     public function test_pages_render_with_empty_content(): void
@@ -30,7 +30,7 @@ class SitePagesTest extends TestCase
             foreach (self::PAGES as $page) {
                 $this->get("/{$locale}{$page}")
                     ->assertOk()
-                    ->assertSee('<html lang="' . $locale . '">', false)
+                    ->assertSee('<html lang="'.$locale.'">', false)
                     ->assertSee('og:title', false)
                     ->assertSee('belgiChat', false);
             }
@@ -88,11 +88,11 @@ class SitePagesTest extends TestCase
             foreach (self::PAGES as $page) {
                 $this->get("/{$locale}{$page}")->assertOk();
             }
-            $this->get("/{$locale}/news/auto-id-{$locale}")->assertOk()->assertSee("Hello");
+            $this->get("/{$locale}/news/auto-id-{$locale}")->assertOk()->assertSee('Hello');
             $this->get("/{$locale}/news/auto-id-{$locale}/hello-{$locale}")
                 ->assertOk()
                 ->assertSee('"@type":"NewsArticle"', false)
-                ->assertSee('Second ' . $locale);
+                ->assertSee('Second '.$locale);
         }
 
         $this->get('/en')

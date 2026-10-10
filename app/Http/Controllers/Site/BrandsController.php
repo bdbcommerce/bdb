@@ -10,6 +10,7 @@ class BrandsController extends Controller
     public function __invoke()
     {
         $brands = Brand::active()->get();
+
         return view('site.brands', compact('brands'));
     }
 }

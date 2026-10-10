@@ -16,22 +16,39 @@ class ArticleForm extends Component
     public ?Article $article = null;
 
     public string $articleCategoryId = '';
+
     public string $titleUz = '';
+
     public string $titleRu = '';
+
     public string $titleEn = '';
+
     public string $slugUz = '';
+
     public string $slugRu = '';
+
     public string $slugEn = '';
+
     public string $excerptUz = '';
+
     public string $excerptRu = '';
+
     public string $excerptEn = '';
+
     public string $contentUz = '';
+
     public string $contentRu = '';
+
     public string $contentEn = '';
+
     public $featuredImage = null;
+
     public ?string $existingImage = null;
+
     public bool $isPublished = false;
+
     public string $publishedAt = '';
+
     public int $sortOrder = 0;
 
     public function mount(?int $articleId = null): void
@@ -39,12 +56,12 @@ class ArticleForm extends Component
         if ($articleId) {
             $this->article = Article::findOrFail($articleId);
             $this->articleCategoryId = (string) $this->article->article_category_id;
-            $this->titleUz   = $this->article->getTranslation('title',   'uz', false) ?? '';
-            $this->titleRu   = $this->article->getTranslation('title',   'ru', false) ?? '';
-            $this->titleEn   = $this->article->getTranslation('title',   'en', false) ?? '';
-            $this->slugUz    = $this->article->getTranslation('slug',    'uz', false) ?? '';
-            $this->slugRu    = $this->article->getTranslation('slug',    'ru', false) ?? '';
-            $this->slugEn    = $this->article->getTranslation('slug',    'en', false) ?? '';
+            $this->titleUz = $this->article->getTranslation('title', 'uz', false) ?? '';
+            $this->titleRu = $this->article->getTranslation('title', 'ru', false) ?? '';
+            $this->titleEn = $this->article->getTranslation('title', 'en', false) ?? '';
+            $this->slugUz = $this->article->getTranslation('slug', 'uz', false) ?? '';
+            $this->slugRu = $this->article->getTranslation('slug', 'ru', false) ?? '';
+            $this->slugEn = $this->article->getTranslation('slug', 'en', false) ?? '';
             $this->excerptUz = $this->article->getTranslation('excerpt', 'uz', false) ?? '';
             $this->excerptRu = $this->article->getTranslation('excerpt', 'ru', false) ?? '';
             $this->excerptEn = $this->article->getTranslation('excerpt', 'en', false) ?? '';
@@ -52,9 +69,9 @@ class ArticleForm extends Component
             $this->contentRu = $this->article->getTranslation('content', 'ru', false) ?? '';
             $this->contentEn = $this->article->getTranslation('content', 'en', false) ?? '';
             $this->existingImage = $this->article->featured_image;
-            $this->isPublished   = $this->article->is_published;
-            $this->publishedAt   = $this->article->published_at?->format('Y-m-d\TH:i') ?? '';
-            $this->sortOrder     = $this->article->sort_order;
+            $this->isPublished = $this->article->is_published;
+            $this->publishedAt = $this->article->published_at?->format('Y-m-d\TH:i') ?? '';
+            $this->sortOrder = $this->article->sort_order;
         }
     }
 
@@ -77,12 +94,12 @@ class ArticleForm extends Component
     {
         $this->validate([
             'articleCategoryId' => 'required|exists:article_categories,id',
-            'titleUz'    => 'required|string|max:500',
-            'titleRu'    => 'required|string|max:500',
-            'titleEn'    => 'required|string|max:500',
-            'contentUz'  => 'required|string',
-            'contentRu'  => 'required|string',
-            'contentEn'  => 'required|string',
+            'titleUz' => 'required|string|max:500',
+            'titleRu' => 'required|string|max:500',
+            'titleEn' => 'required|string|max:500',
+            'contentUz' => 'required|string',
+            'contentRu' => 'required|string',
+            'contentEn' => 'required|string',
             'featuredImage' => 'nullable|image|max:4096',
         ]);
 
@@ -96,8 +113,8 @@ class ArticleForm extends Component
 
         $data = [
             'article_category_id' => $this->articleCategoryId,
-            'title'   => ['uz' => $this->titleUz,   'ru' => $this->titleRu,   'en' => $this->titleEn],
-            'slug'    => [
+            'title' => ['uz' => $this->titleUz,   'ru' => $this->titleRu,   'en' => $this->titleEn],
+            'slug' => [
                 'uz' => $this->slugUz ?: $this->makeSlug($this->titleUz),
                 'ru' => $this->slugRu ?: $this->makeSlug($this->titleRu),
                 'en' => $this->slugEn ?: $this->makeSlug($this->titleEn),
@@ -105,9 +122,9 @@ class ArticleForm extends Component
             'excerpt' => ['uz' => $this->excerptUz, 'ru' => $this->excerptRu, 'en' => $this->excerptEn],
             'content' => ['uz' => $this->contentUz, 'ru' => $this->contentRu, 'en' => $this->contentEn],
             'featured_image' => $image,
-            'is_published'   => $this->isPublished,
-            'published_at'   => $this->isPublished ? ($this->publishedAt ?: now()->toDateTimeString()) : null,
-            'sort_order'     => $this->sortOrder,
+            'is_published' => $this->isPublished,
+            'published_at' => $this->isPublished ? ($this->publishedAt ?: now()->toDateTimeString()) : null,
+            'sort_order' => $this->sortOrder,
         ];
 
         if ($this->article) {
@@ -122,11 +139,11 @@ class ArticleForm extends Component
     private function makeSlug(string $text): string
     {
         $cyrillicMap = [
-            'а'=>'a','б'=>'b','в'=>'v','г'=>'g','д'=>'d','е'=>'e','ё'=>'yo',
-            'ж'=>'zh','з'=>'z','и'=>'i','й'=>'y','к'=>'k','л'=>'l','м'=>'m',
-            'н'=>'n','о'=>'o','п'=>'p','р'=>'r','с'=>'s','т'=>'t','у'=>'u',
-            'ф'=>'f','х'=>'kh','ц'=>'ts','ч'=>'ch','ш'=>'sh','щ'=>'shch',
-            'ъ'=>'','ы'=>'y','ь'=>'','э'=>'e','ю'=>'yu','я'=>'ya',
+            'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'yo',
+            'ж' => 'zh', 'з' => 'z', 'и' => 'i', 'й' => 'y', 'к' => 'k', 'л' => 'l', 'м' => 'm',
+            'н' => 'n', 'о' => 'o', 'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u',
+            'ф' => 'f', 'х' => 'kh', 'ц' => 'ts', 'ч' => 'ch', 'ш' => 'sh', 'щ' => 'shch',
+            'ъ' => '', 'ы' => 'y', 'ь' => '', 'э' => 'e', 'ю' => 'yu', 'я' => 'ya',
         ];
 
         $lower = mb_strtolower($text);

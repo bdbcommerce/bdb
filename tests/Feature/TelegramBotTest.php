@@ -138,7 +138,7 @@ class TelegramBotTest extends TestCase
 
         $sent = $this->lastSent();
         $this->assertSame(TelegramBot::LANGUAGE_PROMPT, $sent['text']);
-        $this->assertSame(['Oʻzbekcha', 'Русский', 'English'], array_column($sent['reply_markup']['keyboard'][0], 'text'));
+        $this->assertSame(['🇺🇿 Oʻzbekcha', '🇷🇺 Русский', '🇬🇧 English'], array_column($sent['reply_markup']['keyboard'][0], 'text'));
         $this->assertSame(TelegramUser::STEP_LANGUAGE, TelegramUser::sole()->step);
     }
 
@@ -188,7 +188,7 @@ class TelegramBotTest extends TestCase
         $this->fakeApis();
         TelegramUser::create(['telegram_id' => '555', 'locale' => 'en', 'step' => TelegramUser::STEP_NAME]);
 
-        foreach (['A', '/start', '12345', str_repeat('a', 61)] as $name) {
+        foreach (['A', '/help', '12345', str_repeat('a', 61)] as $name) {
             $this->send(['text' => $name]);
             $this->assertSame(__('chat.tg_name_invalid', [], 'en'), $this->lastSent()['text'], $name);
         }
@@ -197,6 +197,37 @@ class TelegramBotTest extends TestCase
 
         $this->assertNull(TelegramUser::sole()->name);
         $this->assertSame(0, ChatConversation::count());
+    }
+
+    public function test_uzbek_apostrophe_variants_are_accepted_in_names(): void
+    {
+        $this->fakeApis();
+
+        foreach (['O‘tkir', 'G`ulnora', 'Oʻktam', "O'g'iloy", 'Shoʼira'] as $name) {
+            TelegramUser::query()->delete();
+            TelegramUser::create(['telegram_id' => '555', 'locale' => 'uz', 'step' => TelegramUser::STEP_NAME]);
+
+            $this->send(['text' => $name]);
+
+            $this->assertSame($name, TelegramUser::sole()->name, $name);
+            $this->assertSame(TelegramUser::STEP_PHONE, TelegramUser::sole()->step);
+        }
+    }
+
+    public function test_start_during_registration_repeats_the_current_step(): void
+    {
+        $this->fakeApis();
+        $user = TelegramUser::create(['telegram_id' => '555', 'locale' => 'en', 'step' => TelegramUser::STEP_NAME]);
+
+        $this->send(['text' => '/start']);
+        $this->assertSame(__('chat.tg_ask_name', [], 'en'), $this->lastSent()['text']);
+
+        $user->update(['name' => 'Aziz', 'step' => TelegramUser::STEP_PHONE]);
+        $this->send(['text' => '/start']);
+        $this->assertSame(__('chat.tg_ask_phone', ['name' => 'Aziz'], 'en'), $this->lastSent()['text']);
+        $this->assertTrue($this->lastSent()['reply_markup']['keyboard'][0][0]['request_contact']);
+
+        $this->assertSame(TelegramUser::STEP_PHONE, $user->fresh()->step);
     }
 
     public function test_only_the_customers_own_telegram_number_is_accepted(): void
@@ -257,7 +288,7 @@ class TelegramBotTest extends TestCase
 
         $sent = $this->lastSent();
         $this->assertSame('Asl Belgi is the national marking system.', $sent['text']);
-        $this->assertSame('What equipment do you offer?', $sent['reply_markup']['keyboard'][0][0]['text']);
+        $this->assertSame('💡 What equipment do you offer?', $sent['reply_markup']['keyboard'][0][0]['text']);
         Http::assertSent(fn (Request $r) => str_contains($r->url(), 'generateContent')
             && str_contains($r['system_instruction']['parts'][0]['text'], 'At most 2 short sentences'));
 
@@ -364,8 +395,55 @@ class TelegramBotTest extends TestCase
         $this->assertStringContainsString('+998901234567', $alert['text']);
 
         $thanks = $this->lastSent();
-        $this->assertSame(__('chat.thanks', [], 'ru'), $thanks['text']);
+        $this->assertSame(__('chat.tg_thanks', [], 'ru'), $thanks['text']);
         $this->assertTrue($thanks['reply_markup']['remove_keyboard']);
+    }
+
+    public function test_repeated_call_requests_create_one_lead(): void
+    {
+        $this->fakeApis(offerCallback: true);
+        $this->registered('ru');
+
+        $this->send(['text' => 'Нужен RFID']);
+        $this->send(['text' => __('chat.tg_request_call', [], 'ru')]);
+        $this->send(['text' => __('chat.tg_request_call', [], 'ru')]);
+
+        $this->assertSame(1, ChatLead::count());
+        $this->assertCount(1, $this->sentTo(self::SALES_CHAT));
+        $this->assertSame(__('chat.tg_thanks', [], 'ru'), $this->lastSent()['text']);
+
+        $this->travel(2)->hours();
+        $this->send(['text' => __('chat.tg_request_call', [], 'ru')]);
+        $this->assertSame(2, ChatLead::count());
+    }
+
+    public function test_whitespace_only_text_is_ignored_not_stored_as_media(): void
+    {
+        $this->fakeApis();
+        $this->registered();
+
+        $this->send(['text' => '   ']);
+
+        $this->assertSame([], $this->sentTo(555));
+        $this->assertSame(0, ChatConversation::count());
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'generateContent'));
+    }
+
+    public function test_shorten_never_exceeds_the_limit(): void
+    {
+        $max = ChatAssistant::BRIEF_MAX;
+
+        foreach ([
+            str_repeat('a', $max + 1),
+            'See https://bdb.uz/'.str_repeat('x', $max),
+            str_repeat('слово ', 100),
+            str_repeat('Short one. ', 40),
+        ] as $text) {
+            $this->assertLessThanOrEqual($max, mb_strlen(ChatAssistant::shorten($text, $max)), mb_substr($text, 0, 30));
+        }
+
+        $this->assertSame(str_repeat('a', $max), ChatAssistant::shorten(str_repeat('a', $max), $max));
+        $this->assertStringEndsWith('слово…', ChatAssistant::shorten(str_repeat('слово ', 100), $max));
     }
 
     public function test_start_for_registered_customer_sends_welcome(): void
@@ -376,8 +454,8 @@ class TelegramBotTest extends TestCase
         $this->send(['text' => '/start']);
 
         $sent = $this->lastSent();
-        $this->assertSame(__('chat.welcome', [], 'en'), $sent['text']);
-        $this->assertSame(__('chat.starters', [], 'en')[0], $sent['reply_markup']['keyboard'][0][0]['text']);
+        $this->assertSame(__('chat.tg_welcome', [], 'en'), $sent['text']);
+        $this->assertSame('💡 '.__('chat.starters', [], 'en')[0], $sent['reply_markup']['keyboard'][0][0]['text']);
     }
 
     // Command --------------------------------------------------------------------

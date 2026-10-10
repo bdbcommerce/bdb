@@ -10,8 +10,9 @@ class CustomersController extends Controller
 {
     public function __invoke()
     {
-        $customers  = Customer::active()->with('industry')->get();
+        $customers = Customer::active()->with('industry')->get();
         $industries = Industry::active()->get();
+
         return view('site.customers', compact('customers', 'industries'));
     }
 }

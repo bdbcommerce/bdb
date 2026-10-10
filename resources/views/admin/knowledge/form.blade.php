@@ -10,6 +10,29 @@
         @csrf
         @if($entry->exists) @method('PUT') @endif
 
+        @isset($fromRequest)
+            @if($fromRequest)
+                <input type="hidden" name="client_request_id" value="{{ $fromRequest->id }}">
+                <div class="bg-white border border-slate-300 rounded-xl p-6 space-y-3">
+                    <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Answering customer questions</h2>
+                    <ul class="space-y-1.5 text-sm text-slate-700 list-disc list-inside">
+                        @foreach($questions->take(8) as $q)
+                            <li>{{ $q }}</li>
+                        @endforeach
+                    </ul>
+                    @if($questions->count() > 8)
+                        <p class="text-xs text-slate-400">and {{ $questions->count() - 8 }} more.</p>
+                    @endif
+                    @if($draftFailed)
+                        <p role="alert" class="text-sm text-red-700">The AI could not draft an answer right now — please write it yourself.</p>
+                    @elseif(request()->boolean('draft'))
+                        <p class="text-sm text-slate-600">AI draft below, made only from website data. Check every language and replace each <code class="bg-slate-100 px-1 rounded">[TO FILL: …]</code> with real facts before saving.</p>
+                    @endif
+                    <p class="text-xs text-slate-400">When saved, these questions are marked answered and the AI looks for other open questions this answer covers.</p>
+                </div>
+            @endif
+        @endisset
+
         {{-- Topic --}}
         <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
             <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">1. Topic</h2>
@@ -40,14 +63,14 @@
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Question ({{ strtoupper($locale) }}) <span class="text-red-500">*</span></label>
                         <input type="text" name="question_{{ $locale }}"
-                               value="{{ old("question_$locale", $entry->exists ? $entry->getTranslation('question', $locale, false) : '') }}"
+                               value="{{ old("question_$locale", $entry->getTranslation('question', $locale, false)) }}"
                                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
                         <p class="text-xs text-slate-400 mt-1">Write it the way a customer would ask it.</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Answer ({{ strtoupper($locale) }}) <span class="text-red-500">*</span></label>
                         <textarea name="answer_{{ $locale }}" rows="6"
-                                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">{{ old("answer_$locale", $entry->exists ? $entry->getTranslation('answer', $locale, false) : '') }}</textarea>
+                                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">{{ old("answer_$locale", $entry->getTranslation('answer', $locale, false)) }}</textarea>
                         <p class="text-xs text-slate-400 mt-1">Facts only. The assistant will say this and nothing more.</p>
                     </div>
                 </div>

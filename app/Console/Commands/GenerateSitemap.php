@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Article;
 use App\Models\ArticleCategory;
+use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -47,8 +48,8 @@ class GenerateSitemap extends Command
             }
         }
 
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
-        $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'.PHP_EOL;
+        $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'.PHP_EOL;
         foreach ($urls as $url) {
             $xml .= $url;
         }
@@ -56,17 +57,18 @@ class GenerateSitemap extends Command
 
         file_put_contents(public_path('sitemap.xml'), $xml);
 
-        $this->info('sitemap.xml generated with ' . count($urls) . ' URLs.');
+        $this->info('sitemap.xml generated with '.count($urls).' URLs.');
     }
 
-    private function buildUrl(string $base, string $path, ?\Carbon\Carbon $lastmod = null): string
+    private function buildUrl(string $base, string $path, ?Carbon $lastmod = null): string
     {
-        $loc = htmlspecialchars($base . $path);
+        $loc = htmlspecialchars($base.$path);
         $entry = "  <url>\n    <loc>{$loc}</loc>\n";
         if ($lastmod) {
             $entry .= "    <lastmod>{$lastmod->toDateString()}</lastmod>\n";
         }
         $entry .= "  </url>\n";
+
         return $entry;
     }
 }

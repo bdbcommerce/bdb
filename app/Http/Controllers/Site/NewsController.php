@@ -11,21 +11,21 @@ class NewsController extends Controller
     public function index()
     {
         $categories = ArticleCategory::orderBy('sort_order')->get();
-        $articles   = Article::published()->with('category')->paginate(9);
+        $articles = Article::published()->with('category')->paginate(9);
 
         return view('site.news.index', compact('categories', 'articles'));
     }
 
     public function category(string $locale, string $categorySlug)
     {
-        $locale   = app()->getLocale();
+        $locale = app()->getLocale();
         $category = ArticleCategory::all()
-            ->first(fn($c) => $c->getTranslation('slug', $locale, false) === $categorySlug);
+            ->first(fn ($c) => $c->getTranslation('slug', $locale, false) === $categorySlug);
 
         abort_if(! $category, 404);
 
         $categories = ArticleCategory::orderBy('sort_order')->get();
-        $articles   = Article::published()
+        $articles = Article::published()
             ->where('article_category_id', $category->id)
             ->with('category')
             ->paginate(9);
@@ -35,9 +35,9 @@ class NewsController extends Controller
 
     public function show(string $locale, string $categorySlug, string $slug)
     {
-        $locale  = app()->getLocale();
+        $locale = app()->getLocale();
         $article = Article::published()->get()
-            ->first(fn($a) => $a->getTranslation('slug', $locale, false) === $slug);
+            ->first(fn ($a) => $a->getTranslation('slug', $locale, false) === $slug);
 
         abort_if(! $article, 404);
 

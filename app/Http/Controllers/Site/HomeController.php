@@ -14,12 +14,12 @@ class HomeController extends Controller
 {
     public function __invoke()
     {
-        $banners    = Banner::active()->get();
-        $brands     = Brand::active()->get();
+        $banners = Banner::active()->get();
+        $brands = Brand::active()->get();
         $industries = Industry::active()
             ->with(['customers' => fn ($q) => $q->active()])
             ->get();
-        $articles   = Article::published()->with('category')->limit(3)->get();
+        $articles = Article::published()->with('category')->limit(3)->get();
 
         $stats = $this->stats($brands->count(), $industries->count());
 
@@ -37,10 +37,10 @@ class HomeController extends Controller
     {
         $info = CompanyInfo::instance();
 
-        $founded  = (int) $info->getAttribute('founded_year');
-        $years    = $founded > 1900 && $founded <= (int) date('Y') ? (int) date('Y') - $founded : 0;
+        $founded = (int) $info->getAttribute('founded_year');
+        $years = $founded > 1900 && $founded <= (int) date('Y') ? (int) date('Y') - $founded : 0;
         $projects = (int) $info->getAttribute('projects_count');
-        $clients  = Customer::active()->count();
+        $clients = Customer::active()->count();
 
         return array_values(array_filter([
             ['value' => $years,         'label' => 'years'],

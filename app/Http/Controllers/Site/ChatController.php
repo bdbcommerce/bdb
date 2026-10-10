@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Site;
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\ClientRequest;
 use App\Services\ChatAssistant;
 use App\Services\TelegramNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 use function Illuminate\Support\defer;
 
@@ -37,15 +39,16 @@ class ChatController extends Controller
 
         $question = end($data['messages']);
         if (! empty($data['conversation']) && $question['role'] === 'user') {
-            ChatConversation::firstOrNew(['uuid' => $data['conversation']], [
+            $conversation = ChatConversation::firstOrNew(['uuid' => $data['conversation']], [
                 'locale' => $data['locale'],
                 'page' => $data['page'] ?? null,
-            ])->appendExchange($question['content'], $result['reply'], $result['answered']);
+            ]);
+            $conversation->appendExchange($question['content'], $result['reply'], $result['answered']);
+            ClientRequest::record($conversation, $question['content'], $result);
         }
 
-        unset($result['answered']);
-
-        return response()->json($result);
+        // Internal fields (inbox tagging) are not sent to the browser.
+        return response()->json(Arr::only($result, ['reply', 'suggestions', 'offer_callback']));
     }
 
     public function lead(Request $request, TelegramNotifier $telegram): JsonResponse

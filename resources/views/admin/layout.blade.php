@@ -19,9 +19,10 @@
      * Each item: route (link target), match (route patterns that mark it active), label, icon (Heroicons outline path "d" values).
      * Badge counts must stay cheap (single indexed count query).
      */
-    $newLeadsCount = 0;
+    $newLeadsCount = $openRequestsCount = 0;
     try {
         $newLeadsCount = \App\Models\ChatLead::where('is_handled', false)->count();
+        $openRequestsCount = \App\Models\ClientRequest::where('status', 'open')->count();
     } catch (\Throwable $e) {
         // Table may not exist yet (e.g. migrations pending) — never break the admin shell.
     }
@@ -71,6 +72,9 @@
             'key' => 'assistant',
             'label' => 'AI Assistant',
             'items' => [
+                ['route' => 'admin.client-requests.index', 'match' => ['admin.client-requests.*'], 'label' => 'Client requests',
+                 'badge' => $openRequestsCount, 'badge_label' => 'open requests',
+                 'icon' => ['M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z']],
                 ['route' => 'admin.chat-leads.index', 'match' => ['admin.chat-leads.*'], 'label' => 'Chat leads',
                  'badge' => $newLeadsCount, 'badge_label' => 'new leads',
                  'icon' => ['M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z']],

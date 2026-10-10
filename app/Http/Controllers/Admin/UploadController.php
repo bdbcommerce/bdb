@@ -14,6 +14,6 @@ class UploadController extends Controller
 
         $path = $request->file('image')->store('editor', 'public');
 
-        return response()->json(['url' => asset('storage/' . $path)]);
+        return response()->json(['url' => asset('storage/'.$path)]);
     }
 }

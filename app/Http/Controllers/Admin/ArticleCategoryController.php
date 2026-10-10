@@ -10,6 +10,7 @@ class ArticleCategoryController extends Controller
     public function index()
     {
         $categories = ArticleCategory::orderBy('sort_order')->get();
+
         return view('admin.article-categories.index', compact('categories'));
     }
 
@@ -26,6 +27,7 @@ class ArticleCategoryController extends Controller
     public function destroy(ArticleCategory $articleCategory)
     {
         $articleCategory->delete();
+
         return redirect()->route('admin.article-categories.index')->with('success', 'Category deleted.');
     }
 }

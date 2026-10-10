@@ -13,12 +13,14 @@ class CustomerController extends Controller
     public function index()
     {
         $customers = Customer::with('industry')->orderBy('sort_order')->get();
+
         return view('admin.customers.index', compact('customers'));
     }
 
     public function create()
     {
         $industries = Industry::orderBy('sort_order')->get();
+
         return view('admin.customers.form', ['customer' => new Customer, 'industries' => $industries]);
     }
 
@@ -37,6 +39,7 @@ class CustomerController extends Controller
     public function edit(Customer $customer)
     {
         $industries = Industry::orderBy('sort_order')->get();
+
         return view('admin.customers.form', compact('customer', 'industries'));
     }
 
@@ -58,6 +61,7 @@ class CustomerController extends Controller
             Storage::disk('public')->delete($customer->logo);
         }
         $customer->delete();
+
         return redirect()->route('admin.customers.index')->with('success', 'Customer deleted.');
     }
 
@@ -72,13 +76,13 @@ class CustomerController extends Controller
         }
 
         return [
-            'name'        => $request->input('name'),
+            'name' => $request->input('name'),
             'description' => ['uz' => $request->description_uz, 'ru' => $request->description_ru, 'en' => $request->description_en],
-            'logo'        => $logo,
-            'website'     => $request->input('website'),
+            'logo' => $logo,
+            'website' => $request->input('website'),
             'industry_id' => $request->input('industry_id') ?: null,
-            'sort_order'  => $request->integer('sort_order', 0),
-            'is_active'   => $request->boolean('is_active'),
+            'sort_order' => $request->integer('sort_order', 0),
+            'is_active' => $request->boolean('is_active'),
         ];
     }
 }

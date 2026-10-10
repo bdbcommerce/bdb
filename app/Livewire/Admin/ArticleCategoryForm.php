@@ -11,11 +11,17 @@ class ArticleCategoryForm extends Component
     public ?ArticleCategory $category = null;
 
     public string $nameUz = '';
+
     public string $nameRu = '';
+
     public string $nameEn = '';
+
     public string $slugUz = '';
+
     public string $slugRu = '';
+
     public string $slugEn = '';
+
     public int $sortOrder = 0;
 
     public function mount(?int $categoryId = null): void
@@ -78,11 +84,11 @@ class ArticleCategoryForm extends Component
     {
         // Cyrillic transliteration map for Russian slugs
         $cyrillicMap = [
-            'а'=>'a','б'=>'b','в'=>'v','г'=>'g','д'=>'d','е'=>'e','ё'=>'yo',
-            'ж'=>'zh','з'=>'z','и'=>'i','й'=>'y','к'=>'k','л'=>'l','м'=>'m',
-            'н'=>'n','о'=>'o','п'=>'p','р'=>'r','с'=>'s','т'=>'t','у'=>'u',
-            'ф'=>'f','х'=>'kh','ц'=>'ts','ч'=>'ch','ш'=>'sh','щ'=>'shch',
-            'ъ'=>'','ы'=>'y','ь'=>'','э'=>'e','ю'=>'yu','я'=>'ya',
+            'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'yo',
+            'ж' => 'zh', 'з' => 'z', 'и' => 'i', 'й' => 'y', 'к' => 'k', 'л' => 'l', 'м' => 'm',
+            'н' => 'n', 'о' => 'o', 'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u',
+            'ф' => 'f', 'х' => 'kh', 'ц' => 'ts', 'ч' => 'ch', 'ш' => 'sh', 'щ' => 'shch',
+            'ъ' => '', 'ы' => 'y', 'ь' => '', 'э' => 'e', 'ю' => 'yu', 'я' => 'ya',
         ];
 
         $lower = mb_strtolower($text);

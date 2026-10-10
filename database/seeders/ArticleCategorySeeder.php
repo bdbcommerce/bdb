@@ -12,6 +12,7 @@ class ArticleCategorySeeder extends Seeder
         // Skip if categories already exist — prevents duplicates on re-seed.
         if (ArticleCategory::count() > 0) {
             $this->command->info('Article categories already seeded, skipping.');
+
             return;
         }
 

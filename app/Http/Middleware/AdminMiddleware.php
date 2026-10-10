@@ -19,6 +19,7 @@ class AdminMiddleware
             if ($request->expectsJson()) {
                 abort(403);
             }
+
             return redirect()->route('admin.login');
         }
 
