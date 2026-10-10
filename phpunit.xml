@@ -36,6 +36,7 @@
         <env name="TELEGRAM_BOT_TOKEN" value="" force="true"/>
         <env name="TELEGRAM_CHAT_ID" value="" force="true"/>
         <env name="TELEGRAM_WEBHOOK_SECRET" value="" force="true"/>
+        <env name="TELEGRAM_ALERT_CHAT_ID" value="" force="true"/>
         <env name="GEMINI_API_KEY" value="" force="true"/>
     </php>
 </phpunit>

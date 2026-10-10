@@ -39,6 +39,8 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'chat_id' => env('TELEGRAM_CHAT_ID'),
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+        // Technical alerts (AI assistant errors). Empty = the sales chat_id.
+        'alert_chat_id' => env('TELEGRAM_ALERT_CHAT_ID'),
     ],
 
     'slack' => [

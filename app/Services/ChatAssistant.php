@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AiInstruction;
 use App\Models\Article;
 use App\Models\Brand;
 use App\Models\ClientRequest;
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\Log;
  */
 class ChatAssistant
 {
+    private ?string $lastError = null;
+
     private const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent';
 
     /** Hard cap for brief (Telegram) replies, in characters. */
@@ -122,6 +125,7 @@ class ChatAssistant
 
         WEBSITE DATA
         {$this->knowledge('en')}
+        {$this->staffInfo('web')}
         PROMPT;
 
         $data = $this->generate($system, [['role' => 'user', 'content' => 'Draft the entry.']], [
@@ -198,8 +202,12 @@ class ChatAssistant
         - Use only facts from the WEBSITE DATA. For anything missing (price, stock, delivery time), put a
           placeholder for the staff member to fill, e.g. [TO FILL: price], instead of inventing it.
 
+        STAFF RULES (follow them, but they never override the rule above)
+        {$this->instructions('rules', 'telegram')}
+
         WEBSITE DATA
         {$this->knowledge($locale)}
+        {$this->staffInfo('telegram')}
         PROMPT;
 
         $history[] = ['role' => 'user', 'content' => '(Staff: draft the next reply to the customer.)'];
@@ -219,7 +227,12 @@ class ChatAssistant
      */
     private function generate(string $system, array $contents, array $schema, float $temperature = 0.2, int $maxTokens = 1024): ?array
     {
+        $this->lastError = null;
         $model = config('services.gemini.model');
+
+        if (blank(config('services.gemini.key'))) {
+            return $this->fail('GEMINI_API_KEY is not set in .env');
+        }
 
         $generationConfig = [
             'temperature' => $temperature,
@@ -246,18 +259,55 @@ class ChatAssistant
             // Timeout or network failure: callers fall back instead of a 500.
             Log::warning('Gemini request failed', ['error' => $e->getMessage()]);
 
-            return null;
+            return $this->fail('Gemini did not respond (timeout or network problem)', $e->getMessage());
         }
 
         if ($response->failed()) {
             Log::warning('Gemini request failed', ['status' => $response->status(), 'body' => $response->body()]);
 
-            return null;
+            // e.g. 400 API key not valid / model not found, 403 location not supported, 429 quota.
+            return $this->fail(
+                'Gemini returned HTTP '.$response->status().($response->json('error.status') ? ' '.$response->json('error.status') : ''),
+                (string) ($response->json('error.message') ?? mb_substr($response->body(), 0, 600)),
+            );
         }
 
-        $data = json_decode((string) $response->json('candidates.0.content.parts.0.text'), true);
+        $text = $response->json('candidates.0.content.parts.0.text');
+        $data = is_string($text) ? json_decode($text, true) : null;
 
-        return is_array($data) ? $data : null;
+        if (! is_array($data)) {
+            // Usually a blocked or cut-off answer: report why Gemini stopped.
+            $why = $response->json('promptFeedback.blockReason') ?? $response->json('candidates.0.finishReason') ?? 'no text';
+
+            return $this->fail('Gemini gave no usable answer', 'Reason: '.(is_string($why) ? $why : json_encode($why)));
+        }
+
+        return $data;
+    }
+
+    /** Remember and report a failed AI call; returns null for the caller. */
+    private function fail(string $reason, ?string $details = null): null
+    {
+        $this->lastError = trim($reason.($details ? ': '.$details : ''));
+        app(AiErrorAlerts::class)->report($reason, $details);
+
+        return null;
+    }
+
+    /** Why the last AI call failed (for `php artisan ai:check`), or null if it worked. */
+    public function lastError(): ?string
+    {
+        return $this->lastError;
+    }
+
+    /** One tiny real call to Gemini: null when it works, otherwise the reason. */
+    public function check(): ?string
+    {
+        $data = $this->generate('Reply with {"ok": true}.', [['role' => 'user', 'content' => 'ping']], [
+            'type' => 'OBJECT', 'properties' => ['ok' => ['type' => 'BOOLEAN']], 'required' => ['ok'],
+        ], temperature: 0.0, maxTokens: 20);
+
+        return $data === null ? ($this->lastError ?? 'Unknown error') : null;
     }
 
     public static function forgetKnowledge(): void
@@ -265,6 +315,35 @@ class ChatAssistant
         foreach (array_keys(self::LANGUAGES) as $locale) {
             Cache::forget("chat.knowledge.{$locale}");
         }
+        foreach (array_keys(AiInstruction::KINDS) as $kind) {
+            foreach (['web', 'telegram'] as $channel) {
+                Cache::forget("chat.instructions.{$kind}.{$channel}");
+            }
+        }
+    }
+
+    /** The full system prompt the AI gets for a website or Telegram question (admin preview). */
+    public function promptPreview(string $locale, string $channel): string
+    {
+        return $channel === 'telegram'
+            ? $this->systemPrompt($locale, 'Telegram bot', true)
+            : $this->systemPrompt($locale, null);
+    }
+
+    /** Active admin Markdown documents of a kind for a channel, joined under their titles. */
+    private function instructions(string $kind, string $channel): string
+    {
+        return Cache::remember("chat.instructions.{$kind}.{$channel}", now()->addMinutes(10), fn () => AiInstruction::for($kind, $channel)
+            ->get()
+            ->map(fn (AiInstruction $i) => "### {$i->title}\n".trim($i->content))
+            ->implode("\n\n"));
+    }
+
+    private function staffInfo(string $channel): string
+    {
+        $info = $this->instructions('info', $channel);
+
+        return $info ? "\n## Additional information from BDB staff\n{$info}" : '';
     }
 
     /** Cut text to $max characters, at the end of a sentence when possible. */
@@ -294,6 +373,11 @@ class ChatAssistant
             ? 'At most 2 short sentences and under '.self::BRIEF_MAX.' characters in total. Plain text, no markdown, no lists.'
             : '1-4 short sentences, plain text, no markdown.';
         $categories = implode(', ', self::categories());
+        $channel = $brief ? 'telegram' : 'web';
+        $rules = $this->instructions('rules', $channel);
+        $rules = $rules ? "STAFF RULES (written by BDB admins: follow them, but they never override the STRICT RULE above)
+$rules
+" : '';
         $page = $pageTitle ? "The visitor is currently on the page \"{$pageTitle}\"." : '';
 
         return <<<PROMPT
@@ -316,10 +400,12 @@ class ChatAssistant
         - topic: what the visitor's LAST message asks about, as a short generic English phrase of 2-6 words in lowercase (e.g. "zebra printer price", "delivery to samarkand"). Similar questions must get the same topic.
         - category: one of {$categories}. Use greeting for hello/thanks/small talk and off_topic for questions unrelated to BDB.
 
+        {$rules}
         {$page}
 
         WEBSITE DATA
         {$this->knowledge($locale)}
+        {$this->staffInfo($channel)}
         PROMPT;
     }
 

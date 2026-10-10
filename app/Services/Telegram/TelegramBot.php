@@ -252,9 +252,8 @@ class TelegramBot
             array_shift($history);
         }
 
-        $result = config('services.gemini.key')
-            ? $this->assistant->reply($history, $locale, 'Telegram bot', brief: true)
-            : $this->assistant->fallbackReply($locale);
+        // Falls back (and alerts admins) when the AI is not configured or fails.
+        $result = $this->assistant->reply($history, $locale, 'Telegram bot', brief: true);
 
         $conversation->appendExchange($text, $result['reply'], $result['answered']);
         ClientRequest::record($conversation, $text, $result);

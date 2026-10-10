@@ -33,7 +33,8 @@ class ChatController extends Controller
             array_shift($history);
         }
 
-        $result = config('services.gemini.key') && $history
+        // reply() itself falls back (and alerts admins) when the AI is not configured or fails.
+        $result = $history
             ? $assistant->reply($history, $data['locale'], $data['page'] ?? null)
             : $assistant->fallbackReply($data['locale']);
 

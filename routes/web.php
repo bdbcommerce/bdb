@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AiInstructionController;
 use App\Http\Controllers\Admin\ArticleCategoryController;
 use App\Http\Controllers\Admin\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
@@ -76,6 +77,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('customers', CustomerController::class)->except(['show']);
 
         Route::resource('knowledge', KnowledgeEntryController::class)->except(['show']);
+        Route::get('ai-instructions/prompt', [AiInstructionController::class, 'prompt'])->name('ai-instructions.prompt');
+        Route::resource('ai-instructions', AiInstructionController::class)->except(['show']);
 
         // Client requests: customer questions grouped by AI topic, answered with knowledge entries
         Route::get('client-requests', [ClientRequestController::class, 'index'])->name('client-requests.index');
