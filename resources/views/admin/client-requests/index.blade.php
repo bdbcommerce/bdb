@@ -20,8 +20,8 @@
         Customer questions from the website and Telegram, grouped by topic by the AI. Answer an open group once with a
         knowledge entry, and the assistant uses it for everyone who asks the same thing.
     </p>
-    <div class="flex flex-wrap gap-2">
-        <nav class="flex gap-1 bg-slate-100 rounded-lg p-1" aria-label="Request status">
+    <div class="flex flex-wrap gap-2 min-w-0 max-w-full">
+        <nav class="flex gap-1 bg-slate-100 rounded-lg p-1 max-w-full overflow-x-auto whitespace-nowrap" aria-label="Request status">
             @foreach($statuses + ['all' => 'All'] as $key => $label)
                 <a href="{{ route('admin.client-requests.index', $query($key, $channel)) }}"
                    @if($status === $key) aria-current="true" @endif class="{{ $tab($status === $key) }}">

@@ -101,7 +101,7 @@
                           onsubmit="return confirm('Send this answer to {{ $pendingCustomers }} Telegram {{ Str::plural('customer', $pendingCustomers) }}?')">
                         @csrf
                         <input type="hidden" name="knowledge_entry_id" value="{{ $entry->id }}">
-                        <p class="text-xs text-slate-500">{{ $pendingCustomers }} Telegram {{ Str::plural('customer', $pendingCustomers) }} asked this and haven't got the answer yet. Each gets it in their own language.</p>
+                        <p class="text-xs text-slate-500">{{ $pendingCustomers }} Telegram {{ Str::plural('customer', $pendingCustomers) }} asked questions this entry answers (here or in groups the AI matched) and haven't got it yet. Each gets it in their own language.</p>
                         <button type="submit" class="{{ $primary }} w-full">Send answer to {{ $pendingCustomers }} {{ Str::plural('customer', $pendingCustomers) }}</button>
                     </form>
                 @endif

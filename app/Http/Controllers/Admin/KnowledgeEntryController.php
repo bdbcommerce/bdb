@@ -35,7 +35,8 @@ class KnowledgeEntryController extends Controller
             // Without a draft, start from the customer's own question.
             $entry->setTranslation('question', $fromRequest->locale, $fromRequest->question);
 
-            if ($request->boolean('draft')) {
+            // Back here after a failed save, the admin's edited text is in old input: don't draft again.
+            if ($request->boolean('draft') && ! $request->session()->hasOldInput()) {
                 $draft = config('services.gemini.key') ? $assistant->draftKnowledge($questions->all() ?: [$fromRequest->question]) : null;
                 if ($draft) {
                     $entry->fill(['type' => $draft['type'], 'keywords' => $draft['keywords']])

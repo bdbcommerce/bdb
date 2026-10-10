@@ -59,20 +59,23 @@ class ChatAssistant
     {
         $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief), $history, self::REPLY_SCHEMA);
 
-        if (! is_array($data) || empty($data['reply'])) {
+        // The schema asks for these types, but never trust them: a wrong type must not crash the chat.
+        if (! is_array($data) || ! is_string($data['reply'] ?? null) || trim($data['reply']) === '') {
             return $this->fallbackReply($locale);
         }
 
-        $category = (string) ($data['category'] ?? '');
+        $string = fn (string $key) => is_string($data[$key] ?? null) ? $data[$key] : null;
+        $suggestions = is_array($data['suggestions'] ?? null) ? array_filter($data['suggestions'], 'is_string') : [];
+        $id = $data['knowledge_id'] ?? null;
 
         return [
-            'reply' => $brief ? self::shorten((string) $data['reply'], self::BRIEF_MAX) : (string) $data['reply'],
-            'suggestions' => array_slice(array_map('strval', $data['suggestions'] ?? []), 0, 3),
-            'offer_callback' => (bool) ($data['offer_callback'] ?? false),
-            'answered' => (bool) ($data['answered'] ?? true),
-            'knowledge_id' => ($id = (int) ($data['knowledge_id'] ?? 0)) > 0 ? $id : null,
-            'topic' => ClientRequest::normalizeTopic($data['topic'] ?? null),
-            'category' => in_array($category, self::categories(), true) ? $category : 'other',
+            'reply' => $brief ? self::shorten($data['reply'], self::BRIEF_MAX) : $data['reply'],
+            'suggestions' => array_slice(array_values($suggestions), 0, 3),
+            'offer_callback' => ($data['offer_callback'] ?? false) === true,
+            'answered' => ($data['answered'] ?? true) !== false,
+            'knowledge_id' => is_int($id) && $id > 0 ? $id : null,
+            'topic' => ClientRequest::normalizeTopic($string('topic')),
+            'category' => in_array($string('category'), self::categories(), true) ? $string('category') : 'other',
         ];
     }
 
@@ -130,9 +133,12 @@ class ChatAssistant
             'required' => ['type', 'question_uz', 'question_ru', 'question_en', 'answer_uz', 'answer_ru', 'answer_en', 'keywords'],
         ], temperature: 0.3, maxTokens: 2048);
 
-        if (! is_array($data) || empty($data['answer_en'])) {
+        $fields = ['question_uz', 'question_ru', 'question_en', 'answer_uz', 'answer_ru', 'answer_en'];
+        if (! is_array($data) || collect($fields)->contains(fn ($f) => ! is_string($data[$f] ?? null) || trim($data[$f]) === '')) {
             return null;
         }
+        $data['type'] = is_string($data['type'] ?? null) ? $data['type'] : 'faq';
+        $data['keywords'] = is_string($data['keywords'] ?? null) ? $data['keywords'] : '';
 
         return [
             'type' => array_key_exists($data['type'] ?? '', KnowledgeEntry::TYPES) ? $data['type'] : 'faq',
