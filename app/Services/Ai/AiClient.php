@@ -48,7 +48,7 @@ class AiClient
             Log::warning("{$label} request failed", ['model' => $model->model, 'status' => $response->status(), 'body' => AiErrorAlerts::withoutSecrets($response->body(), $model->key())]);
 
             // e.g. 400 key not valid / model not found, 401, 403 location not supported, 429 quota.
-            $errorStatus = $response->json('error.status') ?? $response->json('error.code') ?? $response->json('error.type');
+            $errorStatus = collect([$response->json('error.status'), $response->json('error.type'), $response->json('error.code')])->first(fn ($v) => is_string($v) && $v !== '');
 
             return $this->failure(
                 "{$label} returned HTTP ".$response->status().(is_string($errorStatus) ? ' '.$errorStatus : ''),

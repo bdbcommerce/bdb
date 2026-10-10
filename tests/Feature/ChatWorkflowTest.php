@@ -141,11 +141,11 @@ class ChatWorkflowTest extends TestCase
 
     public function test_editing_site_content_refreshes_assistant_knowledge(): void
     {
-        Cache::put('chat.knowledge.en', 'stale', 600);
+        Cache::put('chat.knowledge.v2.en', 'stale', 600);
 
         Brand::create(['name' => ['en' => 'Zebra']]);
 
-        $this->assertNull(Cache::get('chat.knowledge.en'));
+        $this->assertNull(Cache::get('chat.knowledge.v2.en'));
     }
 
     public function test_old_conversations_are_pruned(): void

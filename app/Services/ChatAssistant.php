@@ -78,7 +78,10 @@ class ChatAssistant
      */
     public function reply(array $history, string $locale, ?string $pageTitle = null, bool $brief = false): array
     {
-        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief), $history, self::REPLY_SCHEMA, task: $brief ? 'telegram' : 'chat');
+        // The knowledge sent is chosen by what the customer asked in the last two questions.
+        $query = collect($history)->where('role', 'user')->pluck('content')->slice(-2)->implode(' ');
+        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief, $query), $history, self::REPLY_SCHEMA, maxTokens: 600, task: $brief ? 'telegram' : 'chat',
+            valid: fn (array $d) => is_string($d['reply'] ?? null) && trim($d['reply']) !== '');
 
         // The schema asks for these types, but never trust them: a wrong type must not crash the chat.
         if (! is_array($data) || ! is_string($data['reply'] ?? null) || trim($data['reply']) === '') {
@@ -142,7 +145,7 @@ class ChatAssistant
         - keywords: comma-separated search words in all three languages.
 
         WEBSITE DATA
-        {$this->knowledge('en')}
+        {$this->knowledge('en', implode(' ', array_slice($questions, 0, 15)))}
         {$this->staffInfo('web')}
         PROMPT;
 
@@ -224,7 +227,7 @@ class ChatAssistant
         {$this->instructions('rules', 'telegram')}
 
         WEBSITE DATA
-        {$this->knowledge($locale)}
+        {$this->knowledge($locale, collect($history)->where('role', 'user')->pluck('content')->slice(-2)->implode(' '))}
         {$this->staffInfo('telegram')}
         PROMPT;
 
@@ -245,14 +248,20 @@ class ChatAssistant
      *
      * @param  array<int, array{role: string, content: string}>  $contents  roles: user|assistant
      */
-    private function generate(string $system, array $contents, array $schema, float $temperature = 0.2, int $maxTokens = 1024, string $task = 'chat'): ?array
+    private function generate(string $system, array $contents, array $schema, float $temperature = 0.2, int $maxTokens = 1024, string $task = 'chat', ?callable $valid = null): ?array
     {
         $this->lastError = null;
         $this->lastModel = null;
         $failures = [];
 
-        foreach (AiModel::forTask($task) as $model) {
+        // At most MAX_ATTEMPTS models per request, so one failing question can't use up every backup's quota.
+        foreach (AiModel::forTask($task)->take(self::MAX_ATTEMPTS) as $model) {
             $result = app(AiClient::class)->call($model, $system, $contents, $schema, $temperature, $maxTokens);
+
+            // Valid JSON in the wrong shape (e.g. no reply text) counts as a failure, so a backup is tried.
+            if ($result['data'] !== null && $valid && ! $valid($result['data'])) {
+                $result = ['data' => null, 'reason' => ($model->provider === 'gemini' ? 'Gemini' : $model->name).' answered in the wrong format', 'details' => mb_substr((string) json_encode($result['data'], JSON_UNESCAPED_UNICODE), 0, 300), 'status' => null];
+            }
 
             if ($result['data'] !== null) {
                 $model->markSuccess();
@@ -275,7 +284,7 @@ class ChatAssistant
             return $this->fail($failures[0]['reason'], $failures[0]['details'], $failures[0]['model']);
         }
 
-        return $this->fail('All '.count($failures).' AI models failed', collect($failures)
+        return $this->fail('All '.count($failures).' AI models failed', model: collect($failures)->pluck('model')->implode(', '), details: collect($failures)
             ->map(fn ($f) => $f['reason'].($f['details'] ? ' ('.mb_strimwidth($f['details'], 0, 150, '…').')' : ''))
             ->implode('; '));
     }
@@ -333,7 +342,7 @@ class ChatAssistant
     public static function forgetKnowledge(): void
     {
         foreach (array_keys(self::LANGUAGES) as $locale) {
-            Cache::forget("chat.knowledge.{$locale}");
+            Cache::forget("chat.knowledge.v2.{$locale}");
         }
         foreach (array_keys(AiInstruction::KINDS) as $kind) {
             foreach (['web', 'telegram'] as $channel) {
@@ -400,7 +409,7 @@ class ChatAssistant
         return ($words !== '' && $words !== $cut ? $words : $cut).'…';
     }
 
-    private function systemPrompt(string $locale, ?string $pageTitle, bool $brief = false): string
+    private function systemPrompt(string $locale, ?string $pageTitle, bool $brief = false, string $query = ''): string
     {
         $language = self::LANGUAGES[$locale] ?? 'English';
         $length = $brief
@@ -434,14 +443,106 @@ $rules
         {$page}
 
         WEBSITE DATA
-        {$this->knowledge($locale)}
+        {$this->knowledge($locale, $query)}
         {$this->staffInfo($channel)}
         PROMPT;
     }
 
-    private function knowledge(string $locale): string
+    /** How many knowledge entries / full articles relevant to the question are sent. */
+    private const MAX_ENTRIES = 6;
+
+    /** Common question words (as 5-letter stems) that say nothing about the topic. */
+    private const STOP_WORDS = [
+        // ru
+        'что', 'такое', 'как', 'какой', 'какая', 'какие', 'какое', 'где', 'когда', 'почем', 'есть', 'это', 'для', 'или',
+        'вы', 'вас', 'ваш', 'ваша', 'ваши', 'мне', 'нам', 'наш', 'можно', 'нужен', 'нужна', 'нужно', 'хочу', 'есть',
+        'про', 'при', 'под', 'над', 'без', 'все', 'всё', 'так', 'тоже', 'еще', 'ещё', 'уже', 'там', 'тут', 'здрав', 'привет',
+        // uz
+        'nima', 'qanda', 'qanday', 'qaysi', 'qayer', 'qachon', 'nega', 'uchun', 'bilan', 'ham', 'yoki', 'bor', 'yoʻq', 'yoq',
+        'siz', 'sizd', 'sizni', 'bizn', 'biz', 'menga', 'kerak', 'mumki', 'assal', 'salom', 'haqid',
+        // en
+        'what', 'which', 'when', 'where', 'how', 'why', 'the', 'and', 'for', 'you', 'your', 'are', 'can', 'does', 'have',
+        'with', 'about', 'there', 'this', 'that', 'need', 'want', 'hello',
+    ];
+
+    /** Models tried per request before giving the fallback reply. */
+    private const MAX_ATTEMPTS = 3;
+
+    private const MAX_ARTICLES = 2;
+
+    /**
+     * The WEBSITE DATA for one question. Free AI tiers limit tokens per minute, so instead of the whole
+     * site only the compact basics plus the knowledge entries and articles that match the question are sent.
+     * With an empty $query (prompt preview) the first entries are shown.
+     */
+    private function knowledge(string $locale, string $query = ''): string
     {
-        return Cache::remember("chat.knowledge.{$locale}", now()->addMinutes(10), function () use ($locale) {
+        $data = $this->knowledgeIndex($locale);
+        $words = self::searchWords($query);
+
+        // Score by matching words, weighting rare ones higher (IDF): "агрегация" counts, "что"/"такое" barely.
+        $pick = function (array $items, int $limit, float $minScore) use ($words, $query): array {
+            if ($words === []) {
+                // No question (prompt preview): show the first ones. A question of only greetings/filler words: none.
+                return trim($query) === '' ? array_slice($items, 0, $limit) : [];
+            }
+            $n = count($items);
+            $idf = [];
+            foreach ($words as $word) {
+                $df = count(array_filter($items, fn ($i) => in_array($word, $i['title_words'], true) || in_array($word, $i['words'], true)));
+                // A small floor keeps matches working when there are only a few items (every word is "common").
+                $idf[$word] = 0.3 + log(($n + 1) / ($df + 1));
+            }
+
+            $scored = [];
+            foreach ($items as $item) {
+                $score = 0.0;
+                foreach ($words as $word) {
+                    $score += $idf[$word] * ((in_array($word, $item['title_words'], true) ? 3 : 0) + (in_array($word, $item['words'], true) ? 1 : 0));
+                }
+                if ($score >= $minScore) {
+                    $scored[] = $item + ['score' => $score];
+                }
+            }
+            usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
+
+            return array_slice($scored, 0, $limit);
+        };
+
+        $entries = $pick($data['entries'], self::MAX_ENTRIES, 0.5);
+        $articles = $pick($data['articles'], self::MAX_ARTICLES, 1.5);
+
+        $out = $data['base'];
+        if ($entries) {
+            $out .= "\n\n## Knowledge base (written by BDB staff; the entries that match this question)\n"
+                .implode("\n", array_column($entries, 'text'));
+        }
+        if ($articles) {
+            $out .= "\n\n## Articles that match this question\n".implode("\n", array_column($articles, 'text'));
+        }
+
+        return $out;
+    }
+
+    /** Lower-case word stems (first 5 letters, so Russian/Uzbek endings still match) of 3+ letter words. */
+    private static function searchWords(string $text): array
+    {
+        preg_match_all('/[\p{L}\p{N}ʻʼ\']{3,}/u', mb_strtolower($text), $m);
+
+        $stems = array_map(fn ($w) => mb_substr(str_replace(['ʻ', 'ʼ', "'"], '', $w), 0, 5), $m[0]);
+
+        return array_values(array_diff(array_unique($stems), array_map(fn ($w) => mb_substr($w, 0, 5), self::STOP_WORDS)));
+    }
+
+    /**
+     * Cached per locale: the always-sent basics, plus searchable knowledge entries and articles.
+     *
+     * @return array{base: string, entries: array, articles: array}
+     */
+    private function knowledgeIndex(string $locale): array
+    {
+        // v2: an array (basics + searchable items); older deployments cached a plain string under the old key.
+        return Cache::remember("chat.knowledge.v2.{$locale}", now()->addMinutes(10), function () use ($locale) {
             $t = fn ($model, string $field) => trim(preg_replace('/\s+/', ' ', strip_tags(
                 (string) $model->getTranslation($field, $locale, true)
             )));
@@ -462,32 +563,14 @@ $rules
                 $lines[] = "{$label}: {$url}";
             }
 
-            $entries = KnowledgeEntry::active()->get()->groupBy('type');
-            if ($entries->isNotEmpty()) {
-                $lines[] = "\n## Knowledge base (written by BDB staff)";
-                foreach ($entries as $type => $items) {
-                    $lines[] = '### '.(KnowledgeEntry::TYPES[$type] ?? $type);
-                    foreach ($items as $entry) {
-                        $lines[] = "Q [#{$entry->id}]: ".$t($entry, 'question');
-                        $lines[] = 'A: '.$t($entry, 'answer');
-                        if ($entry->keywords) {
-                            $lines[] = 'Keywords: '.$entry->keywords;
-                        }
-                        if ($entry->link) {
-                            $lines[] = 'Link: '.$entry->link;
-                        }
-                    }
-                }
-            }
-
             $lines[] = "\n## Brands BDB distributes ({$base}/brands)";
             foreach (Brand::active()->get() as $brand) {
-                $lines[] = '- '.$t($brand, 'name').': '.mb_substr($t($brand, 'description'), 0, 400);
+                $lines[] = '- '.$t($brand, 'name').': '.mb_strimwidth($t($brand, 'description'), 0, 200, '…');
             }
 
             $lines[] = "\n## Industries served ({$base}/industries)";
             foreach (Industry::active()->get() as $industry) {
-                $lines[] = '- '.$t($industry, 'name').': '.mb_substr($t($industry, 'description'), 0, 400);
+                $lines[] = '- '.$t($industry, 'name').': '.mb_strimwidth($t($industry, 'description'), 0, 200, '…');
             }
 
             $customers = Customer::active()->pluck('name')->filter()->implode(', ');
@@ -495,24 +578,45 @@ $rules
                 $lines[] = "\n## Customers ({$base}/customers)\n".$customers;
             }
 
-            // Published articles are knowledge too: title, link and the start of the text.
-            $articles = Article::published()->with('category')->limit(40)->get();
-            if ($articles->isNotEmpty()) {
-                $lines[] = "\n## Articles ({$base}/news)";
-                foreach ($articles as $article) {
-                    $slug = $article->getTranslation('slug', $locale, true);
-                    $categorySlug = $article->category?->getTranslation('slug', $locale, true);
-                    $lines[] = '### '.$t($article, 'title');
-                    if ($slug && $categorySlug) {
-                        $lines[] = 'Link: '.route('site.news.show', ['locale' => $locale, 'categorySlug' => $categorySlug, 'slug' => $slug]);
-                    }
-                    $lines[] = mb_substr(trim($t($article, 'excerpt').' '.$t($article, 'content')), 0, 900);
-                }
+            // Searchable knowledge entries (only the matching ones are sent).
+            $entries = KnowledgeEntry::active()->get()->map(function (KnowledgeEntry $entry) use ($t) {
+                $question = $t($entry, 'question');
+                $answer = $t($entry, 'answer');
+                $text = "Q [#{$entry->id}]: {$question}\nA: {$answer}".($entry->link ? "\nLink: {$entry->link}" : '');
+
+                return [
+                    'text' => $text,
+                    'title_words' => self::searchWords($question.' '.$entry->keywords),
+                    'words' => self::searchWords($answer),
+                ];
+            })->all();
+
+            // Articles: every title is listed (so the AI knows they exist); only matching ones are sent in full.
+            $articles = [];
+            $titles = [];
+            foreach (Article::published()->with('category')->limit(40)->get() as $article) {
+                $slug = $article->getTranslation('slug', $locale, true);
+                $categorySlug = $article->category?->getTranslation('slug', $locale, true);
+                $link = $slug && $categorySlug
+                    ? route('site.news.show', ['locale' => $locale, 'categorySlug' => $categorySlug, 'slug' => $slug])
+                    : null;
+                $title = $t($article, 'title');
+                $body = trim($t($article, 'excerpt').' '.$t($article, 'content'));
+
+                $titles[] = '- '.$title;
+                $articles[] = [
+                    'text' => "### {$title}".($link ? "\nLink: {$link}" : '')."\n".mb_strimwidth($body, 0, 1200, '…'),
+                    'title_words' => self::searchWords($title),
+                    'words' => self::searchWords($body),
+                ];
+            }
+            if ($titles) {
+                $lines[] = "\n## Articles on {$base}/news (titles)\n".implode("\n", $titles);
             }
 
             $lines[] = "\n## Site pages\nAbout {$base}/about, Brands {$base}/brands, Industries {$base}/industries, Customers {$base}/customers, News {$base}/news, Contact {$base}/contact";
 
-            return implode("\n", $lines);
+            return ['base' => implode("\n", $lines), 'entries' => $entries, 'articles' => $articles];
         });
     }
 }

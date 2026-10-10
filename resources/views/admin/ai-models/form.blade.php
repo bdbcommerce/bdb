@@ -51,7 +51,7 @@
             <label for="base_url" class="block text-sm font-medium text-slate-700 mb-1">API address (base URL)</label>
             <input id="base_url" name="base_url" type="url" maxlength="255" value="{{ old('base_url', $model->base_url) }}" spellcheck="false"
                    placeholder="https://api.groq.com/openai/v1" class="{{ $input.$field('base_url') }} font-mono">
-            <p class="text-xs text-slate-400 mt-1">The OpenAI-compatible endpoint, without /chat/completions.</p>
+            <p class="text-xs text-slate-400 mt-1">The OpenAI-compatible endpoint, without /chat/completions. Use https:// — with http:// the key is sent unencrypted (only for a server on your own network).</p>
         </div>
 
         <div>

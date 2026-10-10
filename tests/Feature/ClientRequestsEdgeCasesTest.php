@@ -527,14 +527,16 @@ class ClientRequestsEdgeCasesTest extends TestCase
             $this->chat('Hi', $locale)->assertOk();
             $prompt = Http::recorded()->last()[0]['system_instruction']['parts'][0]['text'];
             $sizes[$locale] = mb_strlen($prompt);
-            $this->assertStringContainsString('## Articles', $prompt);
-            $this->assertSame(20, substr_count($prompt, 'Link: '.url("/{$locale}/news/")), "article links {$locale}");
+            // All 20 titles are listed; a greeting matches no article, so none is sent in full.
+            $this->assertStringContainsString('## Articles on', $prompt);
+            $this->assertSame(20, substr_count(Str::after($prompt, '## Articles on'), "\n- "), "article titles {$locale}");
+            $this->assertLessThanOrEqual(2, substr_count($prompt, 'Link: '.url("/{$locale}/news/")), "full articles {$locale}");
             $this->assertDoesNotMatchRegularExpression("/<\/?(p|b)>/", $prompt);
         }
 
-        // Measured at QA: uz ~26.5k, ru ~25.0k, en ~24.2k characters with the demo content and 20 articles.
+        // Only matching knowledge is sent (free tiers limit tokens per minute): was ~25k characters with everything.
         foreach ($sizes as $size) {
-            $this->assertLessThan(60000, $size);
+            $this->assertLessThan(12000, $size);
         }
     }
 

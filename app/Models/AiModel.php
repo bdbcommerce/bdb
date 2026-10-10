@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\AiErrorAlerts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
@@ -65,6 +66,27 @@ class AiModel extends Model
                 'Free models end in ":free"; the current list is at https://openrouter.ai/models?max_price=0 if this model name stops working.',
             ],
             'note' => 'Free ":free" models with daily limits. Any other OpenRouter model name works too.',
+        ],
+        'openrouter-deepseek-free' => [
+            'name' => 'OpenRouter DeepSeek V3 (free)', 'provider' => 'openai', 'model' => 'deepseek/deepseek-chat-v3-0324:free', 'base_url' => 'https://openrouter.ai/api/v1', 'priority' => 45,
+            'key_url' => 'https://openrouter.ai/keys',
+            'steps' => [
+                'Open https://openrouter.ai and sign up (the same OpenRouter key works for all OpenRouter models).',
+                'Go to https://openrouter.ai/keys and click "Create Key".',
+                'Copy the key (it starts with sk-or-), paste it here, tick Active and save.',
+                'If the test says the model is not found, pick the current free DeepSeek name at https://openrouter.ai/models?q=deepseek&max_price=0 and update the model name.',
+            ],
+            'note' => 'DeepSeek for free through OpenRouter: strong in Russian and English, daily free limits.',
+        ],
+        'deepseek' => [
+            'name' => 'DeepSeek Chat (official)', 'provider' => 'openai', 'model' => 'deepseek-chat', 'base_url' => 'https://api.deepseek.com', 'priority' => 55,
+            'key_url' => 'https://platform.deepseek.com/api_keys',
+            'steps' => [
+                'Open https://platform.deepseek.com and sign up.',
+                'Top up a small balance under Top up (the API is pay-as-you-go and very cheap; it is not free).',
+                'Go to API keys (https://platform.deepseek.com/api_keys), click "Create new API key", copy it (starts with sk-), paste it here, tick Active and save.',
+            ],
+            'note' => 'Not free, but very low cost per question and no daily free-tier cap. Good quality in Russian and English.',
         ],
         'mistral-small' => [
             'name' => 'Mistral Small', 'provider' => 'openai', 'model' => 'mistral-small-latest', 'base_url' => 'https://api.mistral.ai/v1', 'priority' => 50,
@@ -182,7 +204,8 @@ class AiModel extends Model
         };
 
         $this->forceFill([
-            'last_error' => mb_substr($error, 0, 1000),
+            // Some providers echo the key in their error text: never store or show it.
+            'last_error' => mb_substr(AiErrorAlerts::withoutSecrets($error, $this->key()), 0, 1000),
             'last_error_at' => now(),
             'cooldown_until' => now()->addMinutes($minutes),
         ])->saveQuietly();

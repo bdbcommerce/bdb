@@ -44,7 +44,7 @@ class AiInstructionController extends Controller
     {
         // The main prompt only has its text edited; it stays one active, all-channel document.
         $aiInstruction->update($aiInstruction->isMain()
-            ? $request->validate(['content' => 'required|string|max:'.AiInstruction::MAX_LENGTH])
+            ? self::normalized($request->validate(['content' => 'required|string|max:'.AiInstruction::MAX_LENGTH]))
             : $this->validated($request));
 
         return redirect()->route('admin.ai-instructions.index')->with('success', 'Saved. The AI uses it from the next question.');
@@ -98,6 +98,14 @@ class AiInstructionController extends Controller
             'sort_order' => 'nullable|integer|min:0|max:65535',
         ]);
 
-        return $data + ['is_active' => $request->boolean('is_active'), 'sort_order' => (int) ($data['sort_order'] ?? 0)];
+        return self::normalized($data) + ['is_active' => $request->boolean('is_active'), 'sort_order' => (int) ($data['sort_order'] ?? 0)];
+    }
+
+    /** Browsers send textarea line breaks as \r\n; store plain \n. */
+    private static function normalized(array $data): array
+    {
+        $data['content'] = str_replace("\r\n", "\n", $data['content']);
+
+        return $data;
     }
 }

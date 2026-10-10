@@ -31,7 +31,7 @@ class AiModelController extends Controller
     /** ?preset=groq-llama-70b pre-fills the form with a free model. */
     public function create(Request $request)
     {
-        $preset = AiModel::PRESETS[$request->query('preset')] ?? null;
+        $preset = is_string($key = $request->query('preset')) ? (AiModel::PRESETS[$key] ?? null) : null;
         $model = new AiModel([
             'name' => $preset['name'] ?? '',
             'provider' => $preset['provider'] ?? 'openai',
@@ -134,9 +134,9 @@ class AiModelController extends Controller
             $data['base_url'] = null;
         }
 
-        return $data + [
+        return [
             'is_active' => $request->boolean('is_active'),
             'tasks' => array_values(array_unique($data['tasks'])),
-        ];
+        ] + $data;
     }
 }
