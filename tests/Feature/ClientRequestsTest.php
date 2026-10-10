@@ -9,6 +9,7 @@ use App\Models\TelegramUser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -284,6 +285,22 @@ class ClientRequestsTest extends TestCase
         $this->actingAs($admin)->post(route('admin.client-requests.notify', $first), ['knowledge_entry_id' => $entry->id])
             ->assertSessionHas('success', fn ($m) => str_contains($m, 'sent to 0'));
         $this->assertCount(2, Http::recorded(fn (Request $r) => str_ends_with($r->url(), '/sendMessage')));
+    }
+
+    public function test_notify_does_nothing_while_another_send_is_in_progress(): void
+    {
+        $entry = $this->entry();
+        $request = $this->request(['channel' => 'telegram', 'external_id' => '555', 'status' => 'resolved', 'knowledge_entry_id' => $entry->id]);
+        $this->fakeGemini([]);
+        $lock = Cache::lock("client-requests.notify.{$entry->id}", 120);
+        $lock->get();
+
+        $this->actingAs($this->admin())->post(route('admin.client-requests.notify', $request), ['knowledge_entry_id' => $entry->id])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'already being sent'));
+
+        Http::assertNotSent(fn (Request $r) => str_ends_with($r->url(), '/sendMessage'));
+        $this->assertNull($request->fresh()->notified_at);
+        $lock->release();
     }
 
     // Reply suggestions --------------------------------------------------------------

@@ -3,7 +3,7 @@
 @php
     $locale  = app()->getLocale();
     $address = $companyInfo->getTranslation('address', $locale, false);
-    $socials = array_filter(['Telegram' => $companyInfo->telegram, 'Instagram' => $companyInfo->instagram, 'Facebook' => $companyInfo->facebook, 'LinkedIn' => $companyInfo->linkedin, 'YouTube' => $companyInfo->youtube]);
+    $socials = $companyInfo->socialLinks();
 @endphp
 
 @section('title', __('Contact'))

@@ -83,7 +83,7 @@
                     @endif
 
                     @php
-                        $socials = array_filter(['Telegram' => $companyInfo->telegram, 'Instagram' => $companyInfo->instagram, 'Facebook' => $companyInfo->facebook, 'LinkedIn' => $companyInfo->linkedin, 'YouTube' => $companyInfo->youtube]);
+                        $socials = $companyInfo->socialLinks();
                     @endphp
                     @if($socials)
                         <ul class="mt-6 pt-5 border-t border-gray-200 flex flex-wrap gap-x-4 gap-y-2">

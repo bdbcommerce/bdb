@@ -25,13 +25,8 @@
         ['url' => route('site.contact', $locale),    'label' => __('Contact'),    'route' => 'site.contact'],
     ];
     $_languages = ['uz' => "O'zbekcha", 'ru' => 'Русский', 'en' => 'English'];
-    $_socials = array_filter([
-        'Telegram'  => $companyInfo->telegram,
-        'Instagram' => $companyInfo->instagram,
-        'Facebook'  => $companyInfo->facebook,
-        'LinkedIn'  => $companyInfo->linkedin,
-        'YouTube'   => $companyInfo->youtube,
-    ]);
+    // Normalized https links; values that aren't a link to that network are left out.
+    $_socials = $companyInfo->socialLinks();
 @endphp
 <!DOCTYPE html>
 <html lang="{{ $locale }}">

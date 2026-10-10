@@ -18,10 +18,25 @@ class CompanyInfoController extends Controller
 
     public function update(Request $request)
     {
+        $socialRules = [];
+        foreach (CompanyInfo::SOCIALS as $network => $config) {
+            $socialRules[$network] = ['bail', 'nullable', 'string', 'max:255', function ($attribute, $value, $fail) use ($network, $config) {
+                if (! is_string($value) || CompanyInfo::socialUrl($network, $value) === null) {
+                    $fail("The {$config['label']} link is not valid. Enter it like {$config['example']}.");
+                }
+            }];
+        }
+
         $request->validate([
             'phone' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:100',
-        ]);
+        ] + $socialRules);
+
+        // Store every link as a full https URL, whatever form the admin typed.
+        $socials = [];
+        foreach (array_keys(CompanyInfo::SOCIALS) as $network) {
+            $socials[$network] = CompanyInfo::socialUrl($network, $request->input($network));
+        }
 
         $info = CompanyInfo::instance();
         $info->update([
@@ -42,11 +57,7 @@ class CompanyInfoController extends Controller
             ],
             'phone' => $request->input('phone'),
             'email' => $request->input('email'),
-            'telegram' => $request->input('telegram'),
-            'instagram' => $request->input('instagram'),
-            'facebook' => $request->input('facebook'),
-            'youtube' => $request->input('youtube'),
-            'linkedin' => $request->input('linkedin'),
+            ...$socials,
             'map_embed' => $request->input('map_embed'),
             'google_analytics' => $request->input('google_analytics'),
             'yandex_metrika' => $request->input('yandex_metrika'),

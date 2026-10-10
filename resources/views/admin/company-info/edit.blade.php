@@ -96,11 +96,32 @@
                 </svg>
                 <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contact</h2>
             </div>
-            @foreach(['phone' => 'Phone', 'email' => 'Email', 'telegram' => 'Telegram', 'instagram' => 'Instagram', 'facebook' => 'Facebook', 'youtube' => 'YouTube', 'linkedin' => 'LinkedIn'] as $field => $label)
+            @foreach(['phone' => 'Phone', 'email' => 'Email'] as $field => $label)
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ $label }}</label>
-                    <input type="text" name="{{ $field }}" value="{{ old($field, $info->$field) }}"
+                    <label for="{{ $field }}" class="block text-sm font-medium text-slate-700 mb-1">{{ $label }}</label>
+                    <input type="text" id="{{ $field }}" name="{{ $field }}" value="{{ old($field, $info->$field) }}"
                            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+                </div>
+            @endforeach
+            <p class="text-xs text-slate-400 pt-2">Social networks: paste the full link or just the username (e.g. @bdb_uz). It is saved as a full https link.</p>
+            @foreach(\App\Models\CompanyInfo::SOCIALS as $field => $social)
+                @php $current = \App\Models\CompanyInfo::socialUrl($field, $info->$field); @endphp
+                <div>
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <label for="{{ $field }}" class="text-sm font-medium text-slate-700">{{ $social['label'] }}</label>
+                        @if($current)
+                            <a href="{{ $current }}" target="_blank" rel="noopener noreferrer" class="text-xs text-slate-500 underline hover:text-slate-900">Open<span class="sr-only"> {{ $social['label'] }} link in a new tab</span></a>
+                        @elseif($info->$field)
+                            <span class="text-xs text-red-700">Saved value is not a valid {{ $social['label'] }} link — it is hidden on the site</span>
+                        @endif
+                    </div>
+                    <input type="text" id="{{ $field }}" name="{{ $field }}" value="{{ old($field, $info->$field) }}"
+                           placeholder="{{ $social['example'] }}" autocomplete="off" spellcheck="false"
+                           @error($field) aria-invalid="true" aria-describedby="{{ $field }}-error" @enderror
+                           class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 {{ $errors->has($field) ? 'border-red-400' : 'border-slate-300' }}">
+                    @error($field)
+                        <p id="{{ $field }}-error" class="text-xs text-red-700 mt-1">{{ $message }}</p>
+                    @enderror
                 </div>
             @endforeach
         </div>

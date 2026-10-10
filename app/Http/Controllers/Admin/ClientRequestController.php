@@ -9,6 +9,7 @@ use App\Models\KnowledgeEntry;
 use App\Services\ClientRequestResolver;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Inbox of customer questions, grouped by the AI's topic. Admins answer a group with a
@@ -99,7 +100,18 @@ class ClientRequestController extends Controller
     {
         $entry = KnowledgeEntry::findOrFail($request->validate(['knowledge_entry_id' => 'required|integer|exists:knowledge_entries,id'])['knowledge_entry_id']);
 
-        ['sent' => $sent, 'failed' => $failed] = $resolver->notifyCustomers($entry, $request->user()->name);
+        // Two quick submits (double click, two admins) must not message customers twice.
+        $lock = Cache::lock("client-requests.notify.{$entry->id}", 120);
+        if (! $lock->get()) {
+            return redirect()->route('admin.client-requests.show', $clientRequest)
+                ->with('success', 'This answer is already being sent. Refresh in a moment.');
+        }
+
+        try {
+            ['sent' => $sent, 'failed' => $failed] = $resolver->notifyCustomers($entry, $request->user()->name);
+        } finally {
+            $lock->release();
+        }
 
         $message = "Answer sent to {$sent} Telegram ".str('customer')->plural($sent).'.';
         if ($failed) {

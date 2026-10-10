@@ -337,10 +337,13 @@ class ChatAssistant
             $lines[] = 'About: '.$t($info, 'about');
             $lines[] = 'Slogan: '.$t($info, 'slogan');
             $lines[] = 'Address: '.$t($info, 'address');
-            foreach (['phone', 'email', 'telegram', 'instagram', 'facebook', 'linkedin', 'youtube'] as $field) {
+            foreach (['phone', 'email'] as $field) {
                 if ($info->{$field}) {
                     $lines[] = ucfirst($field).': '.$info->{$field};
                 }
+            }
+            foreach ($info->socialLinks() as $label => $url) {
+                $lines[] = "{$label}: {$url}";
             }
 
             $entries = KnowledgeEntry::active()->get()->groupBy('type');
