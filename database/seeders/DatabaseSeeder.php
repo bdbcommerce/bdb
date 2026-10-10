@@ -35,11 +35,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             ArticleCategorySeeder::class,
             HeroBannerSeeder::class,
+            DemoContentSeeder::class,
         ]);
 
-        // Demo brands, industries, customers and AI knowledge — never on production.
-        if (! app()->isProduction()) {
-            $this->call(DemoContentSeeder::class);
-        }
     }
 }
