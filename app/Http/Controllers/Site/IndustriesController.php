@@ -9,7 +9,7 @@ class IndustriesController extends Controller
 {
     public function __invoke()
     {
-        $industries = Industry::active()->withCount('customers')->get();
+        $industries = Industry::active()->withCount(['customers' => fn ($q) => $q->where('is_active', true)])->get();
         return view('site.industries', compact('industries'));
     }
 }

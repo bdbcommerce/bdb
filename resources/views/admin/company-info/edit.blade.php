@@ -3,7 +3,7 @@
 @section('heading', 'Company Information')
 
 @section('content')
-<div class="max-w-2xl">
+<div class="w-full">
     <form method="POST" action="{{ route('admin.company-info.update') }}" class="space-y-6">
         @csrf
         @method('PUT')
@@ -178,7 +178,3 @@
     </div>
 </div>
 @endsection
-
-@push('scripts')
-<script src="//unpkg.com/alpinejs" defer></script>
-@endpush

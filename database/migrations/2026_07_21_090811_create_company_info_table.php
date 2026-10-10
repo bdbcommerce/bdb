@@ -14,6 +14,8 @@ return new class extends Migration
         Schema::create('company_info', function (Blueprint $table) {
             $table->id();
             $table->json('address')->nullable();
+            $table->json('slogan')->nullable();
+            $table->json('about')->nullable();
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
             $table->string('telegram')->nullable();
@@ -22,6 +24,8 @@ return new class extends Migration
             $table->string('youtube')->nullable();
             $table->string('linkedin')->nullable();
             $table->text('map_embed')->nullable();
+            $table->text('google_analytics')->nullable();
+            $table->text('yandex_metrika')->nullable();
             $table->timestamps();
         });
     }

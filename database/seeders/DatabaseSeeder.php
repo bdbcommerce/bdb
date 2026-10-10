@@ -15,19 +15,31 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // firstOrCreate makes this idempotent — safe to run on a production DB
-        // that already has an admin user.
-        User::firstOrCreate(
-            ['email' => 'admin@bdb.uz'],
-            [
-                'name' => 'BDB Admin',
-                'password' => bcrypt('admin123'),
-                'is_admin' => true,
-            ]
-        );
+        $admin = config('app.admin');
+
+        if (blank($admin['password'])) {
+            $this->command?->warn('ADMIN_PASSWORD is not set in .env — skipping admin user.');
+        } else {
+            // firstOrCreate makes this idempotent — safe to run on a production DB
+            // that already has an admin user.
+            User::firstOrCreate(
+                ['email' => $admin['email']],
+                [
+                    'name' => $admin['name'],
+                    'password' => bcrypt($admin['password']),
+                    'is_admin' => true,
+                ]
+            );
+        }
 
         $this->call([
             ArticleCategorySeeder::class,
+            HeroBannerSeeder::class,
         ]);
+
+        // Demo brands, industries, customers and AI knowledge — never on production.
+        if (! app()->isProduction()) {
+            $this->call(DemoContentSeeder::class);
+        }
     }
 }

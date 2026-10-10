@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FlushesChatKnowledge;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Translatable\HasTranslations;
 
 class Industry extends Model
 {
-    use HasTranslations;
+    use FlushesChatKnowledge, HasTranslations;
 
     public array $translatable = ['name', 'description'];
 

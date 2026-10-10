@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FlushesChatKnowledge;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Translatable\HasTranslations;
 
 class Article extends Model
 {
-    use HasTranslations;
+    use FlushesChatKnowledge, HasTranslations;
 
     public array $translatable = ['title', 'slug', 'excerpt', 'content'];
 

@@ -44,6 +44,7 @@ class NewsController extends Controller
         $related = Article::published()
             ->where('article_category_id', $article->article_category_id)
             ->where('id', '!=', $article->id)
+            ->with('category')
             ->limit(3)
             ->get();
 

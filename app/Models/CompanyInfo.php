@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FlushesChatKnowledge;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Translatable\HasTranslations;
 
 class CompanyInfo extends Model
 {
-    use HasTranslations;
+    use FlushesChatKnowledge, HasTranslations;
 
     protected $table = 'company_info';
 

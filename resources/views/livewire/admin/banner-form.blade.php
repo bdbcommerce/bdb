@@ -30,6 +30,17 @@
             @endforeach
         </div>
 
+        {{-- Badge --}}
+        @foreach(['uz', 'ru', 'en'] as $lc)
+            <div x-show="locale === '{{ $lc }}'">
+                <label class="block text-xs font-medium text-slate-500 mb-1">Badge <span class="uppercase text-slate-400">({{ $lc }})</span></label>
+                <input type="text"
+                       wire:model="badge{{ ucfirst($lc) }}"
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                       placeholder="Small line above the title, e.g. Auto identification · RFID">
+            </div>
+        @endforeach
+
         {{-- Title --}}
         @foreach(['uz', 'ru', 'en'] as $lc)
             <div x-show="locale === '{{ $lc }}'">
@@ -52,6 +63,16 @@
             </div>
         @endforeach
 
+        {{-- Points --}}
+        @foreach(['uz', 'ru', 'en'] as $lc)
+            <div x-show="locale === '{{ $lc }}'">
+                <label class="block text-xs font-medium text-slate-500 mb-1">Bullet points <span class="uppercase text-slate-400">({{ $lc }})</span></label>
+                <textarea wire:model="points{{ ucfirst($lc) }}" rows="3"
+                          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                          placeholder="One point per line (up to 3 look best)"></textarea>
+            </div>
+        @endforeach
+
         {{-- Button text --}}
         @foreach(['uz', 'ru', 'en'] as $lc)
             <div x-show="locale === '{{ $lc }}'">
@@ -66,21 +87,25 @@
 
     {{-- Button URL --}}
     <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Button Link</h2>
+        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Buttons</h2>
         <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">URL</label>
-            <input type="url" wire:model="buttonUrl"
+            <input type="text" wire:model="buttonUrl"
                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
-                   placeholder="https://example.com/page">
-            @error('buttonUrl') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
-            <p class="text-xs text-slate-400 mt-1">Leave empty to show no button. Relative paths like /uz/brands also work.</p>
+                   placeholder="/contact or https://example.com/page">
+            @error('buttonUrl') <p class="text-red-500 text-xs mt-1">Use a full URL (https://…) or a site path starting with /.</p> @enderror
+            <p class="text-xs text-slate-400 mt-1">Leave empty to show no button. Site paths like <code>/contact</code> or <code>/brands</code> open in the visitor's language automatically.</p>
         </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" wire:model="showAiButton" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+            <span class="text-sm font-medium text-slate-700">Show "Ask the AI assistant" button</span>
+        </label>
     </div>
 
     {{-- Image --}}
     <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Image</h2>
-        <p class="text-xs text-slate-400">Recommended: 1600×700 px, JPEG or PNG, max 4 MB. Will be shown full-width.</p>
+        <p class="text-xs text-slate-400">Shown on the right side of the hero. Recommended: 1200×900 px, JPEG or PNG, max 4 MB. Leave empty to show the animated scanner graphic.</p>
 
         @if($existingImage && !$image)
             <div class="relative inline-block">

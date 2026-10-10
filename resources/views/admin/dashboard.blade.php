@@ -54,6 +54,59 @@
     @endforeach
 </div>
 
+{{-- AI Assistant --}}
+<div class="mb-3 flex items-center justify-between">
+    <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">AI Assistant</h3>
+    <a href="{{ route('admin.chat-leads.index') }}" class="text-xs font-medium text-slate-500 hover:text-slate-900">All leads &rarr;</a>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+    <div class="grid grid-cols-2 lg:grid-cols-1 gap-4">
+        <a href="{{ route('admin.chat-leads.index') }}" class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-400 transition-colors">
+            <div class="flex items-start justify-between mb-3">
+                <p class="text-2xl font-bold text-slate-900">{{ $stats['new_leads'] }}</p>
+                <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-sm font-medium text-slate-700">New chat leads</p>
+            <p class="text-xs text-slate-400 mt-0.5">{{ $stats['leads'] }} total</p>
+        </a>
+        <a href="{{ route('admin.knowledge.index') }}" class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-400 transition-colors">
+            <div class="flex items-start justify-between mb-3">
+                <p class="text-2xl font-bold text-slate-900">{{ $stats['active_knowledge'] }}</p>
+                <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-sm font-medium text-slate-700">Knowledge entries</p>
+            <p class="text-xs text-slate-400 mt-0.5">{{ $stats['knowledge'] }} total, {{ $stats['active_knowledge'] }} active</p>
+        </a>
+    </div>
+
+    <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl">
+        <div class="px-5 py-3 border-b border-slate-100">
+            <p class="text-sm font-medium text-slate-700">Recent chat leads</p>
+        </div>
+        @forelse ($recentLeads as $lead)
+            <a href="{{ route('admin.chat-leads.index') }}" class="flex items-center gap-3 px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <span class="w-2 h-2 rounded-full shrink-0 {{ $lead->is_handled ? 'bg-slate-200' : 'bg-slate-900' }}"
+                      title="{{ $lead->is_handled ? 'Handled' : 'New' }}"></span>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-slate-800 truncate">{{ $lead->name ?: 'Anonymous' }} <span class="font-normal text-slate-500">{{ $lead->phone }}</span></p>
+                    <p class="text-xs text-slate-400 truncate">{{ $lead->topic ?: 'No topic' }}</p>
+                </div>
+                <span class="text-xs text-slate-400 shrink-0">{{ $lead->created_at->diffForHumans() }}</span>
+            </a>
+        @empty
+            <p class="px-5 py-8 text-sm text-slate-400 text-center">No chat leads yet. They appear here when visitors leave contact details in the AI chat.</p>
+        @endforelse
+    </div>
+</div>
+
 {{-- Quick links --}}
 <div class="mb-3">
     <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Quick links</h3>
@@ -78,6 +131,18 @@
                 'label' => 'Edit Company Info',
                 'desc'  => 'Update contact details and about text',
                 'icon'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>',
+            ],
+            [
+                'href'  => route('admin.knowledge.create'),
+                'label' => 'Add Knowledge Entry',
+                'desc'  => 'Teach the AI assistant a new answer',
+                'icon'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.5v15m7.5-7.5h-15"/>',
+            ],
+            [
+                'href'  => route('admin.chat-leads.index'),
+                'label' => 'Review Chat Leads',
+                'desc'  => 'Follow up on visitors from the AI chat',
+                'icon'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>',
             ],
         ];
     @endphp
