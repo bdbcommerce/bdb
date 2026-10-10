@@ -3,7 +3,7 @@
 @section('heading', $customer->exists ? 'Edit Customer' : 'New Customer')
 
 @section('content')
-<div class="max-w-2xl">
+<div class="w-full">
     <form method="POST"
           action="{{ $customer->exists ? route('admin.customers.update', $customer) : route('admin.customers.store') }}"
           enctype="multipart/form-data" class="space-y-6">

@@ -3,7 +3,7 @@
 @section('heading', $industry->exists ? 'Edit Industry' : 'New Industry')
 
 @section('content')
-<div class="max-w-2xl">
+<div class="w-full">
     <form method="POST"
           action="{{ $industry->exists ? route('admin.industries.update', $industry) : route('admin.industries.store') }}"
           class="space-y-6">

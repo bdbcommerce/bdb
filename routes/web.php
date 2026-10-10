@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AiInstructionController;
+use App\Http\Controllers\Admin\AiModelController;
 use App\Http\Controllers\Admin\ArticleCategoryController;
 use App\Http\Controllers\Admin\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
@@ -77,7 +78,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('customers', CustomerController::class)->except(['show']);
 
         Route::resource('knowledge', KnowledgeEntryController::class)->except(['show']);
+        // AI settings: models per task, tried by priority
+        Route::resource('ai-models', AiModelController::class)->except(['show']);
+        Route::post('ai-models/{aiModel}/test', [AiModelController::class, 'test'])->middleware('throttle:20,1')->name('ai-models.test');
+        Route::post('ai-models/{aiModel}/resume', [AiModelController::class, 'resume'])->name('ai-models.resume');
+
         Route::get('ai-instructions/prompt', [AiInstructionController::class, 'prompt'])->name('ai-instructions.prompt');
+        Route::post('ai-instructions/main/reset', [AiInstructionController::class, 'reset'])->name('ai-instructions.reset');
         Route::resource('ai-instructions', AiInstructionController::class)->except(['show']);
 
         // Client requests: customer questions grouped by AI topic, answered with knowledge entries

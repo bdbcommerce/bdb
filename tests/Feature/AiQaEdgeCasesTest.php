@@ -262,14 +262,15 @@ class AiQaEdgeCasesTest extends TestCase
 
         $this->artisan('ai:check --alert')
             ->expectsOutputToContain('not set')
-            ->expectsOutputToContain('Add GEMINI_API_KEY')
+            ->expectsOutputToContain('Add the key in Admin → AI settings')
             ->expectsOutputToContain('Telegram chat 777')
             ->doesntExpectOutputToContain(self::BOT)
             ->assertFailed();
 
         $texts = $this->alerts()->pluck('text')->implode("\n");
         $this->assertStringContainsString('Test alert from php artisan ai:check', $texts);
-        $this->assertStringContainsString('GEMINI_API_KEY is not set', $texts);
+        // ai:check tests models directly and reports on the console; it doesn't send failure alerts.
+        $this->assertStringNotContainsString('GEMINI_API_KEY is not set', $texts);
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'generativelanguage'));
     }
 
@@ -309,7 +310,7 @@ class AiQaEdgeCasesTest extends TestCase
         $this->actingAs($user)->put(route('admin.ai-instructions.update', $doc), ['title' => 'h', 'kind' => 'rules', 'channel' => 'all', 'content' => 'h'])
             ->assertRedirect(route('admin.login'));
         $this->assertSame('t', $doc->fresh()->title);
-        $this->assertSame(1, AiInstruction::count());
+        $this->assertSame(1, AiInstruction::where('kind', '!=', AiInstruction::MAIN)->count());
     }
 
     public function test_admin_pages_render_and_missing_record_is_404(): void
@@ -357,7 +358,7 @@ class AiQaEdgeCasesTest extends TestCase
         $this->actingAs($admin)->post(route('admin.ai-instructions.store'), [])
             ->assertSessionHasErrors(['title', 'kind', 'channel', 'content']);
 
-        $this->assertSame(0, AiInstruction::count());
+        $this->assertSame(0, AiInstruction::where('kind', '!=', AiInstruction::MAIN)->count());
     }
 
     public function test_max_length_boundary_and_cyrillic_and_uzbek_text(): void
@@ -367,7 +368,7 @@ class AiQaEdgeCasesTest extends TestCase
         $this->actingAs($admin)->post(route('admin.ai-instructions.store'), [
             'title' => 'Oʻzbekcha qoidalar — Правила', 'kind' => 'rules', 'channel' => 'all', 'content' => $content, 'is_active' => 1,
         ])->assertSessionHasNoErrors();
-        $doc = AiInstruction::sole();
+        $doc = AiInstruction::where('kind', '!=', AiInstruction::MAIN)->sole();
         $this->assertSame(AiInstruction::MAX_LENGTH, mb_strlen($doc->content));
         $this->assertSame('Oʻzbekcha qoidalar — Правила', $doc->title);
         $this->actingAs($admin)->get(route('admin.ai-instructions.index'))->assertSee('Oʻzbekcha qoidalar — Правила')->assertSee('20,000 characters');
@@ -420,8 +421,8 @@ class AiQaEdgeCasesTest extends TestCase
         $prompt = app(ChatAssistant::class)->promptPreview('en', 'web');
         $this->assertTrue(strpos($prompt, 'R1') < strpos($prompt, 'R2') && strpos($prompt, 'R2') < strpos($prompt, 'R3'));
         // Info goes after the website data, rules before it.
-        $this->assertGreaterThan(strpos($prompt, 'WEBSITE DATA'), strpos($prompt, 'I1'));
-        $this->assertLessThan(strpos($prompt, 'WEBSITE DATA'), strpos($prompt, 'R3'));
+        $this->assertGreaterThan(strrpos($prompt, "\nWEBSITE DATA\n"), strpos($prompt, 'I1'));
+        $this->assertLessThan(strrpos($prompt, "\nWEBSITE DATA\n"), strpos($prompt, 'R3'));
     }
 
     public function test_cache_flushed_on_update_deactivate_and_delete(): void
@@ -442,7 +443,7 @@ class AiQaEdgeCasesTest extends TestCase
         ]);
         $this->assertStringNotContainsString('V2', $assistant->promptPreview('ru', 'telegram'));
 
-        $doc->update(['is_active' => true]);
+        $doc->refresh()->update(['is_active' => true]);
         $this->assertStringContainsString('V2', $assistant->promptPreview('ru', 'telegram'));
         $this->actingAs($admin)->delete(route('admin.ai-instructions.destroy', $doc));
         $this->assertStringNotContainsString('V2', $assistant->promptPreview('ru', 'telegram'));
@@ -491,9 +492,9 @@ class AiQaEdgeCasesTest extends TestCase
             AiInstruction::create(['title' => "Doc {$i}", 'kind' => $i % 2 ? 'rules' : 'info', 'channel' => 'all', 'content' => str_repeat('x', AiInstruction::MAX_LENGTH)]);
         }
         $prompt = app(ChatAssistant::class)->promptPreview('ru', 'web');
-        // Not limited in total: document how big it gets.
-        fwrite(STDERR, "\n[QA] prompt length with 10 x 20000-char docs: ".mb_strlen($prompt)."\n");
-        $this->assertGreaterThan(200000, mb_strlen($prompt));
+        // Rules and info are each capped at MAX_TOTAL, so the prompt stays bounded.
+        $this->assertLessThan(2 * AiInstruction::MAX_TOTAL + 20000, mb_strlen($prompt));
+        $this->assertStringContainsString('[… cut: the documents are longer than the limit]', $prompt);
 
         $this->actingAs($this->admin())->get(route('admin.ai-instructions.prompt'))->assertOk();
     }
@@ -502,7 +503,7 @@ class AiQaEdgeCasesTest extends TestCase
     {
         config(['services.gemini.key' => null]);
         Http::fake();
-        $c = ChatConversation::create(['session_id' => (string) Str::uuid(), 'channel' => 'telegram', 'external_id' => '555', 'locale' => 'ru',
+        $c = ChatConversation::create(['uuid' => (string) Str::uuid(), 'channel' => 'telegram', 'external_id' => '555', 'locale' => 'ru',
             'messages' => [['role' => 'user', 'content' => 'Привет', 'at' => now()->toIso8601String()]]]);
 
         $route = collect(app('router')->getRoutes())->first(fn ($r) => str_contains((string) $r->getName(), 'suggest'));

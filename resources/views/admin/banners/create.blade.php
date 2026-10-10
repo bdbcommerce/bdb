@@ -3,7 +3,7 @@
 @section('heading', 'Add Banner')
 
 @section('content')
-<div class="max-w-2xl">
+<div class="w-full">
     <livewire:admin.banner-form />
 </div>
 @endsection

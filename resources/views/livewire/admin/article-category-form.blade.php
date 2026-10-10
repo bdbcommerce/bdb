@@ -1,4 +1,4 @@
-<div class="max-w-2xl" x-data="{ locale: 'uz' }">
+<div class="w-full" x-data="{ locale: 'uz' }">
     <div class="space-y-6">
 
         <div class="bg-white border border-slate-200 rounded-xl p-6">

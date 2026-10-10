@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiModel;
 use App\Models\ClientRequest;
 use App\Models\KnowledgeEntry;
 use App\Services\ChatAssistant;
@@ -37,7 +38,7 @@ class KnowledgeEntryController extends Controller
 
             // Back here after a failed save, the admin's edited text is in old input: don't draft again.
             if ($request->boolean('draft') && ! $request->session()->hasOldInput()) {
-                $draft = config('services.gemini.key') ? $assistant->draftKnowledge($questions->all() ?: [$fromRequest->question]) : null;
+                $draft = AiModel::available() ? $assistant->draftKnowledge($questions->all() ?: [$fromRequest->question]) : null;
                 if ($draft) {
                     $entry->fill(['type' => $draft['type'], 'keywords' => $draft['keywords']])
                         ->setTranslations('question', $draft['question'])

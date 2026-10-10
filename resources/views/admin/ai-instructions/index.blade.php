@@ -20,6 +20,22 @@
     </div>
 </div>
 
+<div class="bg-white border border-slate-300 rounded-xl p-5 mb-4 flex flex-wrap items-start gap-4">
+    <div class="min-w-0 flex-1">
+        <h2 class="text-sm font-semibold text-slate-900">Main prompt</h2>
+        <p class="text-xs text-slate-500 mt-0.5">
+            The AI's core instructions: who it is, the "answer only from website data" rule, tone and style.
+            Reply language, length and the fields used by the requests inbox are added automatically.
+        </p>
+        <p class="text-xs text-slate-400 mt-1 truncate">
+            {{ number_format(mb_strlen($main->content)) }} characters
+            · {{ $main->content === \App\Services\ChatAssistant::DEFAULT_PROMPT ? 'default text' : 'edited '.$main->updated_at->diffForHumans() }}
+        </p>
+    </div>
+    <a href="{{ route('admin.ai-instructions.edit', $main) }}"
+       class="shrink-0 border border-slate-300 rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Edit main prompt</a>
+</div>
+
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
     @if($instructions->isEmpty())
         <div class="px-6 py-16 text-center">

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AiModel;
 use App\Models\ChatConversation;
 use App\Models\ClientRequest;
 use App\Models\KnowledgeEntry;
@@ -46,7 +47,7 @@ class ClientRequestResolver
     /** Let the AI find other open requests the entry answers, and resolve them. Returns how many. */
     public function matchOthers(KnowledgeEntry $entry): int
     {
-        if (! config('services.gemini.key')) {
+        if (! AiModel::available()) {
             return 0;
         }
 

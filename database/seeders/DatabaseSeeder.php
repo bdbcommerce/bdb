@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             ArticleCategorySeeder::class,
             HeroBannerSeeder::class,
+            AiModelSeeder::class, // free AI models, switched off until a key is added
             DemoContentSeeder::class,
         ]);
 

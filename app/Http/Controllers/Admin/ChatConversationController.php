@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiModel;
 use App\Models\ChatConversation;
 use App\Services\ChatAssistant;
 use App\Services\Telegram\TelegramApi;
@@ -89,7 +90,7 @@ class ChatConversationController extends Controller
             array_shift($history);
         }
 
-        $reply = $history && config('services.gemini.key')
+        $reply = $history && AiModel::available()
             ? $assistant->suggestStaffReply($history, $chatConversation->locale)
             : null;
 

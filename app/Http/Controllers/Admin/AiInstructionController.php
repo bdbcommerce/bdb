@@ -16,7 +16,8 @@ class AiInstructionController extends Controller
     public function index()
     {
         return view('admin.ai-instructions.index', [
-            'instructions' => AiInstruction::orderBy('kind')->orderBy('sort_order')->orderBy('id')->get(),
+            'main' => AiInstruction::main(),
+            'instructions' => AiInstruction::where('kind', '!=', AiInstruction::MAIN)->orderBy('kind')->orderBy('sort_order')->orderBy('id')->get(),
             'kinds' => AiInstruction::KINDS,
             'channels' => AiInstruction::CHANNELS,
         ]);
@@ -41,16 +42,31 @@ class AiInstructionController extends Controller
 
     public function update(Request $request, AiInstruction $aiInstruction)
     {
-        $aiInstruction->update($this->validated($request));
+        // The main prompt only has its text edited; it stays one active, all-channel document.
+        $aiInstruction->update($aiInstruction->isMain()
+            ? $request->validate(['content' => 'required|string|max:'.AiInstruction::MAX_LENGTH])
+            : $this->validated($request));
 
         return redirect()->route('admin.ai-instructions.index')->with('success', 'Saved. The AI uses it from the next question.');
     }
 
     public function destroy(AiInstruction $aiInstruction)
     {
+        if ($aiInstruction->isMain()) {
+            return back()->withErrors(['content' => 'The main prompt cannot be deleted. Use "Reset to default" instead.']);
+        }
+
         $aiInstruction->delete();
 
         return redirect()->route('admin.ai-instructions.index')->with('success', 'Deleted.');
+    }
+
+    /** Put the main prompt back to the built-in text. */
+    public function reset()
+    {
+        AiInstruction::main()->update(['content' => ChatAssistant::DEFAULT_PROMPT, 'is_active' => true]);
+
+        return redirect()->route('admin.ai-instructions.edit', AiInstruction::main())->with('success', 'Main prompt reset to the default text.');
     }
 
     /** Exactly what the AI receives (rules + site data + staff info) for a language and channel. */

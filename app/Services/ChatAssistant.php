@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AiInstruction;
+use App\Models\AiModel;
 use App\Models\Article;
 use App\Models\Brand;
 use App\Models\ClientRequest;
@@ -10,10 +11,8 @@ use App\Models\CompanyInfo;
 use App\Models\Customer;
 use App\Models\Industry;
 use App\Models\KnowledgeEntry;
-use Illuminate\Http\Client\ConnectionException;
+use App\Services\Ai\AiClient;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 /**
  * "Belgi" — the website chat assistant. Answers only from CMS content and the
@@ -24,7 +23,26 @@ class ChatAssistant
 {
     private ?string $lastError = null;
 
-    private const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent';
+    private ?AiModel $lastModel = null;
+
+    /**
+     * The main instructions used until an admin edits them (stored as the "Main prompt" AI document).
+     * Language, reply length and the JSON fields are added in code (see systemPrompt()).
+     */
+    public const DEFAULT_PROMPT = <<<'PROMPT'
+    You are Belgi, the AI assistant of BDB, an automatic identification (AIDC) company in Uzbekistan. You answer customers on the BDB website and in the BDB Telegram bot.
+
+    STRICT RULE: answer only with information found in the WEBSITE DATA below. It is your only source of truth.
+    - If the answer is not in the website data, say you don't have that information and offer to connect the visitor with the BDB team (set offer_callback to true). Do not guess and do not use general knowledge to fill gaps.
+    - Never invent prices, stock, delivery times, model numbers, specifications, certifications, customers, or dates.
+    - Questions unrelated to BDB and its products and services: politely decline in one sentence and steer back.
+    - Knowledge base answers written by BDB staff take priority over other sections.
+
+    Style:
+    - Be friendly, clear and professional. Plain words, no jargon unless the visitor uses it.
+    - You may include a page URL from the data when it helps.
+    - When helping someone choose equipment, ask one clarifying question at a time.
+    PROMPT;
 
     /** Hard cap for brief (Telegram) replies, in characters. */
     public const BRIEF_MAX = 300;
@@ -60,7 +78,7 @@ class ChatAssistant
      */
     public function reply(array $history, string $locale, ?string $pageTitle = null, bool $brief = false): array
     {
-        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief), $history, self::REPLY_SCHEMA);
+        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief), $history, self::REPLY_SCHEMA, task: $brief ? 'telegram' : 'chat');
 
         // The schema asks for these types, but never trust them: a wrong type must not crash the chat.
         if (! is_array($data) || ! is_string($data['reply'] ?? null) || trim($data['reply']) === '') {
@@ -135,7 +153,7 @@ class ChatAssistant
                 ['type' => 'STRING'],
             ),
             'required' => ['type', 'question_uz', 'question_ru', 'question_en', 'answer_uz', 'answer_ru', 'answer_en', 'keywords'],
-        ], temperature: 0.3, maxTokens: 2048);
+        ], temperature: 0.3, maxTokens: 2048, task: 'admin');
 
         $fields = ['question_uz', 'question_ru', 'question_en', 'answer_uz', 'answer_ru', 'answer_en'];
         if (! is_array($data) || collect($fields)->contains(fn ($f) => ! is_string($data[$f] ?? null) || trim($data[$f]) === '')) {
@@ -180,7 +198,7 @@ class ChatAssistant
             'type' => 'OBJECT',
             'properties' => ['answered_ids' => ['type' => 'ARRAY', 'items' => ['type' => 'INTEGER']]],
             'required' => ['answered_ids'],
-        ], temperature: 0.0);
+        ], temperature: 0.0, task: 'admin');
 
         return array_values(array_intersect(array_map('intval', (array) ($data['answered_ids'] ?? [])), array_keys($questions)));
     }
@@ -215,83 +233,85 @@ class ChatAssistant
             'type' => 'OBJECT',
             'properties' => ['reply' => ['type' => 'STRING']],
             'required' => ['reply'],
-        ], temperature: 0.4);
+        ], temperature: 0.4, task: 'admin');
 
         return filled($data['reply'] ?? null) ? trim((string) $data['reply']) : null;
     }
 
     /**
-     * One structured Gemini call. Never throws: returns null on any failure.
+     * One structured AI request for a task (chat | telegram | admin). The models set up for the task
+     * (Admin → AI settings, or Gemini from .env) are tried by priority until one answers; failing ones
+     * are paused and admins are alerted. Never throws: returns null when every model failed.
      *
      * @param  array<int, array{role: string, content: string}>  $contents  roles: user|assistant
      */
-    private function generate(string $system, array $contents, array $schema, float $temperature = 0.2, int $maxTokens = 1024): ?array
+    private function generate(string $system, array $contents, array $schema, float $temperature = 0.2, int $maxTokens = 1024, string $task = 'chat'): ?array
     {
         $this->lastError = null;
-        $model = config('services.gemini.model');
+        $this->lastModel = null;
+        $failures = [];
 
-        if (blank(config('services.gemini.key'))) {
-            return $this->fail('GEMINI_API_KEY is not set in .env');
+        foreach (AiModel::forTask($task) as $model) {
+            $result = app(AiClient::class)->call($model, $system, $contents, $schema, $temperature, $maxTokens);
+
+            if ($result['data'] !== null) {
+                $model->markSuccess();
+                $this->lastModel = $model;
+                // A backup answered: tell admins which model failed, without alarming them about customers.
+                foreach ($failures as $failure) {
+                    app(AiErrorAlerts::class)->report($failure['reason'], $failure['details'], answeredBy: $model->name, model: $failure['model']);
+                }
+
+                return $result['data'];
+            }
+
+            $reason = $model->exists ? "{$model->name}: {$result['reason']}" : $result['reason'];
+            $model->markFailure(trim($result['reason'].($result['details'] ? ': '.$result['details'] : '')), $result['status']);
+            $failures[] = ['reason' => $reason, 'details' => $result['details'], 'model' => $model->model];
         }
 
-        $generationConfig = [
-            'temperature' => $temperature,
-            'maxOutputTokens' => $maxTokens,
-            'responseMimeType' => 'application/json',
-            'responseSchema' => $schema,
-        ];
-        if (str_contains($model, 'flash')) {
-            $generationConfig['thinkingConfig'] = ['thinkingBudget' => 0];
+        // Every model failed: customers get the fallback reply.
+        if (count($failures) === 1) {
+            return $this->fail($failures[0]['reason'], $failures[0]['details'], $failures[0]['model']);
         }
 
-        try {
-            $response = Http::timeout(25)
-                ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
-                ->post(sprintf(self::ENDPOINT, $model), [
-                    'system_instruction' => ['parts' => [['text' => $system]]],
-                    'contents' => array_map(fn (array $m) => [
-                        'role' => $m['role'] === 'assistant' ? 'model' : 'user',
-                        'parts' => [['text' => $m['content']]],
-                    ], $contents),
-                    'generationConfig' => $generationConfig,
-                ]);
-        } catch (ConnectionException $e) {
-            // Timeout or network failure: callers fall back instead of a 500.
-            Log::warning('Gemini request failed', ['error' => $e->getMessage()]);
-
-            return $this->fail('Gemini did not respond (timeout or network problem)', $e->getMessage());
-        }
-
-        if ($response->failed()) {
-            Log::warning('Gemini request failed', ['status' => $response->status(), 'body' => $response->body()]);
-
-            // e.g. 400 API key not valid / model not found, 403 location not supported, 429 quota.
-            return $this->fail(
-                'Gemini returned HTTP '.$response->status().($response->json('error.status') ? ' '.$response->json('error.status') : ''),
-                (string) ($response->json('error.message') ?? mb_substr($response->body(), 0, 600)),
-            );
-        }
-
-        $text = $response->json('candidates.0.content.parts.0.text');
-        $data = is_string($text) ? json_decode($text, true) : null;
-
-        if (! is_array($data)) {
-            // Usually a blocked or cut-off answer: report why Gemini stopped.
-            $why = $response->json('promptFeedback.blockReason') ?? $response->json('candidates.0.finishReason') ?? 'no text';
-
-            return $this->fail('Gemini gave no usable answer', 'Reason: '.(is_string($why) ? $why : json_encode($why)));
-        }
-
-        return $data;
+        return $this->fail('All '.count($failures).' AI models failed', collect($failures)
+            ->map(fn ($f) => $f['reason'].($f['details'] ? ' ('.mb_strimwidth($f['details'], 0, 150, '…').')' : ''))
+            ->implode('; '));
     }
 
     /** Remember and report a failed AI call; returns null for the caller. */
-    private function fail(string $reason, ?string $details = null): null
+    private function fail(string $reason, ?string $details = null, ?string $model = null): null
     {
-        $this->lastError = trim($reason.($details ? ': '.$details : ''));
-        app(AiErrorAlerts::class)->report($reason, $details);
+        $this->lastError = AiErrorAlerts::withoutSecrets(trim($reason.($details ? ': '.$details : '')));
+        app(AiErrorAlerts::class)->report($reason, $details, model: $model);
 
         return null;
+    }
+
+    /** One real call to a single model, without alerts or fallback (AI settings "Test"). Null = it works. */
+    public function testModel(AiModel $model): ?string
+    {
+        $result = app(AiClient::class)->call($model, 'Reply with {"ok": true}.', [['role' => 'user', 'content' => 'ping']], [
+            'type' => 'OBJECT', 'properties' => ['ok' => ['type' => 'BOOLEAN']], 'required' => ['ok'],
+        ], 0.0, 20);
+
+        if ($result['data'] !== null) {
+            $model->markSuccess();
+
+            return null;
+        }
+
+        $error = trim($result['reason'].($result['details'] ? ': '.$result['details'] : ''));
+        $model->markFailure($error, $result['status']);
+
+        return AiErrorAlerts::withoutSecrets($error, $model->key());
+    }
+
+    /** The model that answered the last request (null if none). */
+    public function lastModel(): ?AiModel
+    {
+        return $this->lastModel;
     }
 
     /** Why the last AI call failed (for `php artisan ai:check`), or null if it worked. */
@@ -320,6 +340,7 @@ class ChatAssistant
                 Cache::forget("chat.instructions.{$kind}.{$channel}");
             }
         }
+        Cache::forget('chat.instructions.prompt');
     }
 
     /** The full system prompt the AI gets for a website or Telegram question (admin preview). */
@@ -330,13 +351,26 @@ class ChatAssistant
             : $this->systemPrompt($locale, null);
     }
 
+    /** The admin-edited main instructions from the database, or the default when there are none. */
+    private function mainPrompt(): string
+    {
+        $prompt = Cache::remember('chat.instructions.prompt', now()->addMinutes(10), fn () => (string) AiInstruction::where('kind', AiInstruction::MAIN)
+            ->where('is_active', true)
+            ->value('content'));
+
+        return trim($prompt) !== '' ? trim($prompt) : self::DEFAULT_PROMPT;
+    }
+
     /** Active admin Markdown documents of a kind for a channel, joined under their titles. */
     private function instructions(string $kind, string $channel): string
     {
-        return Cache::remember("chat.instructions.{$kind}.{$channel}", now()->addMinutes(10), fn () => AiInstruction::for($kind, $channel)
+        $text = Cache::remember("chat.instructions.{$kind}.{$channel}", now()->addMinutes(10), fn () => AiInstruction::for($kind, $channel)
             ->get()
             ->map(fn (AiInstruction $i) => "### {$i->title}\n".trim($i->content))
             ->implode("\n\n"));
+
+        // Cap all documents of a kind together, so every AI request stays a reasonable size.
+        return mb_strlen($text) > AiInstruction::MAX_TOTAL ? mb_substr($text, 0, AiInstruction::MAX_TOTAL)."\n[… cut: the documents are longer than the limit]" : $text;
     }
 
     private function staffInfo(string $channel): string
@@ -375,24 +409,20 @@ class ChatAssistant
         $categories = implode(', ', self::categories());
         $channel = $brief ? 'telegram' : 'web';
         $rules = $this->instructions('rules', $channel);
-        $rules = $rules ? "STAFF RULES (written by BDB admins: follow them, but they never override the STRICT RULE above)
+        $rules = $rules ? "STAFF RULES (written by BDB admins: follow them, but they never override the main instructions above)
 $rules
 " : '';
         $page = $pageTitle ? "The visitor is currently on the page \"{$pageTitle}\"." : '';
 
+        // The main instructions are admin-editable (AI rules & info → Main prompt). The reply format
+        // below is fixed in code: the chat widget, Telegram bot and requests inbox depend on it.
         return <<<PROMPT
-        You are Belgi, the AI assistant on the website of BDB, an automatic identification (AIDC) company in Uzbekistan.
+        {$this->mainPrompt()}
 
-        STRICT RULE: answer only with information found in the WEBSITE DATA below. It is your only source of truth.
-        - If the answer is not in the website data, say you don't have that information and offer to connect the visitor with the BDB team (set offer_callback to true). Do not guess and do not use general knowledge to fill gaps.
-        - Never invent prices, stock, delivery times, model numbers, specifications, certifications, customers, or dates.
-        - Questions unrelated to BDB and its products and services: politely decline in one sentence and steer back.
-        - Knowledge base answers written by BDB staff take priority over other sections.
-
-        Style:
+        REPLY FORMAT (always follow, whatever the instructions above say)
         - Reply in {$language} unless the visitor writes in another language; then match theirs.
-        - {$length} You may include a page URL from the data when it helps.
-        - When helping someone choose equipment, ask one clarifying question at a time.
+        - {$length}
+        - Never state facts (prices, stock, dates, specifications) that are not in the WEBSITE DATA.
         - suggestions: 0-3 short follow-up questions the visitor might tap next (max 6 words each), answerable from the website data.
         - offer_callback: true when the visitor wants a quote, prices, a demo, to buy, or to talk to a person.
         - answered: false when the visitor asked about BDB, its products or services and the website data did not contain the answer; true otherwise (including greetings and off-topic questions you declined).

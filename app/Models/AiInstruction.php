@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\FlushesChatKnowledge;
+use App\Services\ChatAssistant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -28,7 +29,30 @@ class AiInstruction extends Model
     /** Longest document; keeps every AI request a reasonable size. */
     public const MAX_LENGTH = 20000;
 
+    /** Longest text of all active documents of one kind sent with a request (the rest is cut). */
+    public const MAX_TOTAL = 40000;
+
+    /** The single "main prompt" document: the AI's core instructions, editable by admins. */
+    public const MAIN = 'prompt';
+
     protected $fillable = ['title', 'kind', 'channel', 'content', 'is_active', 'sort_order'];
+
+    /** The main prompt row, created from the built-in default the first time it is needed. */
+    public static function main(): self
+    {
+        return static::firstOrCreate(['kind' => self::MAIN], [
+            'title' => 'Main prompt',
+            'channel' => 'all',
+            'content' => ChatAssistant::DEFAULT_PROMPT,
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+    }
+
+    public function isMain(): bool
+    {
+        return $this->kind === self::MAIN;
+    }
 
     protected function casts(): array
     {

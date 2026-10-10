@@ -3,7 +3,7 @@
 @section('heading', $brand->exists ? 'Edit Brand' : 'New Brand')
 
 @section('content')
-<div class="max-w-2xl">
+<div class="w-full">
     <form method="POST"
           action="{{ $brand->exists ? route('admin.brands.update', $brand) : route('admin.brands.store') }}"
           enctype="multipart/form-data" class="space-y-6">

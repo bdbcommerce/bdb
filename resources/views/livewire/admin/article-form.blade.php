@@ -1,4 +1,4 @@
-<div class="max-w-3xl" x-data="articleForm(@js($contentUz), @js($contentRu), @js($contentEn))">
+<div class="w-full" x-data="articleForm(@js($contentUz), @js($contentRu), @js($contentEn))">
 
     {{-- Sticky save bar --}}
     <div class="sticky top-0 z-10 bg-white border-b border-slate-200 -mx-6 px-6 py-3 mb-6 flex items-center justify-between">

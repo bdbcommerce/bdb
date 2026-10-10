@@ -148,7 +148,7 @@ class TelegramAdminTest extends TestCase
         $this->assertSame(['role' => 'admin', 'content' => 'Здравствуйте! Сканер есть в наличии.', 'author' => $admin->name], $last);
 
         $this->actingAs($admin)->get(route('admin.chat-conversations.show', $conversation))
-            ->assertSee('BDB team · '.$admin->name, false);
+            ->assertSee('BDB team · '.$admin->name); // escaped: random names may contain an apostrophe
     }
 
     public function test_failed_delivery_is_reported_and_not_logged(): void

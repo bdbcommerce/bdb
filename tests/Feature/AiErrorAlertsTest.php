@@ -140,6 +140,24 @@ class AiErrorAlertsTest extends TestCase
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/sendMessage') && (string) $r['chat_id'] === '555');
     }
 
+    public function test_a_failed_alert_is_retried_on_the_next_failure(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(['error' => ['status' => 'RESOURCE_EXHAUSTED', 'message' => 'quota']], 429),
+            'api.telegram.org/*' => Http::sequence()
+                ->push(['ok' => false, 'description' => 'Bad Gateway'], 502)
+                ->push(['ok' => true, 'result' => []]),
+        ]);
+
+        $this->ask();
+        $this->ask();
+
+        // First send failed, so the problem was not muted and the second failure tried again.
+        $this->assertCount(2, $this->alerts());
+        $this->ask();
+        $this->assertCount(2, $this->alerts(), 'muted after a successful send');
+    }
+
     public function test_ai_check_command_shows_the_reason(): void
     {
         Http::fake([
@@ -159,6 +177,6 @@ class AiErrorAlertsTest extends TestCase
     {
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response(['candidates' => [['content' => ['parts' => [['text' => '{"ok":true}']]]]]])]);
 
-        $this->artisan('ai:check')->expectsOutputToContain('OK: the AI assistant answers.')->assertSuccessful();
+        $this->artisan('ai:check')->expectsOutputToContain('OK: answers.')->expectsOutputToContain('1 of 1 model work')->assertSuccessful();
     }
 }

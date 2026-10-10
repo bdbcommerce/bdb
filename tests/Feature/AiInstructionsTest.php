@@ -46,7 +46,7 @@ class AiInstructionsTest extends TestCase
             'content' => "- Always greet the customer\n- **Never** promise delivery dates",
         ])->assertRedirect(route('admin.ai-instructions.index'));
 
-        $doc = AiInstruction::sole();
+        $doc = AiInstruction::where('kind', '!=', AiInstruction::MAIN)->sole();
         $this->assertTrue($doc->is_active);
         $this->assertStringContainsString('**Never**', $doc->content);
 
@@ -59,7 +59,7 @@ class AiInstructionsTest extends TestCase
         $this->assertFalse($doc->fresh()->is_active);
 
         $this->actingAs($admin)->delete(route('admin.ai-instructions.destroy', $doc))->assertRedirect();
-        $this->assertSame(0, AiInstruction::count());
+        $this->assertSame(0, AiInstruction::where('kind', '!=', AiInstruction::MAIN)->count());
     }
 
     public function test_validation(): void
@@ -75,7 +75,7 @@ class AiInstructionsTest extends TestCase
         $this->get(route('admin.ai-instructions.prompt'))->assertRedirect(route('admin.login'));
         $this->post(route('admin.ai-instructions.store'), ['title' => 'x', 'kind' => 'rules', 'channel' => 'all', 'content' => 'x'])
             ->assertRedirect(route('admin.login'));
-        $this->assertSame(0, AiInstruction::count());
+        $this->assertSame(0, AiInstruction::where('kind', '!=', AiInstruction::MAIN)->count());
     }
 
     public function test_active_rules_and_info_reach_the_ai_for_the_right_channel(): void

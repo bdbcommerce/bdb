@@ -18,14 +18,14 @@ class TelegramApi
     }
 
     /** @return array<string, mixed>|null the "result" field, or null on failure */
-    public function call(string $method, array $params = []): ?array
+    public function call(string $method, array $params = [], int $timeout = 10): ?array
     {
         if (! $this->configured()) {
             return null;
         }
 
         try {
-            $response = Http::timeout(10)->asJson()->post(
+            $response = Http::timeout($timeout)->asJson()->post(
                 'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/'.$method,
                 $params,
             );
@@ -82,8 +82,8 @@ class TelegramApi
         ];
     }
 
-    public function sendMessage(int|string $chatId, string $text, array $extra = []): bool
+    public function sendMessage(int|string $chatId, string $text, array $extra = [], int $timeout = 10): bool
     {
-        return $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text] + $extra) !== null;
+        return $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text] + $extra, $timeout) !== null;
     }
 }
