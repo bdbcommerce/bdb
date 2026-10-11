@@ -84,15 +84,15 @@
          x-init="start()" @mouseenter="stop()" @mouseleave="start()" @focusin="stop()">
 
         {{-- All slides share one grid cell, so the hero keeps the height of the tallest slide. --}}
-        <div class="grid">
+        <div class="grid grid-cols-1">
             @foreach($slides as $i => $slide)
-                <div class="col-start-1 row-start-1 grid items-center gap-12 lg:grid-cols-12 lg:gap-10 transition-[opacity,visibility] duration-700 data-[active=false]:opacity-0 data-[active=false]:invisible"
+                <div class="col-start-1 row-start-1 grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-10 transition-[opacity,visibility] duration-700 data-[active=false]:opacity-0 data-[active=false]:invisible"
                      data-active="{{ $i === 0 ? 'true' : 'false' }}"
                      :data-active="(current === {{ $i }}).toString()"
                      @if($slideCount > 1) role="group" aria-roledescription="slide" aria-label="{{ $i + 1 }} / {{ $slideCount }}" @endif>
 
                     {{-- Copy --}}
-                    <div class="lg:col-span-7">
+                    <div class="min-w-0 lg:col-span-7">
                         @if($slide['badge'])
                             <p class="chip !py-1.5 mb-6">
                                 <span class="relative flex size-2" aria-hidden="true">
@@ -104,9 +104,9 @@
                         @endif
 
                         @if($i === 0)
-                            <h1 id="hero-title" class="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-gray-900 leading-[1.08] text-balance">{{ $slide['title'] }}</h1>
+                            <h1 id="hero-title" class="text-[1.75rem] min-[360px]:text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-gray-900 leading-[1.08] text-balance break-words hyphens-auto">{{ $slide['title'] }}</h1>
                         @else
-                            <h2 class="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-gray-900 leading-[1.08] text-balance">{{ $slide['title'] }}</h2>
+                            <h2 class="text-[1.75rem] min-[360px]:text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-gray-900 leading-[1.08] text-balance break-words hyphens-auto">{{ $slide['title'] }}</h2>
                         @endif
 
                         @if($slide['lead'])
@@ -143,7 +143,7 @@
                     </div>
 
                     {{-- Visual: the slide image, or the decorative scanner --}}
-                    <div class="lg:col-span-5" @if(! $slide['image']) aria-hidden="true" @endif>
+                    <div class="min-w-0 lg:col-span-5" @if(! $slide['image']) aria-hidden="true" @endif>
                         @if($slide['image'])
                             <div class="relative mx-auto max-w-md">
                                 <img src="{{ $slide['image'] }}" alt="{{ $slide['title'] }}"
@@ -184,11 +184,11 @@
 <section class="border-y border-gray-200 bg-gray-50" aria-label="{{ __('site.stats.heading') }}">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         @php
-            $statCols = [1 => 'grid-cols-1', 2 => 'grid-cols-2', 3 => 'grid-cols-2 md:grid-cols-3', 4 => 'grid-cols-2 md:grid-cols-4', 5 => 'grid-cols-2 md:grid-cols-5'][min(count($stats), 5)];
+            $statCols = [1 => 'grid-cols-1', 2 => 'grid-cols-2', 3 => 'grid-cols-3', 4 => 'grid-cols-2 md:grid-cols-4', 5 => 'grid-cols-2 md:grid-cols-5'][min(count($stats), 5)];
         @endphp
         <dl class="grid {{ $statCols }} md:divide-x divide-gray-200">
             @foreach($stats as $stat)
-                <div class="flex flex-col px-4 py-8 md:py-10 text-center">
+                <div class="flex flex-col px-2 sm:px-4 py-8 md:py-10 text-center">
                     <dt class="order-2 mt-1 text-sm text-gray-500">{{ __('site.stats.' . $stat['label']) }}</dt>
                     <dd class="order-1 text-3xl md:text-4xl font-semibold tracking-tight text-gray-900 tabular-nums">{{ number_format($stat['value'], 0, '.', ' ') }}</dd>
                 </div>
@@ -306,14 +306,14 @@
             ])
         @else
             @php $indCount = $industries->count(); @endphp
-            <div class="grid gap-8 lg:grid-cols-12"
+            <div class="grid grid-cols-1 gap-8 lg:grid-cols-12"
                  x-data="{
                      active: 0,
                      count: {{ $indCount }},
                      go(i) { this.active = (i + this.count) % this.count; this.$nextTick(() => this.$refs['tab' + this.active]?.focus()); }
                  }">
                 {{-- Tabs --}}
-                <div class="lg:col-span-4">
+                <div class="min-w-0 lg:col-span-4">
                     <div role="tablist" aria-label="{{ __('Industries') }}"
                          class="flex lg:flex-col gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 lg:pb-0">
                         @foreach($industries as $i => $industry)
@@ -345,7 +345,7 @@
                 </div>
 
                 {{-- Panels --}}
-                <div class="lg:col-span-8">
+                <div class="min-w-0 lg:col-span-8">
                     @foreach($industries as $i => $industry)
                         <div role="tabpanel" id="ind-panel-{{ $industry->id }}" aria-labelledby="ind-tab-{{ $industry->id }}" tabindex="0"
                              x-show="active === {{ $i }}" @if($i > 0) style="display: none;" @endif

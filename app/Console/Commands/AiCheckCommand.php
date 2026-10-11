@@ -46,7 +46,7 @@ class AiCheckCommand extends Command
                 $this->info('OK: answers.');
             } else {
                 $this->error('Fails: '.$error);
-                $this->line($this->hint($error));
+                $this->line(self::hint($error));
             }
         }
 
@@ -62,12 +62,14 @@ class AiCheckCommand extends Command
         return self::SUCCESS;
     }
 
-    private function hint(string $error): string
+    /** What to do about an AI error (also shown by the AI settings Test button). */
+    public static function hint(string $error): string
     {
         return match (true) {
             str_contains($error, 'not set'), str_contains($error, 'No API key') => 'Add the key in Admin → AI settings (each model shows how to get a free one).',
             str_contains($error, 'API key not valid'), str_contains($error, 'API_KEY_INVALID'), str_contains($error, '401') => 'The key is wrong or was deleted. Create a new one at the provider and save it in AI settings.',
             str_contains($error, '404'), str_contains($error, 'not found') => 'The model name is wrong or retired. Check the provider\'s model list and fix it in AI settings.',
+            str_contains($error, '402'), str_contains($error, 'Insufficient Balance') => 'The account has no money left. Top up the balance at the provider (e.g. platform.deepseek.com → Top up), or use a free model instead.',
             str_contains($error, '429') => 'Quota or rate limit reached. Wait, enable billing, or add another free model as a backup.',
             str_contains($error, 'location'), str_contains($error, 'FAILED_PRECONDITION') => 'Not available from this server\'s location. Use another provider (e.g. Groq or OpenRouter).',
             str_contains($error, 'timeout'), str_contains($error, 'network') => 'The server cannot reach the provider. Check the firewall / outgoing HTTPS.',

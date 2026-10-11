@@ -10,7 +10,7 @@
 @section('content')
 <div class="w-full space-y-6">
     @if (session('ai_error'))
-        <div role="alert" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 break-words">{{ session('ai_error') }}</div>
+        <div role="alert" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 break-words whitespace-pre-line">{{ session('ai_error') }}</div>
     @endif
 
     <p class="text-xs text-slate-500">

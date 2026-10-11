@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Console\Commands\AiCheckCommand;
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
 use App\Services\AiErrorAlerts;
@@ -80,7 +81,7 @@ class AiModelController extends Controller
 
         return redirect()->route('admin.ai-models.index')->with(...($error === null
             ? ['success', "{$aiModel->name} works."]
-            : ['ai_error', "{$aiModel->name} failed: {$error}"]));
+            : ['ai_error', "{$aiModel->name} failed: {$error}".PHP_EOL.'What to do: '.AiCheckCommand::hint($error)]));
     }
 
     /** Use a paused model again right away. */

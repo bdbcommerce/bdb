@@ -102,7 +102,7 @@
         <div class="flex items-center h-16 gap-6">
 
             <a href="{{ route('site.home', $locale) }}" class="shrink-0 rounded" aria-label="BDB Auto ID — {{ __('Home') }}">
-                <img src="/images/logo.jpg" alt="BDB" width="1160" height="634" class="h-9 w-auto">
+                <img src="/images/logo.jpg" alt="BDB" width="1160" height="634" class="h-[2.7rem] w-auto">
             </a>
 
             {{-- Desktop nav --}}
@@ -190,7 +190,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-10">
             <div class="lg:col-span-4">
                 <a href="{{ route('site.home', $locale) }}" class="inline-flex rounded-lg bg-white p-2">
-                    <img src="/images/logo.jpg" alt="BDB" width="1160" height="634" loading="lazy" class="h-8 w-auto">
+                    <img src="/images/logo.jpg" alt="BDB" width="1160" height="634" loading="lazy" class="h-[2.4rem] w-auto">
                 </a>
                 <p class="mt-4 text-sm leading-relaxed max-w-xs">{{ $_slogan ?: __('site.footer.tagline') }}</p>
                 @if($_socials)

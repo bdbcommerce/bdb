@@ -149,16 +149,14 @@ class AiModelsFixesQaTest extends TestCase
     {
         $this->assertSame('deepseek/deepseek-chat-v3-0324:free', AiModel::PRESETS['openrouter-deepseek-free']['model']);
         $this->assertSame('https://openrouter.ai/api/v1', AiModel::PRESETS['openrouter-deepseek-free']['base_url']);
-        $this->assertSame('deepseek-chat', AiModel::PRESETS['deepseek']['model']);
-        $this->assertSame('https://api.deepseek.com', AiModel::PRESETS['deepseek']['base_url']);
+        // Only free models are offered: the paid official DeepSeek API is not a preset.
+        $this->assertArrayNotHasKey('deepseek', AiModel::PRESETS);
 
         $admin = User::factory()->create(['is_admin' => true]);
         $this->actingAs($admin)->get(route('admin.ai-models.create', ['preset' => 'openrouter-deepseek-free']))
             ->assertOk()->assertSee('deepseek/deepseek-chat-v3-0324:free')->assertSee('https://openrouter.ai/keys');
-        $this->actingAs($admin)->get(route('admin.ai-models.create', ['preset' => 'deepseek']))
-            ->assertOk()->assertSee('deepseek-chat')->assertSee('https://api.deepseek.com')->assertSee('https://platform.deepseek.com/api_keys');
         $this->actingAs($admin)->get(route('admin.ai-models.create', ['preset' => 'no-such']))->assertOk();
-        $this->actingAs($admin)->get('/admin/ai-models/create?preset[]=deepseek')->assertOk()->assertDontSee('platform.deepseek.com/api_keys');
+        $this->actingAs($admin)->get('/admin/ai-models/create?preset[]=openrouter-deepseek-free')->assertOk()->assertDontSee('deepseek-chat-v3-0324:free');
     }
 
     public function test_preset_seeder_is_idempotent_and_keeps_admin_edits(): void
@@ -166,10 +164,9 @@ class AiModelsFixesQaTest extends TestCase
         $this->seed(AiModelSeeder::class);
         $count = AiModel::count();
         $this->assertSame(count(AiModel::PRESETS), $count);
-        $deepseek = AiModel::where('model', 'deepseek-chat')->firstOrFail();
+        $deepseek = AiModel::where('model', 'deepseek/deepseek-chat-v3-0324:free')->sole();
         $this->assertFalse($deepseek->is_active);
         $this->assertNull($deepseek->api_key);
-        $this->assertSame(1, AiModel::where('model', 'deepseek/deepseek-chat-v3-0324:free')->count());
 
         $deepseek->update(['api_key' => self::KEY, 'is_active' => true, 'priority' => 3]);
         $this->seed(AiModelSeeder::class);

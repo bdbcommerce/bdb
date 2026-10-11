@@ -451,18 +451,28 @@ $rules
     /** How many knowledge entries / full articles relevant to the question are sent. */
     private const MAX_ENTRIES = 6;
 
-    /** Common question words (as 5-letter stems) that say nothing about the topic. */
+    /** Whole words (lower case, no apostrophes) that say nothing about the topic. Matched before stemming. */
     private const STOP_WORDS = [
         // ru
-        'что', 'такое', 'как', 'какой', 'какая', 'какие', 'какое', 'где', 'когда', 'почем', 'есть', 'это', 'для', 'или',
-        'вы', 'вас', 'ваш', 'ваша', 'ваши', 'мне', 'нам', 'наш', 'можно', 'нужен', 'нужна', 'нужно', 'хочу', 'есть',
-        'про', 'при', 'под', 'над', 'без', 'все', 'всё', 'так', 'тоже', 'еще', 'ещё', 'уже', 'там', 'тут', 'здрав', 'привет',
+        'что', 'такое', 'как', 'какой', 'какая', 'какие', 'какое', 'где', 'когда', 'почему', 'есть', 'это', 'для', 'или',
+        'вы', 'вас', 'ваш', 'ваша', 'ваши', 'мне', 'нам', 'наш', 'можно', 'можете', 'нужен', 'нужна', 'нужно', 'хочу',
+        'про', 'при', 'под', 'над', 'без', 'все', 'всё', 'так', 'тоже', 'еще', 'ещё', 'уже', 'там', 'тут',
+        'здравствуйте', 'здравствуй', 'привет', 'добрый', 'день', 'спасибо', 'пожалуйста',
         // uz
-        'nima', 'qanda', 'qanday', 'qaysi', 'qayer', 'qachon', 'nega', 'uchun', 'bilan', 'ham', 'yoki', 'bor', 'yoʻq', 'yoq',
-        'siz', 'sizd', 'sizni', 'bizn', 'biz', 'menga', 'kerak', 'mumki', 'assal', 'salom', 'haqid',
+        'nima', 'qanday', 'qaysi', 'qayerda', 'qachon', 'nega', 'uchun', 'bilan', 'ham', 'yoki', 'bor', 'yoq',
+        'siz', 'sizda', 'sizni', 'sizlar', 'biz', 'bizni', 'bizga', 'menga', 'kerak', 'mumkin', 'assalomu', 'alaykum',
+        'salom', 'haqida', 'rahmat', 'iltimos', 'berish', 'qilish',
         // en
         'what', 'which', 'when', 'where', 'how', 'why', 'the', 'and', 'for', 'you', 'your', 'are', 'can', 'does', 'have',
-        'with', 'about', 'there', 'this', 'that', 'need', 'want', 'hello',
+        'with', 'about', 'there', 'this', 'that', 'need', 'want', 'hello', 'please', 'thanks', 'sell',
+    ];
+
+    /** Uzbek Cyrillic → Latin, so a question typed in Cyrillic matches the (Latin) Uzbek content. */
+    private const UZ_CYRILLIC = [
+        'ў' => 'o', 'қ' => 'q', 'ғ' => 'g', 'ҳ' => 'h', 'ё' => 'yo', 'ю' => 'yu', 'я' => 'ya', 'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sh',
+        'ц' => 'ts', 'ж' => 'j', 'х' => 'x', 'й' => 'y', 'ъ' => '', 'ь' => '', 'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g',
+        'д' => 'd', 'е' => 'e', 'з' => 'z', 'и' => 'i', 'к' => 'k', 'л' => 'l', 'м' => 'm', 'н' => 'n', 'о' => 'o', 'п' => 'p',
+        'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u', 'ф' => 'f', 'ы' => 'i', 'э' => 'e',
     ];
 
     /** Models tried per request before giving the fallback reply. */
@@ -478,10 +488,12 @@ $rules
     private function knowledge(string $locale, string $query = ''): string
     {
         $data = $this->knowledgeIndex($locale);
-        $words = self::searchWords($query);
+        // Uzbek content is in Latin script; many customers type Uzbek in Cyrillic.
+        $words = self::searchWords($locale === 'uz' ? $query.' '.self::uzLatin($query) : $query);
 
         // Score by matching words, weighting rare ones higher (IDF): "агрегация" counts, "что"/"такое" barely.
-        $pick = function (array $items, int $limit, float $minScore) use ($words, $query): array {
+        // $strict: items without a title/question match need a clearly higher score (used for long articles).
+        $pick = function (array $items, int $limit, float $minScore, bool $strict) use ($words, $query): array {
             if ($words === []) {
                 // No question (prompt preview): show the first ones. A question of only greetings/filler words: none.
                 return trim($query) === '' ? array_slice($items, 0, $limit) : [];
@@ -497,10 +509,14 @@ $rules
             $scored = [];
             foreach ($items as $item) {
                 $score = 0.0;
+                $titleHit = false;
                 foreach ($words as $word) {
-                    $score += $idf[$word] * ((in_array($word, $item['title_words'], true) ? 3 : 0) + (in_array($word, $item['words'], true) ? 1 : 0));
+                    $inTitle = in_array($word, $item['title_words'], true);
+                    $titleHit = $titleHit || $inTitle;
+                    $score += $idf[$word] * (($inTitle ? 3 : 0) + (in_array($word, $item['words'], true) ? 1 : 0));
                 }
-                if ($score >= $minScore) {
+                // Without a title/question match, one incidental body word must not pull in the item.
+                if ($score >= ($titleHit || ! $strict ? $minScore : 2 * $minScore + 1)) {
                     $scored[] = $item + ['score' => $score];
                 }
             }
@@ -509,8 +525,9 @@ $rules
             return array_slice($scored, 0, $limit);
         };
 
-        $entries = $pick($data['entries'], self::MAX_ENTRIES, 0.5);
-        $articles = $pick($data['articles'], self::MAX_ARTICLES, 1.5);
+        // Entries are short, so a body match is enough; a whole article needs a stronger match.
+        $entries = $pick($data['entries'], self::MAX_ENTRIES, 0.5, strict: false);
+        $articles = $pick($data['articles'], self::MAX_ARTICLES, 1.5, strict: true);
 
         $out = $data['base'];
         if ($entries) {
@@ -524,14 +541,27 @@ $rules
         return $out;
     }
 
-    /** Lower-case word stems (first 5 letters, so Russian/Uzbek endings still match) of 3+ letter words. */
+    /** Uzbek Cyrillic text in Latin script; "е" is "ye" at the start of a word and after a vowel or ъ/ь. */
+    private static function uzLatin(string $text): string
+    {
+        $text = preg_replace('/(?<![\p{L}])е|(?<=[аеёиоуэюяўъь])е/u', 'ye', mb_strtolower($text));
+
+        return strtr($text, self::UZ_CYRILLIC);
+    }
+
+    /**
+     * Lower-case word stems (first 5 letters, so Russian/Uzbek endings still match): words of 3+ letters,
+     * plus short terms with a digit (1C, 2D) and "qr". Every Uzbek apostrophe variant is ignored.
+     */
     private static function searchWords(string $text): array
     {
-        preg_match_all('/[\p{L}\p{N}ʻʼ\']{3,}/u', mb_strtolower($text), $m);
+        $text = str_replace(['ʻ', 'ʼ', "'", '’', '‘', '`'], '', mb_strtolower($text));
+        preg_match_all('/[\p{L}\p{N}]+/u', $text, $m);
 
-        $stems = array_map(fn ($w) => mb_substr(str_replace(['ʻ', 'ʼ', "'"], '', $w), 0, 5), $m[0]);
+        $words = array_filter($m[0], fn ($w) => mb_strlen($w) >= 3 || $w === 'qr' || (mb_strlen($w) === 2 && preg_match('/\d/', $w)));
+        $words = array_diff($words, self::STOP_WORDS);
 
-        return array_values(array_diff(array_unique($stems), array_map(fn ($w) => mb_substr($w, 0, 5), self::STOP_WORDS)));
+        return array_values(array_unique(array_map(fn ($w) => mb_substr($w, 0, 5), $words)));
     }
 
     /**
@@ -594,7 +624,8 @@ $rules
             // Articles: every title is listed (so the AI knows they exist); only matching ones are sent in full.
             $articles = [];
             $titles = [];
-            foreach (Article::published()->with('category')->limit(40)->get() as $article) {
+            // All recent articles are searchable; only the newest 40 titles are listed.
+            foreach (Article::published()->with('category')->limit(200)->get() as $article) {
                 $slug = $article->getTranslation('slug', $locale, true);
                 $categorySlug = $article->category?->getTranslation('slug', $locale, true);
                 $link = $slug && $categorySlug
@@ -603,7 +634,9 @@ $rules
                 $title = $t($article, 'title');
                 $body = trim($t($article, 'excerpt').' '.$t($article, 'content'));
 
-                $titles[] = '- '.$title;
+                if (count($titles) < 40) {
+                    $titles[] = '- '.$title;
+                }
                 $articles[] = [
                     'text' => "### {$title}".($link ? "\nLink: {$link}" : '')."\n".mb_strimwidth($body, 0, 1200, '…'),
                     'title_words' => self::searchWords($title),

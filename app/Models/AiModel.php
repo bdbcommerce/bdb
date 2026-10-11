@@ -27,7 +27,7 @@ class AiModel extends Model
         'Open https://aistudio.google.com/apikey and sign in with a Google account.',
         'Click "Create API key" (pick or create a Google Cloud project when asked).',
         'Copy the key (it starts with AIza) and paste it into the API key field here, tick Active and save.',
-        'Optional: to lift the small free daily limit, open Billing in Google AI Studio and enable it for that project.',
+        'Use it on the free tier: do not add billing. When the free daily limit is used up, the next free model answers.',
     ];
 
     private const GROQ_STEPS = [
@@ -44,7 +44,7 @@ class AiModel extends Model
         'gemini-flash' => [
             'name' => 'Google Gemini Flash', 'provider' => 'gemini', 'model' => 'gemini-flash-latest', 'base_url' => null, 'priority' => 10,
             'key_url' => 'https://aistudio.google.com/apikey', 'steps' => self::GOOGLE_STEPS,
-            'note' => 'Best quality for Uzbek and Russian. Free tier has a small daily limit; enable billing for real traffic.',
+            'note' => 'Free. Best quality for Uzbek and Russian, but a small free daily limit: keep free backups below it.',
         ],
         'gemini-flash-lite' => [
             'name' => 'Google Gemini Flash-Lite', 'provider' => 'gemini', 'model' => 'gemini-flash-lite-latest', 'base_url' => null, 'priority' => 20,
@@ -77,16 +77,6 @@ class AiModel extends Model
                 'If the test says the model is not found, pick the current free DeepSeek name at https://openrouter.ai/models?q=deepseek&max_price=0 and update the model name.',
             ],
             'note' => 'DeepSeek for free through OpenRouter: strong in Russian and English, daily free limits.',
-        ],
-        'deepseek' => [
-            'name' => 'DeepSeek Chat (official)', 'provider' => 'openai', 'model' => 'deepseek-chat', 'base_url' => 'https://api.deepseek.com', 'priority' => 55,
-            'key_url' => 'https://platform.deepseek.com/api_keys',
-            'steps' => [
-                'Open https://platform.deepseek.com and sign up.',
-                'Top up a small balance under Top up (the API is pay-as-you-go and very cheap; it is not free).',
-                'Go to API keys (https://platform.deepseek.com/api_keys), click "Create new API key", copy it (starts with sk-), paste it here, tick Active and save.',
-            ],
-            'note' => 'Not free, but very low cost per question and no daily free-tier cap. Good quality in Russian and English.',
         ],
         'mistral-small' => [
             'name' => 'Mistral Small', 'provider' => 'openai', 'model' => 'mistral-small-latest', 'base_url' => 'https://api.mistral.ai/v1', 'priority' => 50,
@@ -199,7 +189,8 @@ class AiModel extends Model
 
         $minutes = match (true) {
             $status === 429 => 15,
-            in_array($status, [400, 401, 403, 404], true) => 60,
+            // Wrong key/model, or no money on the account (402): retrying soon won't help.
+            in_array($status, [400, 401, 402, 403, 404], true) => 60,
             default => 2,
         };
 

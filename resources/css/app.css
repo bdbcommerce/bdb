@@ -118,7 +118,7 @@
     }
 
     .tab {
-        @apply shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors
+        @apply shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors
                focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600;
     }
     .tab-active   { @apply border-red-600 bg-red-600 text-white; }
