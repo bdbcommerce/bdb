@@ -12,6 +12,23 @@
     --animate-float: float 6s ease-in-out infinite;
     --animate-dash: dash 6s linear infinite;
     --animate-blink: blink 1.4s ease-in-out infinite;
+    --animate-wave: wave 2.4s ease-out infinite;
+    --animate-feed: feed 4.8s ease-in-out infinite;
+    --animate-fill: fill 4.8s ease-in-out infinite;
+
+    @keyframes wave {
+        from { transform: scale(.55); opacity: .9; }
+        to   { transform: scale(1.25); opacity: 0; }
+    }
+    @keyframes feed {
+        0%       { transform: translateY(-100%); }
+        45%, 85% { transform: translateY(0); }
+        100%     { transform: translateY(0); opacity: 0; }
+    }
+    @keyframes fill {
+        0%       { transform: scaleX(.05); }
+        70%, 100% { transform: scaleX(1); }
+    }
 
     @keyframes scan {
         from { top: 0; }

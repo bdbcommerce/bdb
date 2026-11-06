@@ -105,12 +105,17 @@
     {{-- Image --}}
     <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Image</h2>
-        <p class="text-xs text-slate-400">Shown on the right side of the hero. Recommended: 1200×900 px, JPEG or PNG, max 4 MB. Leave empty to show the animated scanner graphic.</p>
+        <p class="text-xs text-slate-400">Shown on the right side of the hero. Recommended: 1200×900 px, JPEG or PNG, max 4 MB. An image replaces the illustration below; leave empty to show the illustration.</p>
 
         @if($existingImage && !$image)
             <div class="relative inline-block">
-                <img src="{{ Storage::url($existingImage) }}" alt="Current" class="h-32 rounded-lg object-cover border border-slate-200">
+                <img src="{{ Storage::url($existingImage) }}" alt="Current"
+                     class="h-32 rounded-lg object-cover border border-slate-200 {{ $removeImage ? 'opacity-30' : '' }}">
                 <p class="text-xs text-slate-400 mt-1">Current image</p>
+                <label class="mt-2 flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" wire:model.live="removeImage" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                    <span class="text-sm text-slate-700">Remove image and show the illustration instead</span>
+                </label>
             </div>
         @endif
 
@@ -126,6 +131,43 @@
                    class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
         </label>
         @error('image') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+    </div>
+
+    {{-- Illustration --}}
+    @php $usesImage = $image || ($existingImage && ! $removeImage); @endphp
+    <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+        <div>
+            <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Illustration</h2>
+            <p class="text-xs text-slate-400 mt-1">Animated graphic on the right side of the hero, shown when the slide has no image.</p>
+            @if($usesImage)
+                <p class="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">This slide has an image, so the illustration is not shown. Remove the image above to use it.</p>
+            @endif
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="radiogroup" aria-label="Illustration">
+            @foreach(\App\Models\Banner::ILLUSTRATIONS as $key => [$label, $hint])
+                <label wire:key="illustration-{{ $key }}"
+                       class="group relative cursor-pointer rounded-xl border-2 p-3 transition-colors {{ $illustration === $key ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-400' }}">
+                    <input type="radio" wire:model.live="illustration" value="{{ $key }}" class="sr-only">
+                    {{-- Live preview of the real hero illustration, scaled down --}}
+                    <div class="h-56 overflow-hidden rounded-lg bg-white border border-slate-100 flex justify-center pt-3 pointer-events-none" aria-hidden="true">
+                        <div class="w-[448px] shrink-0 [zoom:0.46]">
+                            @include('site.partials.hero-illustrations.'.$key)
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-start gap-2">
+                        <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border {{ $illustration === $key ? 'border-slate-900' : 'border-slate-300' }}">
+                            @if($illustration === $key) <span class="size-2 rounded-full bg-slate-900"></span> @endif
+                        </span>
+                        <span>
+                            <span class="block text-sm font-medium text-slate-900">{{ $label }}</span>
+                            <span class="block text-xs text-slate-500">{{ $hint }}</span>
+                        </span>
+                    </div>
+                </label>
+            @endforeach
+        </div>
+        @error('illustration') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
     </div>
 
     {{-- Settings --}}

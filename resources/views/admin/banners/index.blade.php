@@ -40,10 +40,11 @@
                             <img src="{{ Storage::url($banner->image) }}" alt=""
                                  class="h-12 w-20 object-cover rounded-lg border border-slate-200">
                         @else
-                            <div class="h-12 w-20 rounded-lg bg-slate-100 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+                            <div class="h-12 w-20 rounded-lg bg-slate-100 flex flex-col items-center justify-center px-1 text-center" title="Illustration">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
                                 </svg>
+                                <span class="mt-0.5 text-[9px] leading-tight text-slate-500">{{ \App\Models\Banner::ILLUSTRATIONS[\App\Models\Banner::illustrationKey($banner->illustration)][0] }}</span>
                             </div>
                         @endif
                     </td>

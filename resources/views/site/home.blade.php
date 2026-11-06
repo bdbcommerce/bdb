@@ -23,6 +23,7 @@
         'button_href' => $banner->buttonHref($locale),
         'show_ai'     => $banner->show_ai_button,
         'image'       => $banner->image ? Storage::url($banner->image) : null,
+        'illustration' => \App\Models\Banner::illustrationKey($banner->illustration),
     ])->all();
 
     if (! $slides) {
@@ -35,26 +36,13 @@
             'button_href' => route('site.contact', $locale),
             'show_ai'     => true,
             'image'       => null,
+            'illustration' => \App\Models\Banner::DEFAULT_ILLUSTRATION,
         ]];
     }
     $slideCount = count($slides);
 
     $services = __('site.services.items');
     $services = is_array($services) ? $services : [];
-
-    // Deterministic QR-style matrix for the hero visual (decorative only).
-    $qrSize = 25; $qrPath = '';
-    $isFinder = fn ($x, $y) => ($x < 8 && $y < 8) || ($x >= $qrSize - 8 && $y < 8) || ($x < 8 && $y >= $qrSize - 8);
-    for ($y = 0; $y < $qrSize; $y++) {
-        for ($x = 0; $x < $qrSize; $x++) {
-            if ($isFinder($x, $y)) continue;
-            if ((crc32("bdb{$x}-{$y}") % 100) < 47) $qrPath .= "M{$x} {$y}h1v1h-1z";
-        }
-    }
-    foreach ([[0, 0], [$qrSize - 7, 0], [0, $qrSize - 7]] as [$fx, $fy]) {
-        $qrPath .= "M{$fx} {$fy}h7v7h-7zM" . ($fx + 1) . ' ' . ($fy + 1) . 'v5h5v-5z'
-                .  'M' . ($fx + 2) . ' ' . ($fy + 2) . 'h3v3h-3z';
-    }
 @endphp
 
 @section('title_full', 'BDB Auto ID — ' . $slides[0]['title'])
@@ -142,7 +130,7 @@
                         @endif
                     </div>
 
-                    {{-- Visual: the slide image, or the decorative scanner --}}
+                    {{-- Visual: the slide image, or the chosen built-in illustration --}}
                     <div class="min-w-0 lg:col-span-5" @if(! $slide['image']) aria-hidden="true" @endif>
                         @if($slide['image'])
                             <div class="relative mx-auto max-w-md">
@@ -151,7 +139,7 @@
                                      class="w-full aspect-[4/3] object-cover rounded-2xl border border-gray-200 shadow-xl shadow-gray-900/5">
                             </div>
                         @else
-                            @include('site.partials.hero-scanner')
+                            @include('site.partials.hero-illustrations.'.$slide['illustration'])
                         @endif
                     </div>
                 </div>

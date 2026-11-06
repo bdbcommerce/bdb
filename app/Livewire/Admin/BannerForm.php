@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Models\Banner;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -54,6 +55,10 @@ class BannerForm extends Component
 
     public ?string $existingImage = null;
 
+    public bool $removeImage = false;
+
+    public string $illustration = Banner::DEFAULT_ILLUSTRATION;
+
     public function mount(?int $bannerId = null): void
     {
         if ($bannerId) {
@@ -76,6 +81,7 @@ class BannerForm extends Component
             $this->isActive = $this->banner->is_active;
             $this->sortOrder = $this->banner->sort_order;
             $this->existingImage = $this->banner->image;
+            $this->illustration = Banner::illustrationKey($this->banner->illustration);
         }
     }
 
@@ -88,14 +94,15 @@ class BannerForm extends Component
             'image' => $this->banner ? 'nullable|image|max:4096' : 'nullable|image|max:4096',
             // Full URL or a site path like /contact (the locale prefix is added on the site).
             'buttonUrl' => ['nullable', 'max:500', 'regex:#^(https?://|/)#'],
+            'illustration' => ['required', Rule::in(array_keys(Banner::ILLUSTRATIONS))],
         ]);
 
         $imagePath = $this->existingImage;
-        if ($this->image) {
+        if ($this->image || $this->removeImage) {
             if ($this->existingImage) {
                 \Storage::disk('public')->delete($this->existingImage);
             }
-            $imagePath = $this->image->store('banners', 'public');
+            $imagePath = $this->image ? $this->image->store('banners', 'public') : null;
         }
 
         $data = [
@@ -107,6 +114,7 @@ class BannerForm extends Component
             'button_url' => $this->buttonUrl ?: null,
             'show_ai_button' => $this->showAiButton,
             'image' => $imagePath,
+            'illustration' => $this->illustration,
             'is_active' => $this->isActive,
             'sort_order' => $this->sortOrder,
         ];
