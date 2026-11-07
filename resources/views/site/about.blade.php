@@ -40,7 +40,7 @@
                         <h2 class="mt-3 text-2xl font-semibold tracking-tight text-gray-900">{{ __('site.services.title') }}</h2>
                         <ul class="mt-8 grid gap-4 sm:grid-cols-2">
                             @foreach($services as $key => $service)
-                                <li class="flex items-start gap-4 rounded-xl border border-gray-200 p-5 hover:border-red-200 transition-colors">
+                                <li class="flex items-start gap-4 rounded-xl border border-gray-200 p-5 hover:border-brand-200 transition-colors">
                                     <span class="icon-tile">@include('site.partials.icon', ['name' => $serviceIcons[$key] ?? 'cube', 'class' => 'size-5'])</span>
                                     <span>
                                         <span class="block font-semibold text-gray-900">{{ $service['title'] }}</span>
@@ -62,13 +62,13 @@
                             @if($companyInfo->phone)
                                 <li class="flex items-start gap-3">
                                     @include('site.partials.icon', ['name' => 'phone', 'class' => 'size-5 shrink-0 text-gray-400'])
-                                    <a href="tel:{{ preg_replace('/[^0-9+]/', '', $companyInfo->phone) }}" class="text-gray-900 font-medium hover:text-red-600 transition-colors">{{ $companyInfo->phone }}</a>
+                                    <a href="tel:{{ preg_replace('/[^0-9+]/', '', $companyInfo->phone) }}" class="text-gray-900 font-medium hover:text-brand-600 transition-colors">{{ $companyInfo->phone }}</a>
                                 </li>
                             @endif
                             @if($companyInfo->email)
                                 <li class="flex items-start gap-3">
                                     @include('site.partials.icon', ['name' => 'envelope', 'class' => 'size-5 shrink-0 text-gray-400'])
-                                    <a href="mailto:{{ $companyInfo->email }}" class="text-gray-900 font-medium hover:text-red-600 transition-colors break-all">{{ $companyInfo->email }}</a>
+                                    <a href="mailto:{{ $companyInfo->email }}" class="text-gray-900 font-medium hover:text-brand-600 transition-colors break-all">{{ $companyInfo->email }}</a>
                                 </li>
                             @endif
                             @if($companyInfo->getTranslation('address', $locale, false))

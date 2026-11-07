@@ -137,7 +137,7 @@ return [
         'eyebrow' => 'Let\'s talk',
         'title' => 'Tell us about your task and get a solution and a quote',
         'text' => 'Our engineers will select equipment, estimate the integration and offer service terms. Or ask the AI assistant right now.',
-        'quote' => 'Get a quote',
+        'contact' => 'Contact us',
         'ask_ai' => 'Ask the AI assistant',
     ],
 
@@ -174,5 +174,17 @@ return [
         'company' => 'Company',
         'rights' => 'All rights reserved.',
         'made_in' => 'Auto ID · RFID · Product marking',
+    ],
+
+    'shop' => [
+        'nav' => 'Online shop',
+        'eyebrow' => 'Online shop',
+        'title' => 'Order online in the :site catalog',
+        'lead' => 'Labels, ribbons, scanners and printers for product marking — pick them in the catalog and place an order in a few clicks.',
+        'points' => ['The full catalog online', 'Order any time, 24/7', 'Advice from BDB specialists'],
+        'cta' => 'Open the catalog',
+        'new_tab' => '(opens in a new tab)',
+        'categories' => ['Labels', 'Ribbons', 'Scanners', 'Printers'],
+        'cart' => 'Cart',
     ],
 ];

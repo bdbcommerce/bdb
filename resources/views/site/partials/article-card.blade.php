@@ -5,7 +5,7 @@
     $__title   = $article->getTranslation('title', $__locale);
     $__tag     = $headingTag ?? 'h3';
 @endphp
-<article class="group relative flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-red-200 hover:shadow-sm transition has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-red-600 has-[a:focus-visible]:ring-offset-2">
+<article class="group relative flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-brand-200 hover:shadow-sm transition has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-brand-600 has-[a:focus-visible]:ring-offset-2">
     <div class="aspect-video overflow-hidden bg-gray-100">
         @if($article->featured_image)
             <img src="{{ Storage::url($article->featured_image) }}" alt=""
@@ -27,7 +27,7 @@
                 <time datetime="{{ $article->published_at->toDateString() }}">{{ $article->published_at->copy()->locale($__locale)->isoFormat('D MMM YYYY') }}</time>
             @endif
         </div>
-        <{{ $__tag }} class="font-semibold text-gray-900 leading-snug line-clamp-2 group-hover:text-red-600 transition-colors">
+        <{{ $__tag }} class="font-semibold text-gray-900 leading-snug line-clamp-2 group-hover:text-brand-600 transition-colors">
             <a href="{{ route('site.news.show', [$__locale, $__catSlug ?? 'news', $article->getTranslation('slug', $__locale, false)]) }}"
                class="after:absolute after:inset-0 focus-visible:outline-none">{{ $__title }}</a>
         </{{ $__tag }}>

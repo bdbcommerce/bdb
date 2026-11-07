@@ -17,7 +17,7 @@
         {{-- Printer body --}}
         <div class="absolute inset-x-0 top-0 h-[42%] rounded-2xl border-2 border-gray-900 bg-white shadow-lg shadow-gray-900/10">
             <div class="absolute left-4 top-4 flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1">
-                <span class="size-1.5 rounded-full bg-red-600 animate-blink"></span>
+                <span class="size-1.5 rounded-full bg-brand-600 animate-blink"></span>
                 <span class="font-mono text-[9px] tracking-widest text-gray-600">PRINTING</span>
             </div>
             <div class="absolute right-4 top-4 flex gap-1.5">

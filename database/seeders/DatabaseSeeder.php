@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
             ArticleCategorySeeder::class,
             HeroBannerSeeder::class,
             AiModelSeeder::class, // free AI models, switched off until a key is added
+            ColorThemeSeeder::class, // default site colours + designer presets
             DemoContentSeeder::class,
         ]);
 

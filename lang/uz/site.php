@@ -137,7 +137,7 @@ return [
         'eyebrow' => 'Keling, muhokama qilamiz',
         'title' => 'Vazifangiz haqida aytib bering, yechim va narx hisobini oling',
         'text' => 'Muhandislarimiz uskunani tanlaydi, integratsiyani baholaydi va servis shartlarini taklif qiladi. Yoki hoziroq SI yordamchisidan soʻrang.',
-        'quote' => 'Narx hisobini olish',
+        'contact' => 'Biz bilan bog‘laning',
         'ask_ai' => 'SI yordamchisidan soʻrash',
     ],
 
@@ -174,5 +174,17 @@ return [
         'company' => 'Kompaniya',
         'rights' => 'Barcha huquqlar himoyalangan.',
         'made_in' => 'Avtoidentifikatsiya · RFID · Markirovka',
+    ],
+
+    'shop' => [
+        'nav' => 'Onlayn do‘kon',
+        'eyebrow' => 'Onlayn do‘kon',
+        'title' => ':site katalogidan onlayn buyurtma bering',
+        'lead' => 'Markirovka uchun etiketkalar, ribbonlar, skanerlar va printerlar — katalogdan tanlang va bir necha bosishda buyurtma bering.',
+        'points' => ['Butun katalog onlayn', 'Istalgan vaqtda buyurtma, 24/7', 'BDB mutaxassislari maslahati'],
+        'cta' => 'Katalogni ochish',
+        'new_tab' => '(yangi oynada ochiladi)',
+        'categories' => ['Etiketkalar', 'Ribbonlar', 'Skanerlar', 'Printerlar'],
+        'cart' => 'Savat',
     ],
 ];

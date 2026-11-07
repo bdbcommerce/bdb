@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\ChatConversationController;
 use App\Http\Controllers\Admin\ChatLeadController;
 use App\Http\Controllers\Admin\ClientRequestController;
+use App\Http\Controllers\Admin\ColorThemeController;
 use App\Http\Controllers\Admin\CompanyInfoController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -73,6 +74,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('upload/image', [UploadController::class, 'image'])->name('upload.image');
 
         Route::resource('banners', BannerController::class)->except(['show']);
+
+        Route::post('color-themes/{color_theme}/activate', [ColorThemeController::class, 'activate'])->name('color-themes.activate');
+        Route::resource('color-themes', ColorThemeController::class)->except(['show']);
         Route::resource('brands', BrandController::class)->except(['show']);
         Route::resource('industries', IndustryController::class)->except(['show']);
         Route::resource('customers', CustomerController::class)->except(['show']);

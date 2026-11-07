@@ -19,6 +19,7 @@ class CompanyInfo extends Model
         'phone', 'email',
         'telegram', 'instagram', 'facebook', 'youtube', 'linkedin',
         'map_embed', 'google_analytics', 'yandex_metrika',
+        'shop_url',
     ];
 
     /**
@@ -104,6 +105,38 @@ class CompanyInfo extends Model
         $url = 'https://'.$host.$path.(isset($parts['query']) ? '?'.$parts['query'] : '');
 
         return strlen($url) <= self::SOCIAL_MAX ? $url : null;
+    }
+
+    /** A public http(s) shop link with a dotted host (also used by the admin validation). */
+    public static function isValidShopUrl(?string $url): bool
+    {
+        return (bool) preg_match('#^https?://[^\s/?\#:@]+\.[^\s/?\#:@]+([:/?\#]\S*)?$#i', trim((string) $url));
+    }
+
+    /**
+     * The online shop link (default https://mylabel.uz) with UTM tags so the shop's analytics can
+     * tell which block a visitor came from; null when no valid http(s) link is set.
+     */
+    public function shopUrl(string $placement = 'site'): ?string
+    {
+        $url = trim((string) $this->shop_url);
+        if (! self::isValidShopUrl($url)) {
+            return null;
+        }
+
+        // UTM tags go in the query, before any #fragment.
+        [$base, $fragment] = array_pad(explode('#', $url, 2), 2, null);
+        $utm = http_build_query(['utm_source' => 'bdb_site', 'utm_medium' => 'referral', 'utm_campaign' => $placement]);
+
+        return $base.(str_contains($base, '?') ? '&' : '?').$utm.($fragment !== null ? '#'.$fragment : '');
+    }
+
+    /** The shop's host for display, e.g. "mylabel.uz". */
+    public function shopHost(): ?string
+    {
+        $host = parse_url(trim((string) $this->shop_url), PHP_URL_HOST);
+
+        return $host ? preg_replace('/^www\./i', '', $host) : null;
     }
 
     /** @return array<string, string> label => URL, only the valid ones */

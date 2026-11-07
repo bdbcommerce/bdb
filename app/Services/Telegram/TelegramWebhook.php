@@ -10,6 +10,12 @@ class TelegramWebhook
 {
     public const SECRET_PATTERN = '/^[A-Za-z0-9_-]{16,256}$/';
 
+    /** Bot chats, groups (incl. edits) and Telegram Business (Premium account) chats. */
+    public const UPDATES = [
+        'message', 'edited_message',
+        'business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages',
+    ];
+
     public function __construct(private TelegramApi $api) {}
 
     public function url(): string
@@ -37,7 +43,7 @@ class TelegramWebhook
         $ok = $this->api->call('setWebhook', [
             'url' => $url,
             'secret_token' => $secret,
-            'allowed_updates' => ['message'],
+            'allowed_updates' => self::UPDATES,
             'drop_pending_updates' => true,
         ]) !== null;
 
@@ -52,7 +58,7 @@ class TelegramWebhook
     /**
      * Bot and webhook state, or null when Telegram could not be reached (or the token is wrong).
      *
-     * @return array{bot: string, url: string|null, connected: bool, pending: int, last_error: string|null}|null
+     * @return array{bot: string, url: string|null, connected: bool, missing_updates: list<string>, groups_visible: bool, business_mode: bool, pending: int, last_error: string|null}|null
      */
     public function status(): ?array
     {
@@ -68,6 +74,10 @@ class TelegramWebhook
             'bot' => '@'.($bot['username'] ?? '?'),
             'url' => $url,
             'connected' => $url === $this->url(),
+            // Without allowed_updates Telegram sends all of these; a list from an older setWebhook may lack some.
+            'missing_updates' => isset($info['allowed_updates']) ? array_values(array_diff(self::UPDATES, $info['allowed_updates'])) : [],
+            'groups_visible' => (bool) ($bot['can_read_all_group_messages'] ?? false),
+            'business_mode' => (bool) ($bot['can_connect_to_business'] ?? false),
             'pending' => (int) ($info['pending_update_count'] ?? 0),
             'last_error' => isset($info['last_error_message'])
                 ? date('Y-m-d H:i', $info['last_error_date'] ?? time()).' — '.$info['last_error_message']

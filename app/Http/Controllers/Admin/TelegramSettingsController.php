@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChatConversation;
+use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
 use App\Services\Telegram\TelegramWebhook;
 use App\Services\TelegramNotifier;
@@ -30,6 +32,16 @@ class TelegramSettingsController extends Controller
                 'registered' => TelegramUser::registered()->count(),
                 'pending' => TelegramUser::whereNull('registered_at')->count(),
             ],
+            'connections' => TelegramBusinessConnection::latest('updated_at')->get(),
+            // One row per group: the latest session's title (follows renames), all sessions' messages.
+            'groups' => ChatConversation::where('channel', 'group')->latest('updated_at')->limit(1000)
+                ->get(['external_id', 'title', 'message_count', 'updated_at'])
+                ->groupBy('external_id')
+                ->map(fn ($sessions) => (object) [
+                    'external_id' => $sessions->first()->external_id,
+                    'title' => $sessions->first()->title,
+                    'messages' => $sessions->sum('message_count'),
+                ])->take(50)->values(),
         ]);
     }
 
@@ -39,7 +51,7 @@ class TelegramSettingsController extends Controller
 
         return redirect()->route('admin.telegram.edit')->with(
             $error === null ? 'success' : 'telegram_error',
-            $error ?? 'Webhook connected: the bot now answers customers at '.$webhook->url(),
+            $error ?? 'Webhook connected: the bot answers customers and records Business and group chats at '.$webhook->url(),
         );
     }
 

@@ -24,8 +24,8 @@
         @else
             <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 @foreach($industries as $industry)
-                    <li id="industry-{{ $industry->id }}" class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 md:p-7 transition-colors hover:border-red-200">
-                        <span class="icon-tile size-12 group-hover:border-red-200 group-hover:text-red-600 transition-colors">
+                    <li id="industry-{{ $industry->id }}" class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 md:p-7 transition-colors hover:border-brand-200">
+                        <span class="icon-tile size-12 group-hover:border-brand-200 group-hover:text-brand-600 transition-colors">
                             @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-6'])
                         </span>
                         <h2 class="mt-5 text-lg font-semibold text-gray-900">{{ $industry->getTranslation('name', $locale) }}</h2>

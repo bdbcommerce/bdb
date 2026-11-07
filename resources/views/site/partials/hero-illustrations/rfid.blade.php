@@ -14,7 +14,7 @@
     <div class="relative mx-auto aspect-square w-full max-w-[240px]">
         {{-- Radio waves --}}
         @foreach(['0s', '-0.8s', '-1.6s'] as $delay)
-            <div class="absolute inset-0 rounded-full border border-red-600/60 animate-wave" style="animation-delay: {{ $delay }}"></div>
+            <div class="absolute inset-0 rounded-full border border-brand-600/60 animate-wave" style="animation-delay: {{ $delay }}"></div>
         @endforeach
         <div class="absolute inset-[22%] rounded-full border border-dashed border-gray-300"></div>
 
@@ -31,7 +31,7 @@
                     <path d="M4 4h48v24H4zM9 8.5h38v15H9zM14 13h28v6H14z"/>
                     <rect x="24" y="12" width="8" height="8" fill="currentColor" stroke="none"/>
                 </svg>
-                <span class="absolute -right-1 -top-1 size-2 rounded-full bg-red-600 animate-blink" style="animation-delay: {{ $delay }}"></span>
+                <span class="absolute -right-1 -top-1 size-2 rounded-full bg-brand-600 animate-blink" style="animation-delay: {{ $delay }}"></span>
             </div>
         @endforeach
     </div>

@@ -8,7 +8,7 @@
     <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-12 md:pt-14 md:pb-16">
         <nav aria-label="{{ __('site.a11y.breadcrumb') }}" class="mb-6">
             <ol class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                <li><a href="{{ route('site.home', $__locale) }}" class="hover:text-gray-900 transition-colors rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">{{ __('Home') }}</a></li>
+                <li><a href="{{ route('site.home', $__locale) }}" class="hover:text-gray-900 transition-colors rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{{ __('Home') }}</a></li>
                 @foreach(($crumbs ?? [['label' => $title, 'url' => null]]) as $crumb)
                     <li aria-hidden="true">@include('site.partials.icon', ['name' => 'chevron-right', 'class' => 'size-3 text-gray-300'])</li>
                     <li class="min-w-0">

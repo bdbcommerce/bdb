@@ -32,7 +32,7 @@
             'title'       => $slogan ?: __('site.hero.title'),
             'lead'        => __('site.hero.lead'),
             'points'      => array_values((array) __('site.hero.points')),
-            'button_text' => __('site.cta.quote'),
+            'button_text' => __('site.cta.contact'),
             'button_href' => route('site.contact', $locale),
             'show_ai'     => true,
             'image'       => null,
@@ -54,7 +54,7 @@
 <section class="relative overflow-hidden bg-white" aria-labelledby="hero-title"
          @if($slideCount > 1) aria-roledescription="carousel" @endif>
     <div class="absolute inset-0 bg-grid mask-fade pointer-events-none" aria-hidden="true"></div>
-    <div class="absolute -top-40 right-[-10%] size-[36rem] rounded-full bg-red-600/[0.06] blur-3xl pointer-events-none" aria-hidden="true"></div>
+    <div class="absolute -top-40 right-[-10%] size-[36rem] rounded-full bg-brand-600/[0.06] blur-3xl pointer-events-none" aria-hidden="true"></div>
     <div class="absolute -bottom-40 left-[-10%] size-[30rem] rounded-full bg-gray-400/10 blur-3xl pointer-events-none" aria-hidden="true"></div>
 
     <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-16 md:pt-20 md:pb-24 lg:pt-24 lg:pb-28"
@@ -64,10 +64,11 @@
              timer: null,
              start() {
                  if (this.total < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-                 this.stop(); this.timer = setInterval(() => this.go(this.current + 1), 7000);
+                 this.stop(); this.timer = setInterval(() => this.go(this.current + 1), 10000);
              },
              stop() { clearInterval(this.timer); this.timer = null; },
-             go(i)  { this.current = (i + this.total) % this.total; }
+             go(i)  { this.current = (i + this.total) % this.total; },
+             pick(i) { this.go(i); if (this.timer) this.start(); }
          }"
          x-init="start()" @mouseenter="stop()" @mouseleave="start()" @focusin="stop()">
 
@@ -84,8 +85,8 @@
                         @if($slide['badge'])
                             <p class="chip !py-1.5 mb-6">
                                 <span class="relative flex size-2" aria-hidden="true">
-                                    <span class="absolute inline-flex size-full rounded-full bg-red-600 opacity-60 animate-ping"></span>
-                                    <span class="relative inline-flex size-2 rounded-full bg-red-600"></span>
+                                    <span class="absolute inline-flex size-full rounded-full bg-brand-600 opacity-60 animate-ping"></span>
+                                    <span class="relative inline-flex size-2 rounded-full bg-brand-600"></span>
                                 </span>
                                 {{ $slide['badge'] }}
                             </p>
@@ -111,7 +112,7 @@
                                 @endif
                                 @if($slide['show_ai'])
                                     <button type="button" @click="$dispatch('belgi-open')" class="btn-secondary">
-                                        @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4 text-red-600'])
+                                        @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4 text-brand-600'])
                                         {{ __('site.cta.ask_ai') }}
                                     </button>
                                 @endif
@@ -122,7 +123,7 @@
                             <ul class="mt-10 grid gap-3 {{ count($slide['points']) >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }} text-sm text-gray-600">
                                 @foreach($slide['points'] as $point)
                                     <li class="flex items-start gap-2">
-                                        @include('site.partials.icon', ['name' => 'check', 'class' => 'size-4 mt-0.5 shrink-0 text-red-600', 'stroke' => '2'])
+                                        @include('site.partials.icon', ['name' => 'check', 'class' => 'size-4 mt-0.5 shrink-0 text-brand-600', 'stroke' => '2'])
                                         <span>{{ $point }}</span>
                                     </li>
                                 @endforeach
@@ -148,17 +149,17 @@
 
         @if($slideCount > 1)
             <div class="mt-12 flex items-center gap-2">
-                <button type="button" @click="go(current - 1)" aria-label="{{ __('site.a11y.prev') }}"
+                <button type="button" @click="pick(current - 1)" aria-label="{{ __('site.a11y.prev') }}"
                         class="size-9 rounded-full border border-gray-200 bg-white text-gray-700 hover:border-gray-400 flex items-center justify-center transition-colors">
                     @include('site.partials.icon', ['name' => 'arrow-left', 'class' => 'size-4'])
                 </button>
                 @foreach($slides as $i => $slide)
-                    <button type="button" @click="go({{ $i }})" aria-label="{{ __('site.a11y.slide', ['n' => $i + 1]) }}"
+                    <button type="button" @click="pick({{ $i }})" aria-label="{{ __('site.a11y.slide', ['n' => $i + 1]) }}"
                             aria-current="{{ $i === 0 ? 'true' : 'false' }}"
                             :aria-current="(current === {{ $i }}).toString()"
-                            class="h-2 w-2 rounded-full bg-gray-300 hover:bg-gray-400 aria-[current=true]:w-6 aria-[current=true]:bg-red-600 transition-all duration-300"></button>
+                            class="h-2 w-2 rounded-full bg-gray-300 hover:bg-gray-400 aria-[current=true]:w-6 aria-[current=true]:bg-brand-600 transition-all duration-300"></button>
                 @endforeach
-                <button type="button" @click="go(current + 1)" aria-label="{{ __('site.a11y.next') }}"
+                <button type="button" @click="pick(current + 1)" aria-label="{{ __('site.a11y.next') }}"
                         class="size-9 rounded-full border border-gray-200 bg-white text-gray-700 hover:border-gray-400 flex items-center justify-center transition-colors">
                     @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4'])
                 </button>
@@ -201,7 +202,7 @@
             @foreach($services as $key => $service)
                 <li class="group relative flex flex-col bg-white p-6 md:p-8 transition-colors hover:bg-gray-50">
                     <div class="flex items-start justify-between">
-                        <span class="icon-tile size-12 group-hover:border-red-200 group-hover:text-red-600 transition-colors">
+                        <span class="icon-tile size-12 group-hover:border-brand-200 group-hover:text-brand-600 transition-colors">
                             @include('site.partials.icon', ['name' => $serviceIcons[$key] ?? 'cube', 'class' => 'size-6'])
                         </span>
                         <span class="font-mono text-xs text-gray-300" aria-hidden="true">{{ sprintf('%02d', $loop->iteration) }}</span>
@@ -212,7 +213,7 @@
                         <ul class="mt-5 space-y-2 text-sm text-gray-600">
                             @foreach($service['points'] as $point)
                                 <li class="flex items-start gap-2">
-                                    <span class="mt-2 size-1 shrink-0 rounded-full bg-red-600" aria-hidden="true"></span>
+                                    <span class="mt-2 size-1 shrink-0 rounded-full bg-brand-600" aria-hidden="true"></span>
                                     <span>{{ $point }}</span>
                                 </li>
                             @endforeach
@@ -221,7 +222,7 @@
                     @if(! empty($service['ask']))
                         <div class="mt-auto pt-6">
                             <button type="button" @click="$dispatch('belgi-open', { message: @js($service['ask']) })"
-                                    class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-red-600 transition-colors rounded">
+                                    class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-brand-600 transition-colors rounded">
                                 @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4'])
                                 {{ __('site.services.ask') }}
                             </button>
@@ -277,6 +278,9 @@
     </div>
 </section>
 
+{{-- ============================== ONLINE SHOP ============================== --}}
+@include('site.partials.shop-band', ['placement' => 'home_block'])
+
 {{-- ============================== INDUSTRIES & CUSTOMERS ============================== --}}
 <section id="industries" class="bg-white" aria-labelledby="industries-title">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28">
@@ -317,8 +321,8 @@
                                     @keydown.home.prevent="go(0)" @keydown.end.prevent="go(count - 1)"
                                     class="group flex shrink-0 items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors lg:w-full
                                            hover:border-gray-400 hover:text-gray-900
-                                           aria-selected:border-red-600 aria-selected:bg-red-50/60 aria-selected:text-gray-900">
-                                <span class="text-gray-400 group-aria-selected:text-red-600">
+                                           aria-selected:border-brand-600 aria-selected:bg-brand-50/60 aria-selected:text-gray-900">
+                                <span class="text-gray-400 group-aria-selected:text-brand-600">
                                     @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-5'])
                                 </span>
                                 <span class="whitespace-nowrap lg:whitespace-normal lg:flex-1">{{ $industry->getTranslation('name', $locale) }}</span>
@@ -339,7 +343,7 @@
                              x-show="active === {{ $i }}" @if($i > 0) style="display: none;" @endif
                              class="rounded-2xl border border-gray-200 bg-white p-6 md:p-8 focus-visible:outline-2">
                             <div class="flex items-start gap-4">
-                                <span class="icon-tile size-12 text-red-600">
+                                <span class="icon-tile size-12 text-brand-600">
                                     @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-6'])
                                 </span>
                                 <div class="min-w-0">
@@ -357,7 +361,7 @@
                                 @else
                                     <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                                         @foreach($industry->customers->take(8) as $customer)
-                                            <li class="group flex h-20 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 hover:border-red-200 transition-colors"
+                                            <li class="group flex h-20 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 hover:border-brand-200 transition-colors"
                                                 title="{{ $customer->name }}">
                                                 @if($customer->logo)
                                                     <img src="{{ Storage::url($customer->logo) }}" alt="{{ $customer->name }}"

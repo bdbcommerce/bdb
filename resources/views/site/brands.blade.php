@@ -28,7 +28,7 @@
                         $name = $brand->getTranslation('name', $locale);
                         $desc = $brand->getTranslation('description', $locale, false);
                     @endphp
-                    <li class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-colors hover:border-red-200">
+                    <li class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-colors hover:border-brand-200">
                         <div class="flex h-20 items-center justify-center rounded-xl bg-gray-50 px-6">
                             @if($brand->logo)
                                 <img src="{{ Storage::url($brand->logo) }}" alt="{{ $name }}"
@@ -45,7 +45,7 @@
                         <div class="mt-auto pt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
                             <button type="button"
                                     @click="$dispatch('belgi-open', { message: @js(__('site.brands.ask_about', ['brand' => $name])) })"
-                                    class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-red-600 transition-colors rounded">
+                                    class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-brand-600 transition-colors rounded">
                                 @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4'])
                                 {{ __('site.services.ask') }}
                             </button>
@@ -64,6 +64,8 @@
         @endif
     </div>
 </section>
+
+@include('site.partials.shop-band', ['placement' => 'brands_block'])
 
 @include('site.partials.cta-band')
 

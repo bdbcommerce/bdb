@@ -20,7 +20,7 @@
     :chips="[['signal', 'RFID · UHF Gen2'], ['sparkles', 'AI · Belgi', true], ['printer', 'GS1 · 300 dpi']]">
     <div class="relative mx-auto aspect-square w-full max-w-[240px]">
         {{-- Corner brackets (echo the logo frames) --}}
-        <svg class="absolute -inset-4 size-[calc(100%+2rem)] text-red-600" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.2" preserveAspectRatio="none">
+        <svg class="absolute -inset-4 size-[calc(100%+2rem)] text-brand-600" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.2" preserveAspectRatio="none">
             <path d="M2 16V2h14M84 2h14v14M98 84v14H84M16 98H2V84" vector-effect="non-scaling-stroke"/>
         </svg>
         <svg viewBox="0 0 {{ $qrSize }} {{ $qrSize }}" class="size-full text-gray-900" shape-rendering="crispEdges">
@@ -28,7 +28,7 @@
         </svg>
         {{-- Laser --}}
         <div class="absolute -inset-x-3 inset-y-0">
-            <div class="animate-scan absolute inset-x-0 top-0 h-0.5 bg-red-600 shadow-[0_0_12px_2px_rgba(220,38,38,0.55)]"></div>
+            <div class="animate-scan absolute inset-x-0 top-0 h-0.5 bg-brand-600 shadow-[0_0_12px_2px_color-mix(in_srgb,var(--color-brand-600)_55%,transparent)]"></div>
         </div>
     </div>
 </x-hero-frame>

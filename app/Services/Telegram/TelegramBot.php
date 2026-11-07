@@ -18,7 +18,8 @@ use Illuminate\Support\Str;
  * phone number linked to their Telegram account. Only then are text questions
  * answered by ChatAssistant (briefly). Other messages (photos, voice, files…) are
  * not answered; only their type and Telegram file ID are stored in the conversation.
- * Only private chats are handled, so the sales group that receives lead alerts is ignored.
+ * Only private chats are answered. Telegram Business chats (a Premium account that connected
+ * the bot) and groups are recorded without replies by TelegramRecorder.
  */
 class TelegramBot
 {
@@ -31,32 +32,61 @@ class TelegramBot
     public const LANGUAGE_PROMPT = '🌐 Tilni tanlang · Выберите язык · Choose a language';
 
     /** Message keys that carry a downloadable file, checked in this order (an animation also has "document"). */
-    private const FILE_TYPES = ['animation', 'photo', 'video', 'video_note', 'voice', 'audio', 'sticker', 'document'];
+    public const FILE_TYPES = ['animation', 'photo', 'video', 'video_note', 'voice', 'audio', 'sticker', 'document'];
 
     /** Other non-text message kinds, stored by type only. */
-    private const OTHER_TYPES = ['contact', 'location', 'venue', 'poll', 'dice', 'story'];
+    public const OTHER_TYPES = ['contact', 'location', 'venue', 'poll', 'dice', 'story'];
 
     public function __construct(
         private TelegramApi $api,
         private ChatAssistant $assistant,
         private TelegramNotifier $notifier,
+        private TelegramRecorder $recorder,
     ) {}
+
+    /** Telegram ID of the private message being handled (to mark it answered). */
+    private ?int $messageId = null;
 
     public function handle(array $update): void
     {
+        if ($this->record($update)) {
+            return;
+        }
+
+        $private = fn ($m) => is_array($m) && is_array($m['chat'] ?? null) && is_scalar($m['chat']['id'] ?? null)
+            && ($m['chat']['type'] ?? null) === 'private';
+
+        if ($private($edited = $update['edited_message'] ?? null)) {
+            $this->recordEdit($edited);
+
+            return;
+        }
+
         $message = $update['message'] ?? null;
-        if (! $message || ($message['chat']['type'] ?? null) !== 'private') {
+        if (! $private($message)) {
             return;
         }
 
         $chatId = $message['chat']['id'];
-        $from = $message['from'] ?? [];
+        $from = is_array($message['from'] ?? null) ? $message['from'] : [];
+        // Malformed text (not a string) is treated as a non-text message.
+        if (isset($message['text']) && ! is_scalar($message['text'])) {
+            unset($message['text']);
+        }
 
         $user = TelegramUser::firstOrNew(['telegram_id' => (string) $chatId]);
-        $user->username = $from['username'] ?? null;
+        $user->username = is_string($from['username'] ?? null) ? $from['username'] : null;
         $user->save();
 
         $locale = $user->locale ?? 'ru';
+
+        // Every message is recorded: text as text, anything else by type and Telegram file ID.
+        $messageId = is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null;
+        $this->conversation($user)->appendIncoming(TelegramRecorder::describe($message) + [
+            'message_id' => $messageId,
+            'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
+        ]);
+        $this->messageId = $messageId;
 
         if (! RateLimiter::attempt("telegram-chat:{$chatId}", 15, fn () => true, 60)) {
             $this->api->sendMessage($chatId, __('chat.tg_too_fast', [], $locale));
@@ -86,6 +116,37 @@ class TelegramBot
             TelegramUser::STEP_DONE => $this->chat($user, $message, $text),
             default => $this->receiveLanguage($user, $text),
         };
+    }
+
+    /** Business and group updates are only recorded. Returns true when the update was one of them. */
+    private function record(array $update): bool
+    {
+        // Malformed parts (not an object) are ignored.
+        foreach (['business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages'] as $key) {
+            if (array_key_exists($key, $update)) {
+                if (is_array($part = $update[$key])) {
+                    match ($key) {
+                        'business_connection' => $this->recorder->connection($part),
+                        'business_message' => $this->recorder->businessMessage($part),
+                        'edited_business_message' => $this->recorder->businessMessage($part, edited: true),
+                        'deleted_business_messages' => $this->recorder->businessDeleted($part),
+                    };
+                }
+
+                return true;
+            }
+        }
+
+        foreach (['message' => false, 'edited_message' => true] as $key => $edited) {
+            $part = $update[$key] ?? null;
+            if (is_array($part) && is_array($part['chat'] ?? null) && in_array($part['chat']['type'] ?? null, ['group', 'supergroup'], true)) {
+                $this->recorder->groupMessage($part, $edited);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -208,9 +269,7 @@ class TelegramBot
         $locale = $user->locale;
 
         if (! array_key_exists('text', $message)) {
-            $this->recordMedia($user, $message);
-
-            return;
+            return; // already recorded by type and file ID; not answered
         }
 
         if ($text === '') {
@@ -255,7 +314,7 @@ class TelegramBot
         // Falls back (and alerts admins) when the AI is not configured or fails.
         $result = $this->assistant->reply($history, $locale, 'Telegram bot', brief: true);
 
-        $conversation->appendExchange($text, $result['reply'], $result['answered']);
+        $conversation->appendReply($this->messageId, $text, $result['reply'], $result['answered']);
         ClientRequest::record($conversation, $text, $result);
 
         $reply = $result['reply'];
@@ -268,21 +327,21 @@ class TelegramBot
         ]);
     }
 
-    /** Store a non-text message by type and file ID only; it is not answered. */
-    private function recordMedia(TelegramUser $user, array $message): void
+    /** The customer edited a message in the bot chat: update the recorded copy (or record the new text). */
+    private function recordEdit(array $message): void
     {
-        foreach (self::FILE_TYPES as $type) {
-            if (isset($message[$type])) {
-                // A photo comes in several sizes; keep the largest (last).
-                $file = $type === 'photo' ? end($message['photo']) : $message[$type];
-                $this->conversation($user)->appendMedia($type, $file['file_id'] ?? null);
+        $chatId = (string) $message['chat']['id'];
+        $messageId = is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null;
+        $content = TelegramRecorder::describe($message);
 
-                return;
+        $conversation = ChatConversation::where('channel', 'telegram')->where('external_id', $chatId)
+            ->latest('updated_at')->latest('id')->first();
+        if (! $conversation || $messageId === null || ! $conversation->applyEdit($messageId, $content)) {
+            $user = TelegramUser::firstWhere('telegram_id', $chatId);
+            if ($user) {
+                $this->conversation($user)->appendIncoming($content + ['message_id' => $messageId, 'at' => date('c'), 'edited' => true]);
             }
         }
-
-        $type = collect(self::OTHER_TYPES)->first(fn (string $t) => isset($message[$t])) ?? 'other';
-        $this->conversation($user)->appendMedia($type, null);
     }
 
     /** The registered customer asked for a call: a lead with their registration details. */
@@ -335,7 +394,7 @@ class TelegramBot
             ]);
 
         // Follows /language changes.
-        $conversation->locale = $user->locale;
+        $conversation->locale = $user->locale ?? 'ru'; // before a language is picked: Russian
 
         return $conversation;
     }

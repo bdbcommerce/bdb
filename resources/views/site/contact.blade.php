@@ -31,11 +31,11 @@
                             @if($companyInfo->phone)
                                 <li>
                                     <a href="tel:{{ preg_replace('/[^0-9+]/', '', $companyInfo->phone) }}"
-                                       class="group flex items-center gap-4 rounded-xl border border-gray-200 p-4 hover:border-red-200 transition-colors">
+                                       class="group flex items-center gap-4 rounded-xl border border-gray-200 p-4 hover:border-brand-200 transition-colors">
                                         <span class="icon-tile">@include('site.partials.icon', ['name' => 'phone', 'class' => 'size-5'])</span>
                                         <span>
                                             <span class="block text-xs text-gray-500">{{ __('Phone') }}</span>
-                                            <span class="block font-semibold text-gray-900 group-hover:text-red-600 transition-colors">{{ $companyInfo->phone }}</span>
+                                            <span class="block font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">{{ $companyInfo->phone }}</span>
                                         </span>
                                     </a>
                                 </li>
@@ -43,11 +43,11 @@
                             @if($companyInfo->email)
                                 <li>
                                     <a href="mailto:{{ $companyInfo->email }}"
-                                       class="group flex items-center gap-4 rounded-xl border border-gray-200 p-4 hover:border-red-200 transition-colors">
+                                       class="group flex items-center gap-4 rounded-xl border border-gray-200 p-4 hover:border-brand-200 transition-colors">
                                         <span class="icon-tile">@include('site.partials.icon', ['name' => 'envelope', 'class' => 'size-5'])</span>
                                         <span class="min-w-0">
                                             <span class="block text-xs text-gray-500">{{ __('Email') }}</span>
-                                            <span class="block font-semibold text-gray-900 group-hover:text-red-600 transition-colors break-all">{{ $companyInfo->email }}</span>
+                                            <span class="block font-semibold text-gray-900 group-hover:text-brand-600 transition-colors break-all">{{ $companyInfo->email }}</span>
                                         </span>
                                     </a>
                                 </li>
@@ -70,7 +70,7 @@
                 {{-- AI assistant shortcut --}}
                 <div class="rounded-2xl border border-gray-200 bg-gray-50 p-6" x-data>
                     <div class="flex items-start gap-4">
-                        <span class="icon-tile text-red-600">@include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-5'])</span>
+                        <span class="icon-tile text-brand-600">@include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-5'])</span>
                         <div>
                             <h2 class="font-semibold text-gray-900">{{ __('site.contact.ai_title') }}</h2>
                             <p class="mt-1 text-sm text-gray-600 leading-relaxed">{{ __('site.contact.ai_text') }}</p>

@@ -14,7 +14,7 @@
             <span class="size-2.5 rounded-full bg-gray-200"></span>
             <span class="ml-3 font-mono text-[11px] text-gray-400 truncate">{{ $path }}</span>
             <span class="ml-auto inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-gray-500">
-                <span class="size-1.5 rounded-full bg-red-600 animate-blink"></span> LIVE
+                <span class="size-1.5 rounded-full bg-brand-600 animate-blink"></span> LIVE
             </span>
         </div>
 
@@ -29,7 +29,7 @@
                         <div class="bg-white px-4 py-3 col-span-2 flex items-center justify-between">
                             <dt class="text-gray-400">{{ $row[0] }}</dt>
                             <dd class="inline-flex items-center gap-1 text-gray-900">
-                                @include('site.partials.icon', ['name' => 'check-badge', 'class' => 'size-4 text-red-600'])
+                                @include('site.partials.icon', ['name' => 'check-badge', 'class' => 'size-4 text-brand-600'])
                                 {{ $row[1] }}
                             </dd>
                         </div>
@@ -49,7 +49,7 @@
     @endphp
     @foreach(array_slice($chips, 0, 3) as $i => $chip)
         <div class="hidden sm:flex absolute {{ $chipPositions[$i] }} chip shadow-md animate-float">
-            @include('site.partials.icon', ['name' => $chip[0], 'class' => 'size-4 '.(($chip[2] ?? false) ? 'text-red-600' : 'text-gray-900')])
+            @include('site.partials.icon', ['name' => $chip[0], 'class' => 'size-4 '.(($chip[2] ?? false) ? 'text-brand-600' : 'text-gray-900')])
             {{ $chip[1] }}
         </div>
     @endforeach

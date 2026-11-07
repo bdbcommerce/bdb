@@ -23,7 +23,7 @@ class ClientRequestController extends Controller
     public function index(Request $request)
     {
         $status = is_string($s = $request->query('status')) && ($s === 'all' || array_key_exists($s, ClientRequest::STATUSES)) ? $s : 'open';
-        $channel = is_string($c = $request->query('channel')) && array_key_exists($c, ChatConversation::CHANNELS) ? $c : null;
+        $channel = is_string($c = $request->query('channel')) && array_key_exists($c, ChatConversation::answeredChannels()) ? $c : null;
 
         $requests = ClientRequest::query()
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
@@ -58,7 +58,7 @@ class ClientRequestController extends Controller
             'status' => $status,
             'statuses' => ClientRequest::STATUSES,
             'channel' => $channel,
-            'channels' => ChatConversation::CHANNELS,
+            'channels' => ChatConversation::answeredChannels(),
             'counts' => ClientRequest::query()->toBase()->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
         ]);
     }

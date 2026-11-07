@@ -8,6 +8,20 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
+    /* Site accent ("brand"). Defaults to the original BDB red; the active colour theme
+       (Admin → Company → Site colors) overrides these on the public site only. */
+    --color-brand-50: oklch(97.1% 0.013 17.38);
+    --color-brand-100: oklch(93.6% 0.032 17.717);
+    --color-brand-200: oklch(88.5% 0.062 18.334);
+    --color-brand-300: oklch(80.8% 0.114 19.571);
+    --color-brand-400: oklch(70.4% 0.191 22.216);
+    --color-brand-500: oklch(63.7% 0.237 25.331);
+    --color-brand-600: oklch(57.7% 0.245 27.325);
+    --color-brand-700: oklch(50.5% 0.213 27.518);
+    --color-brand-800: oklch(44.4% 0.177 26.899);
+    --color-brand-900: oklch(39.6% 0.141 25.723);
+    --color-brand-950: oklch(25.8% 0.092 26.042);
+
     --animate-scan: scan 3.2s ease-in-out infinite alternate;
     --animate-float: float 6s ease-in-out infinite;
     --animate-dash: dash 6s linear infinite;
@@ -47,6 +61,31 @@
     }
 }
 
+/* ---------- Component colours ----------
+   Defaults = the original look. A colour theme (Admin → Site colors) may override any of them;
+   keep in sync with ColorTheme::COMPONENTS. */
+:root {
+    --site-header-bg: #ffffff;
+    --site-header-border: var(--color-gray-200);
+    --site-nav-text: var(--color-gray-600);
+    --site-nav-hover: var(--color-gray-900);
+    --site-nav-hover-bg: var(--color-gray-50);
+    --site-nav-active: var(--color-brand-600);
+    --site-nav-active-bg: var(--color-brand-50);
+    --site-btn-bg: var(--color-brand-600);
+    --site-btn-hover: var(--color-brand-700);
+    --site-btn-text: #ffffff;
+    --site-btn2-border: var(--color-gray-300);
+    --site-btn2-text: var(--color-gray-900);
+    --site-link: var(--color-brand-600);
+    --site-link-hover: var(--color-brand-700);
+    --site-footer-bg: var(--color-gray-900);
+    --site-footer-text: var(--color-gray-400);
+    --site-footer-heading: #ffffff;
+    --site-footer-link-hover: #ffffff;
+    --site-footer-border: var(--color-gray-800);
+}
+
 /* ---------- Base ---------- */
 @layer base {
     html {
@@ -57,7 +96,7 @@
     [id] { scroll-margin-top: 5rem; }
 
     :focus-visible {
-        outline: 2px solid var(--color-red-600);
+        outline: 2px solid var(--color-brand-600);
         outline-offset: 2px;
     }
 
@@ -101,19 +140,19 @@
     }
     .eyebrow::before {
         content: '';
-        @apply inline-block h-px w-6 bg-red-600;
+        @apply inline-block h-px w-6 bg-brand-600;
     }
 
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-sm
-               transition-colors hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600;
+        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-(color:--site-btn-bg) px-6 py-3 text-sm font-semibold text-(color:--site-btn-text) shadow-sm
+               transition-colors hover:bg-(color:--site-btn-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600;
     }
     .btn-secondary {
-        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-900
-               transition-colors hover:border-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600;
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-(color:--site-btn2-border) bg-white px-6 py-3 text-sm font-semibold text-(color:--site-btn2-text)
+               transition-colors hover:border-(color:--site-btn2-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600;
     }
     .link-arrow {
-        @apply inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 transition-colors hover:text-red-700;
+        @apply inline-flex items-center gap-1.5 text-sm font-semibold text-(color:--site-link) transition-colors hover:text-(color:--site-link-hover);
     }
 
     .icon-tile {
@@ -136,9 +175,9 @@
 
     .tab {
         @apply shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors
-               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600;
+               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600;
     }
-    .tab-active   { @apply border-red-600 bg-red-600 text-white; }
+    .tab-active   { @apply border-(color:--site-btn-bg) bg-(color:--site-btn-bg) text-(color:--site-btn-text); }
     .tab-inactive { @apply border-gray-200 bg-white text-gray-600 hover:border-gray-400 hover:text-gray-900; }
 }
 
@@ -154,14 +193,14 @@
 
 /* ---------- Article rich-text content rendered from Quill editor ---------- */
 .article-content {
-    color: #4b5563;
+    color: var(--color-gray-600);
     line-height: 1.75;
     font-size: 1.0625rem;
     overflow-wrap: anywhere;
 }
 .article-content h1, .article-content h2, .article-content h3,
 .article-content h4, .article-content h5, .article-content h6 {
-    color: #111827;
+    color: var(--color-gray-900);
     font-weight: 600;
     line-height: 1.3;
     letter-spacing: -0.01em;
@@ -172,17 +211,17 @@
 .article-content h2 { font-size: 1.5rem; }
 .article-content h3 { font-size: 1.25rem; }
 .article-content p { margin-bottom: 1.25rem; }
-.article-content a { color: #dc2626; text-decoration: underline; text-underline-offset: 2px; }
-.article-content a:hover { color: #b91c1c; }
-.article-content strong { font-weight: 600; color: #1f2937; }
+.article-content a { color: var(--site-link); text-decoration: underline; text-underline-offset: 2px; }
+.article-content a:hover { color: var(--site-link-hover); }
+.article-content strong { font-weight: 600; color: var(--color-gray-800); }
 .article-content ul, .article-content ol { padding-left: 1.5rem; margin-bottom: 1.25rem; }
 .article-content li { margin-bottom: 0.375rem; }
 .article-content ul { list-style-type: disc; }
 .article-content ol { list-style-type: decimal; }
 .article-content blockquote {
-    border-left: 3px solid #dc2626;
+    border-left: 3px solid var(--color-brand-600);
     padding-left: 1rem;
-    color: #6b7280;
+    color: var(--color-gray-500);
     font-style: italic;
     margin: 1.5rem 0;
 }
@@ -200,13 +239,13 @@
     font-size: 0.9375rem;
 }
 .article-content th, .article-content td {
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--color-gray-200);
     padding: 0.5rem 0.75rem;
     text-align: left;
 }
 .article-content pre {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
     border-radius: 0.5rem;
     padding: 1rem;
     overflow-x: auto;
@@ -214,7 +253,7 @@
     margin-bottom: 1.25rem;
 }
 .article-content code {
-    background: #f3f4f6;
+    background: var(--color-gray-100);
     padding: 0.125rem 0.375rem;
     border-radius: 0.25rem;
     font-size: 0.875em;

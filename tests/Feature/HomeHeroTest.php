@@ -50,7 +50,28 @@ class HomeHeroTest extends TestCase
         $this->seed(HeroBannerSeeder::class);
         $this->seed(HeroBannerSeeder::class);
 
-        $this->assertSame(2, Banner::count());
+        // 1 unrelated banner + 4 seeded slides, nothing duplicated on the second run.
+        $this->assertSame(5, Banner::count());
+    }
+
+    public function test_seeded_rfid_fiscal_and_printer_slides_render_in_every_locale(): void
+    {
+        $this->seed(HeroBannerSeeder::class);
+
+        $this->assertSame(
+            ['scanner', 'rfid', 'fiscal', 'printer'],
+            Banner::active()->pluck('illustration')->all()
+        );
+
+        foreach (['uz', 'ru', 'en'] as $lc) {
+            $html = $this->get("/{$lc}")->assertOk()->getContent();
+
+            foreach (Banner::active()->get() as $banner) {
+                $this->assertStringContainsString(e($banner->getTranslation('title', $lc)), $html);
+            }
+            $this->assertStringContainsString('bdb://fiscal/receipt', $html);
+            $this->assertDoesNotMatchRegularExpression('/>\s*site\.[a-z_.]+\s*</', $html);
+        }
     }
 
     public function test_several_banners_rotate_inside_the_hero(): void
@@ -73,6 +94,24 @@ class HomeHeroTest extends TestCase
         $this->assertStringContainsString('Asl Belgi deadline is coming', $html);
         $this->assertStringContainsString('href="https://example.com/news"', $html);
         $this->assertStringContainsString('Applicators', $html);
+    }
+
+    public function test_hero_carousel_autoplays_every_10_seconds_in_every_locale(): void
+    {
+        $this->seed(HeroBannerSeeder::class);
+        Banner::create([
+            'title' => ['en' => 'Second slide', 'uz' => 'Ikkinchi slayd', 'ru' => 'Второй слайд'],
+            'sort_order' => 1,
+        ]);
+
+        foreach (['uz', 'ru', 'en'] as $lc) {
+            $html = $this->get("/{$lc}")->assertOk()->getContent();
+
+            $this->assertStringContainsString('aria-roledescription="carousel"', $html);
+            $this->assertStringContainsString('this.go(this.current + 1), 10000)', $html);
+            $this->assertStringNotContainsString(', 7000)', $html);
+            $this->assertDoesNotMatchRegularExpression('/>\s*site\.[a-z_.]+\s*</', $html);
+        }
     }
 
     public function test_inactive_banners_are_not_shown(): void

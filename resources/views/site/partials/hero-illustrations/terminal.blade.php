@@ -8,8 +8,8 @@
     :chips="[['qr-code', '2D · Imager'], ['sparkles', 'AI · Belgi', true], ['archive-box', 'WMS · Sync']]">
     <div class="relative mx-auto aspect-square w-full max-w-[240px]">
         {{-- Scan beam leaving the top of the device --}}
-        <div class="absolute left-1/2 top-0 h-[14%] w-24 -translate-x-1/2 bg-gradient-to-t from-red-600/40 to-transparent [clip-path:polygon(42%_100%,58%_100%,100%_0,0_0)] animate-blink"></div>
-        <div class="absolute left-1/2 top-0 h-0.5 w-24 -translate-x-1/2 bg-red-600 shadow-[0_0_10px_2px_rgba(220,38,38,0.5)] animate-blink"></div>
+        <div class="absolute left-1/2 top-0 h-[14%] w-24 -translate-x-1/2 bg-gradient-to-t from-brand-600/40 to-transparent [clip-path:polygon(42%_100%,58%_100%,100%_0,0_0)] animate-blink"></div>
+        <div class="absolute left-1/2 top-0 h-0.5 w-24 -translate-x-1/2 bg-brand-600 shadow-[0_0_10px_2px_color-mix(in_srgb,var(--color-brand-600)_50%,transparent)] animate-blink"></div>
 
         {{-- Device --}}
         <div class="absolute inset-x-[18%] top-[14%] bottom-0 overflow-hidden rounded-[1.6rem] border-2 border-gray-900 bg-white p-2.5 shadow-lg shadow-gray-900/10">
@@ -25,13 +25,13 @@
                             <span class="truncate text-gray-700">{{ $code }}</span>
                             <span class="ml-1 inline-flex items-center gap-0.5 text-gray-900">
                                 {{ $qty }}
-                                @include('site.partials.icon', ['name' => 'check', 'class' => 'size-2.5 text-red-600', 'stroke' => '2.5'])
+                                @include('site.partials.icon', ['name' => 'check', 'class' => 'size-2.5 text-brand-600', 'stroke' => '2.5'])
                             </span>
                         </li>
                     @endforeach
                 </ul>
                 <div class="mt-2 h-1 overflow-hidden rounded-full bg-gray-200">
-                    <div class="h-full origin-left rounded-full bg-red-600 animate-fill"></div>
+                    <div class="h-full origin-left rounded-full bg-brand-600 animate-fill"></div>
                 </div>
             </div>
             {{-- Keypad (dropped on very narrow phones so the device content fits) --}}

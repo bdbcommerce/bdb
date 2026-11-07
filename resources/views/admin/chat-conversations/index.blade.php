@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <p class="text-xs text-slate-500">Every chat with the AI assistant, on the website and in Telegram. Kept for {{ $keepDays }} days.</p>
+    <p class="text-xs text-slate-500">Every chat with the AI assistant (website, Telegram bot), plus recorded Telegram Business and group chats. Kept for {{ $keepDays }} days.</p>
     <div class="flex flex-wrap gap-2">
         @php
             $tab = fn (bool $active) => 'text-xs font-medium rounded-md px-3 py-1.5 transition-colors '
@@ -46,18 +46,28 @@
             @foreach($conversations as $conversation)
                 @php
                     $userMessages = collect($conversation->messages)->where('role', 'user');
-                    $first = $userMessages->first();
-                    $questions = $userMessages->whereNotNull('content')->count();
-                    $media = $userMessages->count() - $questions;
+                    $recorded = in_array($conversation->channel, ['business', 'group'], true);
+                    $first = $recorded ? collect($conversation->messages)->last() : $userMessages->first();
+                    $questions = $userMessages->whereNotNull('content')->filter(fn ($m) => empty($m['aside']))->count();
+                    $media = $userMessages->whereNull('content')->count();
                 @endphp
                 <a href="{{ route('admin.chat-conversations.show', $conversation) }}" class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50">
                     <div class="min-w-0 flex-1">
-                        <p class="text-sm text-slate-800 truncate">{{ $first['content'] ?? (isset($first['type']) ? '['.str_replace('_', ' ', ucfirst($first['type'])).']' : '—') }}</p>
+                        @if($conversation->title)
+                            <p class="text-sm font-medium text-slate-900 truncate">{{ $conversation->title }}</p>
+                        @endif
+                        <p class="text-sm text-slate-800 truncate">@isset($first['sender'])<span class="text-slate-500">{{ $first['sender'] }}:</span> @endisset{{ $first['content'] ?? (isset($first['type']) ? '['.str_replace('_', ' ', ucfirst($first['type'])).']' : '—') }}</p>
                         <p class="text-xs text-slate-400 mt-0.5 truncate">
-                            {{ $questions }} {{ Str::plural('question', $questions) }}
-                            @if($media) · {{ $media }} {{ Str::plural('file', $media) }} @endif
-                            · <span class="uppercase">{{ $conversation->locale }}</span>
-                            @if($conversation->telegramUser?->name)
+                            @if($recorded)
+                                {{ $conversation->message_count }} {{ Str::plural('message', $conversation->message_count) }}
+                                @if($conversation->page) · {{ $conversation->page }} @endif
+                            @else
+                                {{ $questions }} {{ Str::plural('question', $questions) }}
+                                @if($media) · {{ $media }} {{ Str::plural('file', $media) }} @endif
+                                · <span class="uppercase">{{ $conversation->locale }}</span>
+                            @endif
+                            @if($recorded)
+                            @elseif($conversation->channel === 'telegram' && $conversation->telegramUser?->name)
                                 · {{ $conversation->telegramUser->name }}
                             @elseif($conversation->page && $conversation->channel === 'web')
                                 · {{ $conversation->page }}
@@ -65,7 +75,7 @@
                         </p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <span class="text-xs font-medium px-2 py-0.5 rounded-full border {{ $conversation->channel === 'telegram' ? 'border-slate-400 text-slate-700' : 'border-slate-200 text-slate-500' }}">{{ $channels[$conversation->channel] ?? ucfirst($conversation->channel) }}</span>
+                        <span class="text-xs font-medium px-2 py-0.5 rounded-full border {{ $conversation->channel === 'web' ? 'border-slate-200 text-slate-500' : 'border-slate-400 text-slate-700' }}">{{ $channels[$conversation->channel] ?? ucfirst($conversation->channel) }}</span>
                         @if($conversation->unanswered_count)
                             <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{{ $conversation->unanswered_count }} unanswered</span>
                         @endif

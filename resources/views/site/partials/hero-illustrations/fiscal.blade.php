@@ -37,8 +37,8 @@
                     <div class="space-y-1 text-gray-500">
                         <p>FISCAL</p>
                         <p class="text-gray-900">OK</p>
-                        <p class="inline-flex items-center gap-1 text-red-600">
-                            <span class="size-1.5 rounded-full bg-red-600 animate-blink"></span> ONLINE
+                        <p class="inline-flex items-center gap-1 text-brand-600">
+                            <span class="size-1.5 rounded-full bg-brand-600 animate-blink"></span> ONLINE
                         </p>
                     </div>
                 </div>

@@ -141,7 +141,9 @@ class TelegramEdgeCasesTest extends TestCase
         $user = TelegramUser::sole();
         $this->assertSame(TelegramUser::STEP_NAME, $user->step);
         $this->assertNull($user->phone);
-        $this->assertSame(0, ChatConversation::count());
+        // Recorded by type, but not part of the AI dialogue.
+        $this->assertSame(['contact', 'voice'], array_column(ChatConversation::sole()->messages, 'type'));
+        $this->assertSame('voice_file_123', ChatConversation::sole()->messages[1]['file_id']);
     }
 
     public function test_contact_without_a_sender_is_rejected(): void
@@ -334,7 +336,7 @@ class TelegramEdgeCasesTest extends TestCase
         }
 
         $this->assertSame(__('chat.tg_too_fast', [], 'en'), $this->lastText());
-        $this->assertCount(15, ChatConversation::sole()->messages);
+        $this->assertCount(16, ChatConversation::sole()->messages); // throttled messages are still recorded
     }
 
     // Admin views --------------------------------------------------------------------

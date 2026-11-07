@@ -96,7 +96,7 @@
 
         {{-- Ask the assistant about this topic --}}
         <aside class="mt-12 rounded-2xl border border-gray-200 bg-gray-50 p-6 flex flex-col sm:flex-row sm:items-center gap-4" x-data>
-            <span class="icon-tile text-red-600">@include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-5'])</span>
+            <span class="icon-tile text-brand-600">@include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-5'])</span>
             <div class="flex-1">
                 <p class="font-semibold text-gray-900">{{ __('site.news.ask_title') }}</p>
                 <p class="mt-1 text-sm text-gray-600">{{ __('site.news.ask_text') }}</p>

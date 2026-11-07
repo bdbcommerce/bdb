@@ -4,7 +4,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
         <div class="relative overflow-hidden rounded-2xl border border-gray-200 bg-white px-6 py-10 sm:px-10 md:px-14 md:py-14">
             <div class="absolute inset-0 bg-grid mask-fade-l pointer-events-none" aria-hidden="true"></div>
-            <div class="absolute -right-24 -top-24 size-72 rounded-full bg-red-600/5 blur-3xl pointer-events-none" aria-hidden="true"></div>
+            <div class="absolute -right-24 -top-24 size-72 rounded-full bg-brand-600/5 blur-3xl pointer-events-none" aria-hidden="true"></div>
 
             <div class="relative grid gap-10 lg:grid-cols-5 lg:items-center">
                 <div class="lg:col-span-3">
@@ -16,7 +16,7 @@
 
                     <div class="mt-8 flex flex-col sm:flex-row gap-3" x-data>
                         <a href="{{ route('site.contact', $__locale) }}" class="btn-primary">
-                            {{ __('site.cta.quote') }}
+                            {{ __('site.cta.contact') }}
                             @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4'])
                         </a>
                         <button type="button" @click="$dispatch('belgi-open')" class="btn-secondary">
@@ -34,7 +34,7 @@
                                     <span class="icon-tile">@include('site.partials.icon', ['name' => 'phone', 'class' => 'size-5'])</span>
                                     <span>
                                         <span class="block text-xs text-gray-500">{{ __('Phone') }}</span>
-                                        <span class="font-medium text-gray-900 group-hover:text-red-600 transition-colors">{{ $companyInfo->phone }}</span>
+                                        <span class="font-medium text-gray-900 group-hover:text-brand-600 transition-colors">{{ $companyInfo->phone }}</span>
                                     </span>
                                 </a>
                             </li>
@@ -45,7 +45,7 @@
                                     <span class="icon-tile">@include('site.partials.icon', ['name' => 'envelope', 'class' => 'size-5'])</span>
                                     <span class="min-w-0">
                                         <span class="block text-xs text-gray-500">{{ __('Email') }}</span>
-                                        <span class="block font-medium text-gray-900 group-hover:text-red-600 transition-colors truncate">{{ $companyInfo->email }}</span>
+                                        <span class="block font-medium text-gray-900 group-hover:text-brand-600 transition-colors truncate">{{ $companyInfo->email }}</span>
                                     </span>
                                 </a>
                             </li>

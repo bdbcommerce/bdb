@@ -10,7 +10,7 @@
     <div class="relative mx-auto aspect-square w-full max-w-[240px]">
         <svg viewBox="0 0 240 240" class="size-full" fill="none">
             {{-- Links (marching dashes show the packing direction) --}}
-            <g class="text-red-600 animate-dash" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 5">
+            <g class="text-brand-600 animate-dash" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 5">
                 @foreach($unitX as $i => $x)
                     @php $boxCenter = $i < 3 ? 61 : 179; @endphp
                     <path d="M{{ $x + 11 }} 34 C{{ $x + 11 }} 70 {{ $boxCenter }} 64 {{ $boxCenter }} 100"/>

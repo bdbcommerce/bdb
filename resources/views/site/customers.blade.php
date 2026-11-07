@@ -40,7 +40,7 @@
                          class="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap pb-1 mb-10">
                         <button type="button" aria-pressed="true" :aria-pressed="(active === 'all').toString()"
                                 @click="active = 'all'; history.replaceState(null, '', location.pathname)"
-                                class="tab tab-inactive aria-pressed:border-red-600 aria-pressed:bg-red-600 aria-pressed:text-white">
+                                class="tab tab-inactive aria-pressed:border-brand-600 aria-pressed:bg-brand-600 aria-pressed:text-white">
                             {{ __('All') }}
                             <span class="ml-1 tabular-nums opacity-70">{{ $customers->count() }}</span>
                         </button>
@@ -48,7 +48,7 @@
                             <button type="button" aria-pressed="false" x-ref="f{{ $industry->id }}"
                                     :aria-pressed="(active === '{{ $industry->id }}').toString()"
                                     @click="active = '{{ $industry->id }}'; history.replaceState(null, '', '#industry-{{ $industry->id }}')"
-                                    class="tab tab-inactive aria-pressed:border-red-600 aria-pressed:bg-red-600 aria-pressed:text-white">
+                                    class="tab tab-inactive aria-pressed:border-brand-600 aria-pressed:bg-brand-600 aria-pressed:text-white">
                                 {{ $industry->getTranslation('name', $locale) }}
                                 <span class="ml-1 tabular-nums opacity-70">{{ $customers->where('industry_id', $industry->id)->count() }}</span>
                             </button>
@@ -60,7 +60,7 @@
                     @foreach($customers as $customer)
                         <li x-show="active === 'all' || active === '{{ $customer->industry_id }}'"
                             x-transition.opacity
-                            class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-5 transition-colors hover:border-red-200">
+                            class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-5 transition-colors hover:border-brand-200">
                             <div class="flex h-20 items-center justify-center rounded-xl bg-gray-50 px-4">
                                 @if($customer->logo)
                                     <img src="{{ Storage::url($customer->logo) }}" alt="{{ $customer->name }}"

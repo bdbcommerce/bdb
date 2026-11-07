@@ -7,6 +7,7 @@ use App\Models\ChatLead;
 use App\Models\TelegramUser;
 use App\Services\ChatAssistant;
 use App\Services\Telegram\TelegramBot;
+use App\Services\Telegram\TelegramWebhook;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -196,7 +197,11 @@ class TelegramBotTest extends TestCase
         $this->assertSame(__('chat.tg_name_invalid', [], 'en'), $this->lastSent()['text']);
 
         $this->assertNull(TelegramUser::sole()->name);
-        $this->assertSame(0, ChatConversation::count());
+        // Every message is recorded, but registration replies are not questions for the AI.
+        $conversation = ChatConversation::sole();
+        $this->assertSame(['A', '/help', '12345', str_repeat('a', 61)], array_column($conversation->messages, 'content'));
+        $this->assertSame('photo', $conversation->messages[4]['type']);
+        $this->assertSame([], $conversation->textMessages());
     }
 
     public function test_uzbek_apostrophe_variants_are_accepted_in_names(): void
@@ -257,7 +262,9 @@ class TelegramBotTest extends TestCase
         $this->send(['text' => 'Сколько стоит принтер?']);
 
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'generateContent'));
-        $this->assertSame(0, ChatConversation::count());
+        $messages = ChatConversation::sole()->messages;
+        $this->assertSame('Сколько стоит принтер?', $messages[0]['content']);
+        $this->assertTrue($messages[0]['aside']);
     }
 
     public function test_language_command_changes_language_and_keeps_registration(): void
@@ -360,13 +367,14 @@ class TelegramBotTest extends TestCase
         $this->assertSame([], $this->sentTo(555));
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'generateContent'));
 
+        $messages = collect(ChatConversation::sole()->messages)->map(fn ($m) => array_diff_key($m, ['at' => 1, 'message_id' => 1]))->all();
         $this->assertSame([
-            ['role' => 'user', 'type' => 'photo', 'file_id' => 'photo_large_1'],
+            ['role' => 'user', 'type' => 'photo', 'file_id' => 'photo_large_1', 'caption' => 'my label'],
             ['role' => 'user', 'type' => 'voice', 'file_id' => 'voice_1'],
             ['role' => 'user', 'type' => 'animation', 'file_id' => 'anim_1'],
             ['role' => 'user', 'type' => 'document', 'file_id' => 'doc_1'],
             ['role' => 'user', 'type' => 'location', 'file_id' => null],
-        ], ChatConversation::sole()->messages);
+        ], $messages);
     }
 
     public function test_callback_offer_shows_request_call_button_and_creates_lead(): void
@@ -417,7 +425,7 @@ class TelegramBotTest extends TestCase
         $this->assertSame(2, ChatLead::count());
     }
 
-    public function test_whitespace_only_text_is_ignored_not_stored_as_media(): void
+    public function test_whitespace_only_text_is_not_answered_or_stored_as_media(): void
     {
         $this->fakeApis();
         $this->registered();
@@ -425,7 +433,9 @@ class TelegramBotTest extends TestCase
         $this->send(['text' => '   ']);
 
         $this->assertSame([], $this->sentTo(555));
-        $this->assertSame(0, ChatConversation::count());
+        // Recorded as (empty) text, not as media, and not a question.
+        $this->assertSame('   ', ChatConversation::sole()->messages[0]['content']);
+        $this->assertSame([], ChatConversation::sole()->textMessages());
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'generateContent'));
     }
 
@@ -475,6 +485,6 @@ class TelegramBotTest extends TestCase
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/setWebhook')
             && $r['url'] === 'https://bdb.uz/telegram/webhook'
             && $r['secret_token'] === self::SECRET
-            && $r['allowed_updates'] === ['message']);
+            && $r['allowed_updates'] === TelegramWebhook::UPDATES);
     }
 }

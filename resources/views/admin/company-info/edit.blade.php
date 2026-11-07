@@ -103,6 +103,12 @@
                            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
                 </div>
             @endforeach
+            <div>
+                <label for="shop_url" class="block text-sm font-medium text-slate-700 mb-1">Online shop (catalog link)</label>
+                <input type="url" id="shop_url" name="shop_url" value="{{ old('shop_url', $info->shop_url) }}" placeholder="https://mylabel.uz"
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+                <p class="text-xs text-slate-400 mt-1">Shown as the “Online shop” block on the home and brands pages and in the header and footer. Leave empty to hide them.</p>
+            </div>
             <p class="text-xs text-slate-400 pt-2">Social networks: paste the full link or just the username (e.g. @bdb_uz). It is saved as a full https link.</p>
             @foreach(\App\Models\CompanyInfo::SOCIALS as $field => $social)
                 @php $current = \App\Models\CompanyInfo::socialUrl($field, $info->$field); @endphp

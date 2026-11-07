@@ -12,7 +12,7 @@
         @if($assistant ?? true)
             <div class="mt-6 flex flex-col sm:flex-row justify-center gap-3">
                 <button type="button" @click="$dispatch('belgi-open')" class="btn-secondary !py-2.5">
-                    @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4 text-red-600'])
+                    @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4 text-brand-600'])
                     {{ __('site.cta.ask_ai') }}
                 </button>
                 <a href="{{ route('site.contact', app()->getLocale()) }}" class="btn-primary !py-2.5">{{ __('Contact us') }}</a>

@@ -30,6 +30,11 @@ class CompanyInfoController extends Controller
         $request->validate([
             'phone' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:100',
+            'shop_url' => ['nullable', 'url:http,https', 'max:255', function ($attribute, $value, $fail) {
+                if (! CompanyInfo::isValidShopUrl($value)) {
+                    $fail('Enter the public shop address, like https://mylabel.uz.');
+                }
+            }],
         ] + $socialRules);
 
         // Store every link as a full https URL, whatever form the admin typed.
@@ -57,6 +62,7 @@ class CompanyInfoController extends Controller
             ],
             'phone' => $request->input('phone'),
             'email' => $request->input('email'),
+            'shop_url' => $request->input('shop_url'),
             ...$socials,
             'map_embed' => $request->input('map_embed'),
             'google_analytics' => $request->input('google_analytics'),

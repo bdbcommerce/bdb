@@ -3,6 +3,7 @@
 @section('heading', 'Conversation')
 
 @section('content')
+@php $recordedChat = in_array($conversation->channel, ['business', 'group'], true); @endphp
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <a href="{{ route('admin.chat-conversations.index') }}" class="text-sm text-slate-500 hover:text-slate-900">&larr; All conversations</a>
     <form method="POST" action="{{ route('admin.chat-conversations.destroy', $conversation) }}" onsubmit="return confirm('Delete this conversation?')">
@@ -14,7 +15,17 @@
 <div class="grid gap-4 lg:grid-cols-3">
     <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         @foreach($conversation->messages as $m)
-            @if($m['role'] === 'user' && ! isset($m['content']))
+            @php $right = $m['role'] === 'user'; @endphp
+            @isset($m['sender'])
+                {{-- Recorded chats (Telegram Business, groups): who wrote it and when --}}
+                <p class="text-[11px] text-slate-500 -mb-2 {{ $right ? 'text-right' : '' }}">
+                    <span class="font-semibold">{{ $m['role'] === 'owner' ? 'Account owner · ' : '' }}{{ $m['sender'] }}</span>
+                    @isset($m['at']) · {{ \Illuminate\Support\Carbon::parse($m['at'])->timezone(config('app.timezone'))->format('d.m H:i') }} @endisset
+                    @if($m['edited'] ?? false) · edited @endif
+                    @if($m['deleted'] ?? false) · <span class="font-medium text-red-700">deleted in Telegram</span> @endif
+                </p>
+            @endisset
+            @if(! isset($m['content']))
                 {{-- Telegram media: only type + file ID are stored; the file is fetched from Telegram on demand --}}
                 @php
                     $type = $m['type'] ?? 'other';
@@ -26,8 +37,8 @@
                         default => null,
                     };
                 @endphp
-                <div class="flex justify-end" x-data="{ shown: false }">
-                    <div class="max-w-[85%] border border-slate-300 bg-white text-sm rounded-2xl rounded-tr-sm px-3.5 py-2.5 space-y-2">
+                <div class="flex {{ $right ? 'justify-end' : '' }}" x-data="{ shown: false }">
+                    <div class="max-w-[85%] border border-slate-300 bg-white text-sm rounded-2xl {{ $right ? 'rounded-tr-sm' : 'rounded-tl-sm' }} px-3.5 py-2.5 space-y-2">
                         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"/>
@@ -43,11 +54,14 @@
                                 <span class="text-xs text-slate-400">not stored</span>
                             @endif
                         </div>
+                        @isset($m['caption'])
+                            <p class="text-slate-800 whitespace-pre-line">{{ $m['caption'] }}</p>
+                        @endisset
                         @if($url && $player)
                             <template x-if="shown">
                                 <div>
                                     @if($player === 'image')
-                                        <img src="{{ $url }}" alt="{{ ucfirst($type) }} sent by the customer" class="max-h-80 rounded-lg border border-slate-200">
+                                        <img src="{{ $url }}" alt="{{ ucfirst($type) }} sent by {{ $m['sender'] ?? 'the customer' }}" class="max-h-80 rounded-lg border border-slate-200">
                                     @elseif($player === 'video')
                                         <video src="{{ $url }}" controls class="max-h-80 rounded-lg border border-slate-200"></video>
                                     @else
@@ -62,6 +76,10 @@
                 <div class="flex justify-end">
                     <p class="max-w-[85%] bg-slate-900 text-white text-sm rounded-2xl rounded-tr-sm px-3.5 py-2.5 whitespace-pre-line">{{ $m['content'] }}</p>
                 </div>
+            @elseif($m['role'] === 'owner')
+                <p class="max-w-[85%] bg-white border-2 border-slate-900 text-slate-900 text-sm rounded-2xl rounded-tl-sm px-3.5 py-2.5 whitespace-pre-line">{{ $m['content'] }}</p>
+            @elseif($m['role'] === 'member')
+                <p class="max-w-[85%] bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-2xl rounded-tl-sm px-3.5 py-2.5 whitespace-pre-line">{{ $m['content'] }}</p>
             @elseif($m['role'] === 'admin')
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">BDB team · {{ $m['author'] ?? 'Admin' }}</p>
@@ -142,9 +160,21 @@
             </div>
             <div>
                 <dt class="text-xs text-slate-400">Channel</dt>
-                <dd class="text-slate-800">{{ $conversation->channel === 'telegram' ? 'Telegram bot' : 'Website' }}</dd>
+                <dd class="text-slate-800">{{ \App\Models\ChatConversation::CHANNELS[$conversation->channel] ?? ucfirst($conversation->channel) }}</dd>
             </div>
-            @if($conversation->telegramUser)
+            @if($conversation->title)
+                <div>
+                    <dt class="text-xs text-slate-400">{{ $conversation->channel === 'group' ? 'Group' : 'Chat with' }}</dt>
+                    <dd class="text-slate-800">{{ $conversation->title }}</dd>
+                </div>
+            @endif
+            @if($recordedChat)
+                <div>
+                    <dt class="text-xs text-slate-400">Recording</dt>
+                    <dd class="text-slate-800">Recorded only — the bot does not reply in this chat.</dd>
+                </div>
+            @endif
+            @if($conversation->channel === 'telegram' && $conversation->telegramUser)
                 @php $tgUser = $conversation->telegramUser; @endphp
                 <div>
                     <dt class="text-xs text-slate-400">Telegram customer</dt>
@@ -156,16 +186,24 @@
                     </dd>
                 </div>
             @endif
-            <div>
-                <dt class="text-xs text-slate-400">Language</dt>
-                <dd class="text-slate-800 uppercase">{{ $conversation->locale }}</dd>
-            </div>
+            @unless($recordedChat)
+                <div>
+                    <dt class="text-xs text-slate-400">Language</dt>
+                    <dd class="text-slate-800 uppercase">{{ $conversation->locale }}</dd>
+                </div>
+            @endunless
             @if($conversation->page)
                 <div>
-                    <dt class="text-xs text-slate-400">Page</dt>
+                    <dt class="text-xs text-slate-400">{{ $conversation->channel === 'web' ? 'Page' : 'Source' }}</dt>
                     <dd class="text-slate-800">{{ $conversation->page }}</dd>
                 </div>
             @endif
+            @if($recordedChat)
+                <div>
+                    <dt class="text-xs text-slate-400">Messages</dt>
+                    <dd class="text-slate-800">{{ $conversation->message_count }}</dd>
+                </div>
+            @else
             <div>
                 <dt class="text-xs text-slate-400">Questions / unanswered</dt>
                 <dd class="text-slate-800">{{ collect($conversation->textMessages())->where('role', 'user')->count() }} / {{ $conversation->unanswered_count }}</dd>
@@ -180,6 +218,7 @@
                     @endif
                 </dd>
             </div>
+            @endif
         </dl>
     </aside>
 </div>
