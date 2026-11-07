@@ -57,11 +57,13 @@ class ChatConversation extends Model
      */
     public function replyState(): array
     {
-        // Deleted messages and late edits (of a message from an older session) don't count.
-        $relevant = collect($this->messages ?? [])->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit']))->values();
+        // Deleted messages, late edits (of a message from an older session), the bot's registration
+        // questions and the customer's answers to them (bot steps) don't change who is waiting.
+        $relevant = collect($this->messages ?? [])->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit'])
+            || ($m['role'] ?? null) === 'bot' || ! empty($m['aside']))->values();
         $last = $relevant->last();
         $awaiting = in_array($this->channel, self::REPLY_CHANNELS, true)
-            && ($last['role'] ?? null) === 'user' && empty($last['aside'])
+            && ($last['role'] ?? null) === 'user'
             && $this->countedMessages() > (int) $this->handled_count;
 
         // Waiting since the first of the customer's unanswered messages; otherwise the last message.

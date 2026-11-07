@@ -198,18 +198,17 @@
             </div>
             <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold text-slate-800">XML Sitemap</p>
-                <p class="text-xs text-slate-500 mt-0.5">Generates <code class="bg-slate-100 px-1 rounded">public/sitemap.xml</code> with all localised URLs for published articles and static pages. Submit this URL to Google Search Console after generating.</p>
-                @if(file_exists(public_path('sitemap.xml')))
-                    <p class="text-xs text-green-600 mt-1.5">Last generated: {{ date('d M Y H:i', filemtime(public_path('sitemap.xml'))) }}</p>
-                @else
-                    <p class="text-xs text-slate-400 mt-1.5">Not yet generated.</p>
-                @endif
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Always up to date at <a href="{{ url('/sitemap.xml') }}" target="_blank" rel="noopener" class="underline">{{ url('/sitemap.xml') }}</a>
+                    (all pages in 3 languages). Crawlers, robots.txt and llms.txt are managed in
+                    <a href="{{ route('admin.seo.edit') }}" class="underline">SEO &amp; AI visibility</a>.
+                </p>
             </div>
             <form method="POST" action="{{ route('admin.company-info.sitemap') }}" class="shrink-0">
                 @csrf
                 <button type="submit"
                         class="bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700 transition-colors">
-                    Generate Sitemap
+                    Rebuild now
                 </button>
             </form>
         </div>

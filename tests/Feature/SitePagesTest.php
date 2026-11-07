@@ -100,7 +100,8 @@ class SitePagesTest extends TestCase
             ->assertSee('Slogan en')
             ->assertSee('Zebra en')
             ->assertSee('Retail en')
-            ->assertSee('Korzinka')
+            ->assertDontSee('Korzinka') // the home page shows only the number of customers per industry
+            ->assertSee(trans_choice('site.industries.customers_count', 1, [], 'en'))
             ->assertSee(__('site.stats.clients', [], 'en'))
             ->assertSee('Hello &quot;world&quot; en', false);
 

@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CompanyInfo;
+use App\Models\SeoSetting;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 
 class CompanyInfoController extends Controller
 {
@@ -81,8 +81,8 @@ class CompanyInfoController extends Controller
 
     public function generateSitemap()
     {
-        Artisan::call('sitemap:generate');
+        SeoSetting::flush();
 
-        return back()->with('success', 'sitemap.xml generated successfully.');
+        return back()->with('success', 'sitemap.xml is rebuilt from the current content: '.url('/sitemap.xml'));
     }
 }

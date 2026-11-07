@@ -98,10 +98,10 @@ return [
     'industries' => [
         'eyebrow' => 'Kimlar uchun ishlaymiz',
         'title' => 'Sohalar va mijozlar',
-        'lead' => 'Har bir sohaning oʻz identifikatsiya vazifalari bor. Qanday yordam berishimizni va kimlar biz bilan ishlashini koʻrish uchun sohangizni tanlang.',
+        'lead' => 'Har bir sohaning oʻz identifikatsiya vazifalari bor. Biz qaysi sohalarda ishlayotganimiz va har birida nechta mijozga xizmat koʻrsatayotganimiz.',
         'empty_title' => 'Sohalar haqidagi maʼlumot tez orada paydo boʻladi',
         'empty_text' => 'Biznesingiz haqida aytib bering, biz mos yechimni taklif qilamiz.',
-        'customers_here' => 'Ushbu sohadagi mijozlar',
+        'customers_count' => 'ta mijoz ushbu sohada|ta mijoz ushbu sohada',
         'no_customers' => 'Ushbu soha mijozlari haqidagi maʼlumotlar tez orada eʼlon qilinadi.',
         'see_customers' => 'Mijozlarni koʻrish',
     ],
@@ -187,5 +187,12 @@ return [
         'new_tab' => '(yangi oynada ochiladi)',
         'categories' => ['Etiketkalar', 'Ribbonlar', 'Skanerlar', 'Printerlar'],
         'cart' => 'Savat',
+    ],
+    'faq' => [
+        'nav' => 'Savol-javoblar',
+        'title' => 'Koʻp beriladigan savollar',
+        'lead' => 'Mijozlar bizga eng koʻp beradigan savollarga javoblar.',
+        'empty' => 'Tez orada bu yerda savol-javoblar paydo boʻladi.',
+        'more' => 'Javob topmadingizmi? Biz bilan bogʻlaning — yordam beramiz.',
     ],
 ];

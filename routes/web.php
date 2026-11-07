@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AiInstructionController;
 use App\Http\Controllers\Admin\AiModelController;
+use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\ArticleCategoryController;
 use App\Http\Controllers\Admin\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
@@ -17,20 +18,26 @@ use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\IndustryController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
+use App\Http\Controllers\Admin\McpSettingController;
+use App\Http\Controllers\Admin\SeoSettingController;
 use App\Http\Controllers\Admin\TelegramSettingsController;
 use App\Http\Controllers\Admin\TelegramUserController;
 use App\Http\Controllers\Admin\UploadController;
+use App\Http\Controllers\McpController;
 use App\Http\Controllers\Site\AboutController;
 use App\Http\Controllers\Site\BrandsController;
 use App\Http\Controllers\Site\ChatController;
 use App\Http\Controllers\Site\ContactController;
 use App\Http\Controllers\Site\CustomersController;
+use App\Http\Controllers\Site\FaqController;
 use App\Http\Controllers\Site\HomeController;
 use App\Http\Controllers\Site\IndustriesController;
 use App\Http\Controllers\Site\NewsController;
+use App\Http\Controllers\Site\SeoController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\SetLocale;
+use App\Http\Middleware\TrackPageView;
 use Illuminate\Support\Facades\Route;
 
 // AI chat assistant
@@ -40,13 +47,24 @@ Route::post('/chat/lead', [ChatController::class, 'lead'])->middleware('throttle
 // Telegram bot (same assistant), secured by the X-Telegram-Bot-Api-Secret-Token header
 Route::post('/telegram/webhook', TelegramWebhookController::class)->name('telegram.webhook');
 
+// Files for search engines and AI assistants (generated; public/robots.txt and sitemap.xml must not exist)
+Route::middleware(TrackPageView::class)->group(function () { // crawler visits count in Site analytics
+    Route::get('/robots.txt', [SeoController::class, 'robots'])->name('seo.robots');
+    Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('seo.sitemap');
+    Route::get('/llms.txt', [SeoController::class, 'llms'])->name('seo.llms');
+});
+Route::get('/{key}.txt', [SeoController::class, 'indexNowKey'])->where('key', '[a-z0-9]{8,64}')->name('seo.indexnow-key');
+
+// MCP server for Claude and other AI clients (Admin → AI Assistant → MCP server; CSRF-exempt, own auth)
+Route::match(['get', 'post', 'delete'], '/mcp', McpController::class)->name('mcp');
+
 // Root redirect to default locale
 Route::get('/', fn () => redirect('/uz'));
 
 // Public site
 Route::prefix('{locale}')
     ->where(['locale' => 'uz|ru|en'])
-    ->middleware(SetLocale::class)
+    ->middleware([SetLocale::class, TrackPageView::class])
     ->name('site.')
     ->group(function () {
         Route::get('/', HomeController::class)->name('home');
@@ -55,6 +73,7 @@ Route::prefix('{locale}')
         Route::get('/industries', IndustriesController::class)->name('industries');
         Route::get('/customers', CustomersController::class)->name('customers');
         Route::get('/contact', ContactController::class)->name('contact');
+        Route::get('/faq', FaqController::class)->name('faq');
         Route::get('/news', [NewsController::class, 'index'])->name('news');
         Route::get('/news/{categorySlug}', [NewsController::class, 'category'])->name('news.category');
         Route::get('/news/{categorySlug}/{slug}', [NewsController::class, 'show'])->name('news.show');
@@ -77,6 +96,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::resource('banners', BannerController::class)->except(['show']);
 
+        Route::get('mcp', [McpSettingController::class, 'edit'])->name('mcp.edit');
+        Route::put('mcp', [McpSettingController::class, 'update'])->name('mcp.update');
+        Route::post('mcp/token', [McpSettingController::class, 'token'])->middleware('throttle:10,1')->name('mcp.token');
+        Route::get('analytics', AnalyticsController::class)->name('analytics');
+        Route::get('seo', [SeoSettingController::class, 'edit'])->name('seo.edit');
+        Route::put('seo', [SeoSettingController::class, 'update'])->name('seo.update');
+        Route::post('seo/indexnow', [SeoSettingController::class, 'submitAll'])->middleware('throttle:5,1')->name('seo.indexnow');
+        Route::post('seo/refresh', [SeoSettingController::class, 'refresh'])->name('seo.refresh');
         Route::post('color-themes/{color_theme}/activate', [ColorThemeController::class, 'activate'])->name('color-themes.activate');
         Route::resource('color-themes', ColorThemeController::class)->except(['show']);
         Route::resource('brands', BrandController::class)->except(['show']);

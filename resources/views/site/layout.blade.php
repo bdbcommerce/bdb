@@ -78,7 +78,31 @@
         $_addr = $companyInfo->getTranslation('address', $locale, false);
         if ($_addr) $_ld['address'] = ['@type' => 'PostalAddress', 'streetAddress' => $_addr, 'addressCountry' => 'UZ'];
         if ($_socials) $_ld['sameAs'] = array_values($_socials);
+
+        // Search & AI visibility: a local business with location, hours and the brands it supplies.
+        $_seo = \App\Models\SeoSetting::current();
+        $_ld['@type'] = ['Organization', 'LocalBusiness'];
+        $_ld['@id'] = url('/').'#organization';
+        $_ld['areaServed'] = ['@type' => 'Country', 'name' => 'Uzbekistan'];
+        $_ld['knowsLanguage'] = ['uz', 'ru', 'en'];
+        if ($_point = $companyInfo->mapPoint()) {
+            $_ld['geo'] = ['@type' => 'GeoCoordinates', 'latitude' => $_point[0], 'longitude' => $_point[1]];
+            $_ld['hasMap'] = $companyInfo->yandexMapLink();
+        }
+        if ($_seo->opening_hours) {
+            $_ld['openingHours'] = array_map('trim', explode(';', $_seo->opening_hours));
+        }
+        $_brandNames = \Illuminate\Support\Facades\Cache::remember('seo.brand-names.'.$locale, 600, fn () => \App\Models\Brand::where('is_active', true)
+            ->orderBy('sort_order')->get()->map(fn ($b) => $b->getTranslation('name', $locale, false) ?: $b->getTranslation('name', 'en', false))->filter()->values()->all());
+        if ($_brandNames) {
+            $_ld['brand'] = array_map(fn ($n) => ['@type' => 'Brand', 'name' => $n], $_brandNames);
+        }
     @endphp
+    {{-- Webmaster verification (Admin → SEO & AI visibility) --}}
+    @if($_seo->google_verification)<meta name="google-site-verification" content="{{ $_seo->google_verification }}">@endif
+    @if($_seo->bing_verification)<meta name="msvalidate.01" content="{{ $_seo->bing_verification }}">@endif
+    @if($_seo->yandex_verification)<meta name="yandex-verification" content="{{ $_seo->yandex_verification }}">@endif
+    @if($_seo->llms_enabled)<link rel="alternate" type="text/plain" href="{{ url('/llms.txt') }}" title="llms.txt">@endif
     <script type="application/ld+json">{!! json_encode($_ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
     @stack('schema')
 
@@ -240,6 +264,9 @@
                     @foreach($navLinks as $link)
                         <li><a href="{{ $link['url'] }}" class="{{ $_fLink }}">{{ $link['label'] }}</a></li>
                     @endforeach
+                    @if($_seo->faq_enabled)
+                        <li><a href="{{ route('site.faq', $locale) }}" class="{{ $_fLink }}">{{ __('site.faq.nav') }}</a></li>
+                    @endif
                     @if($_shopUrl)
                         <li>
                             <a href="{{ $companyInfo->shopUrl('footer') }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 {{ $_fLink }}">

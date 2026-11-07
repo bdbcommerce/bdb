@@ -143,6 +143,7 @@ class HomeHeroTest extends TestCase
         $this->assertSame(10, Customer::count());
         $this->assertSame(8, KnowledgeEntry::count());
 
-        $this->get('/en')->assertOk()->assertSee('Zebra Technologies')->assertSee('Demo Supermarket Chain');
+        $this->get('/en')->assertOk()->assertSee('Zebra Technologies')->assertDontSee('Demo Supermarket Chain'); // counts only
+        $this->get('/en/customers')->assertOk()->assertSee('Demo Supermarket Chain');
     }
 }

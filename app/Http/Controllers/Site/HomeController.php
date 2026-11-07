@@ -17,7 +17,8 @@ class HomeController extends Controller
         $banners = Banner::active()->get();
         $brands = Brand::active()->get();
         $industries = Industry::active()
-            ->with(['customers' => fn ($q) => $q->active()])
+            // The home page shows only how many customers each industry has (no names or logos).
+            ->withCount(['customers' => fn ($q) => $q->active()])
             ->get();
         $articles = Article::published()->with('category')->limit(3)->get();
 

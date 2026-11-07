@@ -104,11 +104,12 @@
                 <h2 class="sr-only">{{ __('site.contact.map') }}</h2>
                 @if($mapUrl = $companyInfo->yandexMapEmbedUrl($locale ?? app()->getLocale()))
                     {{-- Yandex Maps widget, built from the admin's link: never raw HTML --}}
-                    <div class="relative h-full min-h-80 overflow-hidden rounded-2xl border border-gray-200">
+                    {{-- The link sits below the map so it never covers the Yandex logo or terms. --}}
+                    <div class="flex h-full min-h-80 flex-col overflow-hidden rounded-2xl border border-gray-200">
                         <iframe src="{{ $mapUrl }}" title="{{ __('site.contact.map') }}" loading="lazy" allowfullscreen
-                                class="block size-full min-h-80 border-0"></iframe>
+                                class="block w-full flex-1 min-h-80 border-0"></iframe>
                         <a href="{{ $companyInfo->yandexMapLink() }}" target="_blank" rel="noopener"
-                           class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-800 shadow-sm border border-gray-200 hover:bg-white">
+                           class="inline-flex items-center justify-center gap-1.5 border-t border-gray-200 bg-white px-4 py-3 text-sm font-medium text-(color:--site-link) hover:text-(color:--site-link-hover) hover:bg-gray-50">
                             @include('site.partials.icon', ['name' => 'map-pin', 'class' => 'size-4'])
                             {{ __('site.contact.open_map') }}
                             <span class="sr-only">{{ __('site.shop.new_tab') }}</span>

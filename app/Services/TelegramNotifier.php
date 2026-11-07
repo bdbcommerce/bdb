@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ChatLead;
+use App\Services\Seo\SeoFiles;
 use App\Services\Telegram\TelegramApi;
 
 /**
@@ -23,7 +24,9 @@ class TelegramNotifier
         $e = fn (?string $s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         $lines = [
-            '<b>New chat lead — '.($lead->channel === 'telegram' ? 'Telegram bot' : 'BDB website').'</b>',
+            '<b>New chat lead — '.match ($lead->channel) {
+                'telegram' => 'Telegram bot', 'mcp' => 'AI agent (MCP)', default => 'BDB website'
+            }.'</b>',
             '',
             '<b>Name:</b> '.$e($lead->name),
             '<b>Phone:</b> '.$e($lead->phone),
@@ -36,7 +39,7 @@ class TelegramNotifier
             $lines[] = '<b>'.($lead->channel === 'telegram' ? 'Telegram' : 'Page').':</b> '.$e($lead->page_url);
         }
         $lines[] = '';
-        $lines[] = '<a href="'.$e(route('admin.chat-leads.index').'#lead-'.$lead->id).'">Open in admin</a>';
+        $lines[] = '<a href="'.$e(SeoFiles::publicUrl(route('admin.chat-leads.index')).'#lead-'.$lead->id).'">Open in admin</a>';
 
         $this->send(implode("\n", $lines));
     }

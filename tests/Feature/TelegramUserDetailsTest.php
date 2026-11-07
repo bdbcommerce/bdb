@@ -47,6 +47,25 @@ class TelegramUserDetailsTest extends TestCase
         return Http::recorded(fn (Request $r) => str_ends_with($r->url(), '/sendMessage'))->map(fn ($p) => $p[0]['text'])->values()->all();
     }
 
+    public function test_phone_formats_and_partial_update(): void
+    {
+        $user = TelegramUser::create(['telegram_id' => '555', 'phone' => '+998901112233']);
+        $admin = User::factory()->create(['is_admin' => true]);
+        $save = fn (array $data) => $this->actingAs($admin)->put(route('admin.telegram-users.update', $user), $data);
+
+        $save(['phone' => '(90) 123-45-67'])->assertSessionHasNoErrors();
+        $this->assertSame('+998901234567', $user->fresh()->phone); // local number → +998
+
+        $save(['phone' => '+7 701 123 45 67'])->assertSessionHasNoErrors();
+        $this->assertSame('+77011234567', $user->fresh()->phone);
+
+        $save(['phone' => '12345678'])->assertSessionHasErrors('phone'); // no country code, not 9 digits
+
+        // A request without the phone field keeps the stored number.
+        $save(['company' => 'BDB'])->assertSessionHasNoErrors();
+        $this->assertSame('+77011234567', $user->fresh()->phone);
+    }
+
     public function test_admin_edits_details(): void
     {
         $this->send(['text' => 'Salom']);

@@ -72,6 +72,23 @@ class TelegramUser extends Model
         return $user;
     }
 
+    /**
+     * A phone number as +digits: separators removed, a 9-digit local Uzbek number gets +998.
+     * Null when it is not a phone number (other countries need their code).
+     */
+    public static function normalizePhone(?string $input): ?string
+    {
+        $phone = preg_replace('/[\s()\-.]/', '', trim((string) $input));
+        if (preg_match('/^\d{9}$/', $phone)) {
+            return '+998'.$phone;
+        }
+        if (preg_match('/^\+?(\d{11,15})$/', $phone, $m) || preg_match('/^\+(\d{7,10})$/', $phone, $m)) {
+            return '+'.$m[1];
+        }
+
+        return null;
+    }
+
     /** The registered name, else the Telegram profile name, else @username. */
     public function displayName(): ?string
     {

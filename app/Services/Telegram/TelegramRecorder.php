@@ -53,14 +53,98 @@ class TelegramRecorder
         }
 
         $fromOwner = $connection->user_id !== '' && (string) ($message['from']['id'] ?? '') === $connection->user_id;
+        // Sent by this bot on behalf of the account (a registration question): not the owner's answer.
+        $role = isset($message['sender_business_bot']) ? 'bot' : ($fromOwner ? 'owner' : 'user');
         $conversation = $this->conversation('business', $message['chat'], $connection, $message['from'] ?? [], $edited);
 
-        $this->store($conversation, $message, $fromOwner ? 'owner' : 'user', $edited);
-
         // The customer side of a Premium-account chat is listed under Telegram → Users.
-        if (! $fromOwner && ! $edited && isset($message['from']['id']) && (string) $message['from']['id'] === (string) $message['chat']['id']) {
-            TelegramUser::fromTelegram($message['from'], 'business');
+        $customer = $role === 'user' && ! $edited && isset($message['from']['id']) && (string) $message['from']['id'] === (string) $message['chat']['id']
+            ? TelegramUser::fromTelegram($message['from'], 'business')
+            : null;
+
+        // An admin ticked "ask for registration info": the bot asks here, on behalf of the account.
+        $asking = $customer && $customer->ask_registration && ! $customer->isRegistered()
+            && $connection->is_enabled && $connection->can_reply;
+        // Answers to the bot's questions are bot steps, not new questions for the team.
+        $answering = $asking && in_array($customer->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true);
+
+        $this->store($conversation, $message, $role, $edited, $answering);
+
+        if ($asking) {
+            $this->askRegistration($customer, $conversation, $connection, $message);
         }
+    }
+
+    /**
+     * Registration in a Premium-account chat, by text only (business chats have no contact button):
+     * name, then a typed phone number. The language comes from the admin's choice or the customer's
+     * Telegram app, so it is not asked.
+     */
+    private function askRegistration(TelegramUser $user, ChatConversation $conversation, TelegramBusinessConnection $connection, array $message): void
+    {
+        $code = $message['from']['language_code'] ?? null;
+        $locale = $user->locale ?? (in_array($code, ['uz', 'ru', 'en'], true) ? $code : 'ru');
+        $text = trim((string) ($message['text'] ?? ''));
+
+        if ($user->step === TelegramUser::STEP_NAME) {
+            $name = preg_replace('/\s+/u', ' ', $text);
+            if (! TelegramBot::isValidName($name)) {
+                $this->sendAsAccount($conversation, $connection, __('chat.tg_name_invalid', [], $locale));
+
+                return;
+            }
+            $user->update(['name' => $name, 'step' => TelegramUser::STEP_PHONE, 'locale' => $locale]);
+            $this->sendAsAccount($conversation, $connection, __('chat.tg_biz_ask_phone', ['name' => $name], $locale));
+
+            return;
+        }
+
+        if ($user->step === TelegramUser::STEP_PHONE) {
+            $raw = isset($message['contact']['phone_number']) && (string) ($message['contact']['user_id'] ?? '') === (string) $user->telegram_id
+                ? (string) $message['contact']['phone_number']
+                : $text;
+            $phone = TelegramUser::normalizePhone($raw);
+            if ($phone === null) {
+                $this->sendAsAccount($conversation, $connection, __('chat.tg_biz_phone_invalid', [], $locale));
+
+                return;
+            }
+            $user->update(['phone' => $phone, 'step' => TelegramUser::STEP_DONE, 'registered_at' => now(), 'ask_registration' => false]);
+            $this->sendAsAccount($conversation, $connection, __('chat.tg_biz_registered', [], $locale));
+
+            return;
+        }
+
+        // First message after the admin's request: start (a name typed by the admin is not asked again).
+        // The step moves on only once the question was delivered.
+        $sent = $this->sendAsAccount($conversation, $connection, $user->name
+            ? __('chat.tg_biz_ask_phone', ['name' => $user->name], $locale)
+            : __('chat.tg_biz_ask_name', [], $locale));
+        if ($sent) {
+            $user->update(['locale' => $locale, 'step' => $user->name ? TelegramUser::STEP_PHONE : TelegramUser::STEP_NAME]);
+        }
+    }
+
+    /** Send a message in a Premium-account chat on behalf of the account, and record it as the bot's. */
+    private function sendAsAccount(ChatConversation $conversation, TelegramBusinessConnection $connection, string $text): bool
+    {
+        $sent = $this->api->call('sendMessage', [
+            'business_connection_id' => $connection->connection_id,
+            'chat_id' => $conversation->external_id,
+            'text' => $text,
+        ]);
+        if ($sent === null) {
+            return false;
+        }
+
+        $conversation->messages = [...($conversation->messages ?? []), [
+            'role' => 'bot', 'sender' => 'BDB bot', 'content' => $text,
+            'message_id' => is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null, 'at' => date('c'),
+        ]];
+        $conversation->message_count = count($conversation->messages);
+        $conversation->save();
+
+        return true;
     }
 
     public function businessDeleted(array $deleted): void
@@ -106,15 +190,22 @@ class TelegramRecorder
 
     // ---------------------------------------------------------------------------
 
-    private function store(ChatConversation $conversation, array $message, string $role, bool $edited): void
+    private function store(ChatConversation $conversation, array $message, string $role, bool $edited, bool $aside = false): void
     {
-        $entry = $this->entry($message, $role);
+        $entry = $this->entry($message, $role) + ($aside ? ['aside' => true] : []);
         $messages = $conversation->messages ?? [];
+
+        // Telegram echoes the bot's own business messages; they are already recorded when sent.
+        if (! $edited && $entry['message_id'] !== null && $role === 'bot'
+            && collect($messages)->contains(fn ($m) => ($m['message_id'] ?? null) === $entry['message_id'])) {
+            return;
+        }
 
         if ($edited && $entry['message_id'] !== null) {
             foreach ($messages as $i => $m) {
                 if (($m['message_id'] ?? null) === $entry['message_id']) {
-                    $messages[$i] = ['at' => $m['at'] ?? $entry['at']] + $entry + ['edited' => true];
+                    // A bot-step answer stays a bot step when it is edited.
+                    $messages[$i] = ['at' => $m['at'] ?? $entry['at']] + $entry + ['edited' => true] + array_intersect_key($m, ['aside' => true]);
                     $conversation->messages = $messages;
                     $this->saveWithoutTouching($conversation); // an edit does not keep the session open
 

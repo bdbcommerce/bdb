@@ -50,8 +50,10 @@
                 @endphp
                 <div class="mt-5"
                      x-data="{
-                         open: true,
-                         key: @js('bdb.admin.nav.' . $group['key']),
+                         // Collapsed by default; the group of the current page opens, and an admin's own
+                         // open/close choice is remembered (v2: earlier saved states are ignored).
+                         open: @js($group['active']),
+                         key: @js('bdb.admin.nav.v2.' . $group['key']),
                          forced: @js($group['active']),
                          init() {
                              if (! this.forced) {
@@ -69,7 +71,7 @@
                         <button type="button"
                                 @click="open = ! open"
                                 :aria-expanded="open.toString()"
-                                aria-expanded="true"
+                                aria-expanded="{{ $group['active'] ? 'true' : 'false' }}"
                                 aria-controls="{{ $groupId }}"
                                 class="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-widest
                                        {{ $group['active'] ? 'text-slate-700' : 'text-slate-400' }}
@@ -91,7 +93,7 @@
                             </svg>
                         </button>
                     </h2>
-                    <ul id="{{ $groupId }}" x-show="open" x-collapse role="list"
+                    <ul id="{{ $groupId }}" x-show="open" x-collapse role="list" @unless($group['active']) x-cloak @endunless
                         class="mt-1 space-y-0.5 border-t border-slate-100 pt-1.5">
                         @foreach ($group['items'] as $item)
                             @include('admin.partials.sidebar-link', ['item' => $item])

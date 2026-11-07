@@ -47,7 +47,7 @@
         <ul class="divide-y divide-slate-100">
             @foreach($conversations as $conversation)
                 @php
-                    $last = collect($conversation->messages)->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit']))->last() ?? [];
+                    $last = collect($conversation->messages)->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit']) || ! empty($m['aside']) || ($m['role'] ?? null) === 'bot')->last() ?? [];
                     $tgUser = $conversation->channel === 'telegram' ? $conversation->telegramUser : null;
                     $name = $conversation->title ?? $tgUser?->displayName() ?? 'Telegram '.$conversation->external_id;
                     $username = $tgUser?->username;
@@ -55,7 +55,7 @@
                     $unread = 0;
                     foreach (array_reverse($conversation->messages ?? []) as $m) {
                         if (! empty($m['deleted'])) { continue; }
-                        if (! empty($m['late_edit'])) { continue; }
+                        if (! empty($m['late_edit']) || ! empty($m['aside']) || ($m['role'] ?? null) === 'bot') { continue; }
                         if (($m['role'] ?? null) !== 'user') { break; }
                         $unread++;
                     }

@@ -98,10 +98,10 @@ return [
     'industries' => [
         'eyebrow' => 'Who we work for',
         'title' => 'Industries and customers we serve',
-        'lead' => 'Each industry has its own identification tasks. Choose yours to see how we help and who already works with us.',
+        'lead' => 'Each industry has its own identification tasks. Here is where we work and how many customers we already serve in each.',
         'empty_title' => 'Industry information is coming soon',
         'empty_text' => 'Tell us about your business and we will suggest a solution that fits it.',
-        'customers_here' => 'Customers in this industry',
+        'customers_count' => 'customer in this industry|customers in this industry',
         'no_customers' => 'Customer stories for this industry will be published soon.',
         'see_customers' => 'See customers',
     ],
@@ -187,5 +187,12 @@ return [
         'new_tab' => '(opens in a new tab)',
         'categories' => ['Labels', 'Ribbons', 'Scanners', 'Printers'],
         'cart' => 'Cart',
+    ],
+    'faq' => [
+        'nav' => 'FAQ',
+        'title' => 'Frequently asked questions',
+        'lead' => 'Answers to the questions customers ask us most often.',
+        'empty' => 'Questions and answers will appear here soon.',
+        'more' => 'Didn’t find your answer? Contact us — we will help.',
     ],
 ];

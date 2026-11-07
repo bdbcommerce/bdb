@@ -143,7 +143,10 @@
                                class="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400">
                         <span>
                             Ask for registration info on the next conversation
-                            <span class="block text-xs text-slate-400">When the customer next writes to the bot, it asks for language, name and the phone linked to their Telegram. Works only in bot chats.</span>
+                            <span class="block text-xs text-slate-400">The next time the customer writes — to the bot or to your Premium account — the bot asks for their name and phone (in the bot chat also the language). In Premium-account chats it writes on behalf of your account.</span>
+                            @if($businessCanReply === false)
+                                <span class="block text-xs text-red-700 mt-1">The Premium account does not let the bot reply: in Telegram → Settings → Telegram Business → Chatbots, allow it to reply to messages.</span>
+                            @endif
                         </span>
                     </label>
                 @endunless

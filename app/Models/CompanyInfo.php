@@ -150,25 +150,48 @@ class CompanyInfo extends Model
             return null;
         }
 
-        // "41.311081, 69.240562" (latitude, longitude)
-        if (preg_match('/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/', $input, $m)
-            && abs((float) $m[1]) <= 90 && abs((float) $m[2]) <= 180) {
-            $point = $m[2].','.$m[1];
+        // "41.311081, 69.240562" or "41,311081; 69,240562" (latitude, longitude)
+        $coords = '(-?\d{1,3}(?:[.,]\d+)?)';
+        if (preg_match('/^'.$coords.'\s*(?:;|\s|,\s)\s*'.$coords.'$/', $input, $m) || preg_match('/^(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)$/', $input, $m)) {
+            [$lat, $lng] = [(float) str_replace(',', '.', $m[1]), (float) str_replace(',', '.', $m[2])];
+            if (abs($lat) > 90 || abs($lng) > 180) {
+                return null;
+            }
+            $point = $lng.','.$lat;
 
             return http_build_query(['ll' => $point, 'z' => '16', 'pt' => $point.',pm2rdm']);
         }
 
-        // The first URL in the text (an embed code holds it in src="…").
-        if (! preg_match('#https?://[^\s"\'<>]+#i', html_entity_decode($input, ENT_QUOTES | ENT_HTML5), $url)) {
+        // A plain link is taken whole (an unencoded search text may contain spaces); in an embed
+        // code every URL is tried, the widget (iframe src) first — company codes start with <a> links.
+        $text = html_entity_decode($input, ENT_QUOTES | ENT_HTML5);
+        $urls = ! str_contains($text, '<') && preg_match('#^https?://#i', $text)
+            ? [$text]
+            : (preg_match_all('#https?://[^\s"\'<>]+#i', $text, $found) ? $found[0] : []);
+        usort($urls, fn ($a, $b) => str_contains($b, '/map-widget/') <=> str_contains($a, '/map-widget/'));
+
+        foreach ($urls as $url) {
+            if (($query = self::yandexUrlQuery($url)) !== null) {
+                return $query;
+            }
+        }
+
+        return null;
+    }
+
+    /** Query parameters for one Yandex Maps URL, or null. */
+    private static function yandexUrlQuery(string $url): ?string
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
             return null;
         }
-        $parts = parse_url($url[0]);
         $host = strtolower($parts['host'] ?? '');
-        $path = $parts['path'] ?? '/';
-        $yandex = preg_match('/^(www\.)?yandex\.(uz|ru|com|kz|by|com\.tr)$/', $host)
-            && (str_starts_with($path, '/maps') || str_starts_with($path, '/map-widget/'));
+        $path = strtolower($parts['path'] ?? '/');
+        $yandex = (preg_match('/^(www\.)?yandex\.(uz|ru|com|kz|by|com\.tr)$/', $host) && (str_starts_with($path, '/maps') || str_starts_with($path, '/map-widget/')))
+            || $host === 'maps.yandex.ru';
         $constructor = $host === 'api-maps.yandex.ru' && str_starts_with($path, '/services/constructor/');
-        if ((! $yandex && ! $constructor) || str_starts_with($path, '/maps/-/')) {
+        if ((! $yandex && ! $constructor) || preg_match('#/(maps|map-widget/v1)/-/#', $path)) {
             return null;
         }
 
@@ -178,6 +201,11 @@ class CompanyInfo extends Model
             fn ($v) => is_string($v) ? strlen($v) <= 1000 : is_array($v) && count($v) <= 5 && array_filter($v, 'is_string') === $v,
         );
 
+        // A company card: /maps/org/<name>/<id>/ (optionally after a city prefix) → show that organisation.
+        if (! isset($query['oid']) && preg_match('#/org/(?:[^/]+/)?(\d{5,20})(?:/|$)#', $path, $org)) {
+            $query = ['oid' => $org[1], 'ol' => 'biz', 'z' => $query['z'] ?? '16'] + $query;
+        }
+
         // A map needs a place: coordinates, an organisation, a constructor map or a search.
         return array_intersect_key($query, array_flip(['ll', 'pt', 'oid', 'um', 'text', 'whatshere'])) ? http_build_query($query) : null;
     }
@@ -185,7 +213,8 @@ class CompanyInfo extends Model
     /** True when the pasted value is a Yandex short link (they hold no location). */
     public static function isYandexShortLink(?string $input): bool
     {
-        return (bool) preg_match('#https?://(www\.)?yandex\.[a-z.]+/maps/-/#i', (string) $input);
+        return (bool) preg_match('#https?://(www\.)?yandex\.[a-z.]+/(maps|map-widget/v1)/-/#i', (string) $input)
+            && self::yandexMapQuery($input) === null;
     }
 
     /** The Yandex Maps widget to embed on the contact page, in the visitor's language. */
@@ -195,6 +224,20 @@ class CompanyInfo extends Model
         $lang = self::YANDEX_MAP_LANG[$locale ?? app()->getLocale()] ?? 'ru_RU';
 
         return $query === null ? null : 'https://yandex.uz/map-widget/v1/?'.$query.'&lang='.$lang;
+    }
+
+    /** The office location [latitude, longitude] from the map setting (pin first, else map centre). */
+    public function mapPoint(): ?array
+    {
+        parse_str((string) self::yandexMapQuery($this->map_embed), $query);
+        foreach (['pt', 'll'] as $key) {
+            if (is_string($query[$key] ?? null) && preg_match('/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/', $query[$key], $m)
+                && abs((float) $m[2]) <= 90 && abs((float) $m[1]) <= 180) {
+                return [(float) $m[2], (float) $m[1]];
+            }
+        }
+
+        return null;
     }
 
     /** The same place opened in Yandex Maps (route planning, the mobile app…). */

@@ -90,7 +90,12 @@ class TelegramBot
                 'message_id' => $messageId,
                 'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
             ],
-            aside: ($replies || $asking) && $user->step !== TelegramUser::STEP_DONE,
+            // Bot steps: everything before registration when the bot answers; when only asked by an
+            // admin, just the answers to its questions (the first message stays a real question).
+            aside: $replies ? $user->step !== TelegramUser::STEP_DONE
+                : $asking && (in_array($user->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
+                    || self::languageFromText(self::withoutEmoji((string) ($message['text'] ?? ''))) !== null
+                    || str_starts_with((string) ($message['text'] ?? ''), '/')),
             awaitsReply: $replies,
         );
         $this->messageId = $messageId;
@@ -129,6 +134,13 @@ class TelegramBot
             TelegramUser::STEP_DONE => $replies ? $this->chat($user, $message, $text) : null,
             default => $this->receiveLanguage($user, $text),
         };
+    }
+
+    /** A person's name as typed: 2–60 letters, spaces, apostrophes (Uzbek ʻ ʼ), dots and hyphens. */
+    public static function isValidName(string $name): bool
+    {
+        return mb_strlen($name) >= 2 && mb_strlen($name) <= 60
+            && preg_match("/^[\p{L}\p{M}][\p{L}\p{M} '’‘ʻʼ`.-]*$/u", $name) === 1;
     }
 
     /** Business and group updates are only recorded. Returns true when the update was one of them. */
@@ -196,10 +208,16 @@ class TelegramBot
         ]);
     }
 
+    /** The language a tapped picker button (or "uz" / "ru" / "en") stands for. */
+    private static function languageFromText(string $text): ?string
+    {
+        return array_search($text, array_map(self::withoutEmoji(...), self::LANGUAGES), true)
+            ?: (array_key_exists(mb_strtolower($text), self::LANGUAGES) ? mb_strtolower($text) : null);
+    }
+
     private function receiveLanguage(TelegramUser $user, string $text): void
     {
-        $locale = array_search($text, array_map(self::withoutEmoji(...), self::LANGUAGES), true)
-            ?: (array_key_exists(mb_strtolower($text), self::LANGUAGES) ? mb_strtolower($text) : null);
+        $locale = self::languageFromText($text);
 
         if (! $locale) {
             $this->askLanguage($user->telegram_id);
@@ -226,10 +244,8 @@ class TelegramBot
     private function receiveName(TelegramUser $user, string $text): void
     {
         $name = preg_replace('/\s+/u', ' ', $text);
-        $valid = mb_strlen($name) >= 2 && mb_strlen($name) <= 60
-            && preg_match("/^[\p{L}\p{M}][\p{L}\p{M} '’‘ʻʼ`.-]*$/u", $name);
 
-        if (! $valid) {
+        if (! self::isValidName($name)) {
             $this->api->sendMessage($user->telegram_id, __('chat.tg_name_invalid', [], $user->locale));
 
             return;

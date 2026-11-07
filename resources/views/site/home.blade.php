@@ -297,92 +297,55 @@
                 'text'  => __('site.industries.empty_text'),
             ])
         @else
-            @php $indCount = $industries->count(); @endphp
-            <div class="grid grid-cols-1 gap-8 lg:grid-cols-12"
-                 x-data="{
-                     active: 0,
-                     count: {{ $indCount }},
-                     go(i) { this.active = (i + this.count) % this.count; this.$nextTick(() => this.$refs['tab' + this.active]?.focus()); }
-                 }">
-                {{-- Tabs --}}
-                <div class="min-w-0 lg:col-span-4">
-                    <div role="tablist" aria-label="{{ __('Industries') }}"
-                         class="flex lg:flex-col gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 lg:pb-0">
-                        @foreach($industries as $i => $industry)
-                            <button type="button" role="tab" id="ind-tab-{{ $industry->id }}"
-                                    aria-controls="ind-panel-{{ $industry->id }}"
-                                    x-ref="tab{{ $i }}"
-                                    aria-selected="{{ $i === 0 ? 'true' : 'false' }}" tabindex="{{ $i === 0 ? 0 : -1 }}"
-                                    :aria-selected="(active === {{ $i }}).toString()"
-                                    :tabindex="active === {{ $i }} ? 0 : -1"
-                                    @click="active = {{ $i }}"
-                                    @keydown.arrow-right.prevent="go({{ $i }} + 1)" @keydown.arrow-down.prevent="go({{ $i }} + 1)"
-                                    @keydown.arrow-left.prevent="go({{ $i }} - 1)" @keydown.arrow-up.prevent="go({{ $i }} - 1)"
-                                    @keydown.home.prevent="go(0)" @keydown.end.prevent="go(count - 1)"
-                                    class="group flex shrink-0 items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors lg:w-full
-                                           hover:border-gray-400 hover:text-gray-900
-                                           aria-selected:border-brand-600 aria-selected:bg-brand-50/60 aria-selected:text-gray-900">
-                                <span class="text-gray-400 group-aria-selected:text-brand-600">
+            {{-- One card per industry: what it is and how many customers BDB serves there (no names). --}}
+            <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
+                @foreach($industries as $industry)
+                    @php
+                        $indCustomers = (int) $industry->customers_count;
+                        $indDesc = $industry->getTranslation('description', $locale, false);
+                    @endphp
+                    <li>
+                        @if($indCustomers)
+                            <a href="{{ route('site.customers', $locale) }}#industry-{{ $industry->id }}"
+                               aria-labelledby="ind-name-{{ $industry->id }}" aria-describedby="ind-count-{{ $industry->id }}"
+                               class="group flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-colors hover:border-brand-200 hover:bg-brand-50/30
+                                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+                        @else
+                            <div class="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6">
+                        @endif
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="icon-tile size-11 text-brand-600">
                                     @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-5'])
                                 </span>
-                                <span class="whitespace-nowrap lg:whitespace-normal lg:flex-1">{{ $industry->getTranslation('name', $locale) }}</span>
-                                @if($industry->customers->count())
-                                    <span class="hidden lg:inline-flex min-w-6 justify-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 tabular-nums">
-                                        {{ $industry->customers->count() }}<span class="sr-only"> {{ __('Customers') }}</span>
+                                @if($indCustomers)
+                                    <span id="ind-count-{{ $industry->id }}" class="text-right leading-none">
+                                        <span class="block text-3xl font-semibold tracking-tight text-gray-900 tabular-nums">{{ $indCustomers }}</span>
+                                        <span class="mt-1 block text-xs text-gray-500">{{ trans_choice('site.industries.customers_count', $indCustomers) }}</span>
                                     </span>
                                 @endif
-                            </button>
-                        @endforeach
-                    </div>
-                </div>
-
-                {{-- Panels --}}
-                <div class="min-w-0 lg:col-span-8">
-                    @foreach($industries as $i => $industry)
-                        <div role="tabpanel" id="ind-panel-{{ $industry->id }}" aria-labelledby="ind-tab-{{ $industry->id }}" tabindex="0"
-                             x-show="active === {{ $i }}" @if($i > 0) style="display: none;" @endif
-                             class="rounded-2xl border border-gray-200 bg-white p-6 md:p-8 focus-visible:outline-2">
-                            <div class="flex items-start gap-4">
-                                <span class="icon-tile size-12 text-brand-600">
-                                    @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-6'])
-                                </span>
-                                <div class="min-w-0">
-                                    <h3 class="text-xl font-semibold text-gray-900">{{ $industry->getTranslation('name', $locale) }}</h3>
-                                    @if($industry->getTranslation('description', $locale, false))
-                                        <p class="mt-2 text-gray-600 leading-relaxed">{{ $industry->getTranslation('description', $locale) }}</p>
-                                    @endif
-                                </div>
                             </div>
-
-                            <div class="mt-8 border-t border-gray-100 pt-6">
-                                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 mb-4">{{ __('site.industries.customers_here') }}</p>
-                                @if($industry->customers->isEmpty())
-                                    <p class="text-sm text-gray-500">{{ __('site.industries.no_customers') }}</p>
-                                @else
-                                    <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                        @foreach($industry->customers->take(8) as $customer)
-                                            <li class="group flex h-20 items-center justify-center rounded-xl border border-gray-200 bg-white px-3 hover:border-brand-200 transition-colors"
-                                                title="{{ $customer->name }}">
-                                                @if($customer->logo)
-                                                    <img src="{{ Storage::url($customer->logo) }}" alt="{{ $customer->name }}"
-                                                         loading="lazy" decoding="async"
-                                                         class="max-h-9 max-w-full object-contain grayscale opacity-70 transition duration-300 group-hover:grayscale-0 group-hover:opacity-100">
-                                                @else
-                                                    <span class="text-xs font-semibold text-gray-600 text-center line-clamp-2">{{ $customer->name }}</span>
-                                                @endif
-                                            </li>
-                                        @endforeach
-                                    </ul>
-                                    <a href="{{ route('site.customers', $locale) }}#industry-{{ $industry->id }}" class="link-arrow mt-6">
+                            <h3 id="ind-name-{{ $industry->id }}" class="mt-5 text-lg font-semibold text-gray-900 break-words">{{ $industry->getTranslation('name', $locale) }}</h3>
+                            @if($indDesc)
+                                <p class="mt-2 text-sm leading-relaxed text-gray-600 line-clamp-3 break-words">{{ $indDesc }}</p>
+                            @endif
+                            <p class="mt-auto pt-5 text-sm">
+                                @if($indCustomers)
+                                    <span class="link-arrow">
                                         {{ __('site.industries.see_customers') }}
-                                        @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4'])
-                                    </a>
+                                        @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4 transition-transform group-hover:translate-x-0.5'])
+                                    </span>
+                                @else
+                                    <span class="text-gray-500">{{ __('site.industries.no_customers') }}</span>
                                 @endif
+                            </p>
+                        @if($indCustomers)
+                            </a>
+                        @else
                             </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
         @endif
     </div>
 </section>

@@ -81,4 +81,38 @@ class YandexMapTest extends TestCase
         $this->actingAs($admin)->put(route('admin.company-info.update'), ['map_embed' => ''])->assertSessionHasNoErrors();
         $this->get(route('site.contact', 'en'))->assertOk()->assertDontSee('map-widget', false);
     }
+
+    public function test_company_cards_and_other_real_formats(): void
+    {
+        // Company card share link → that organisation.
+        $this->assertSame('oid=1234567890&ol=biz&z=16', CompanyInfo::yandexMapQuery('https://yandex.uz/maps/org/bdb_commerce/1234567890/'));
+        $this->assertSame('oid=1234567890&ol=biz&z=17&ll=69.2%2C41.3',
+            CompanyInfo::yandexMapQuery('https://yandex.uz/maps/10335/tashkent/org/bdb_commerce/1234567890/?ll=69.2%2C41.3&z=17'));
+
+        // Company embed code: <a> links first, then the widget iframe.
+        $embed = '<div style="position:relative;overflow:hidden;"><a href="https://yandex.uz/maps/org/bdb/1234567890/?utm_medium=mapframe" style="color:#eee">BDB</a>'
+            .'<a href="https://yandex.uz/maps/10335/tashkent/category/printing/184107309/">Printing</a>'
+            .'<iframe src="https://yandex.uz/map-widget/v1/?ll=69.240562%2C41.311081&amp;mode=search&amp;oid=1234567890&amp;ol=biz&amp;z=16" width="560" height="400" frameborder="1" allowfullscreen="true"></iframe></div>';
+        $this->assertSame('ll=69.240562%2C41.311081&mode=search&oid=1234567890&ol=biz&z=16', CompanyInfo::yandexMapQuery($embed));
+
+        // Unencoded search text keeps its spaces; old host; upper-case path; decimal commas.
+        $this->assertSame('text='.urlencode('Ташкент, Амир Темур 1'), CompanyInfo::yandexMapQuery('https://yandex.uz/maps/?text=Ташкент, Амир Темур 1'));
+        $this->assertNotNull(CompanyInfo::yandexMapQuery('https://maps.yandex.ru/?ll=69.2,41.3&z=15'));
+        $this->assertNotNull(CompanyInfo::yandexMapQuery('https://yandex.uz/MAPS/?ll=69.2,41.3'));
+        $this->assertSame('ll=69.240562%2C41.311081&z=16&pt=69.240562%2C41.311081%2Cpm2rdm', CompanyInfo::yandexMapQuery('41,311081, 69,240562'));
+        $this->assertNotNull(CompanyInfo::yandexMapQuery('41.311081,69.240562'));
+
+        // Widget short links get the short-link hint.
+        $this->assertTrue(CompanyInfo::isYandexShortLink('https://yandex.uz/map-widget/v1/-/CDqXYZ'));
+        $this->assertFalse(CompanyInfo::isYandexShortLink($embed));
+    }
+
+    public function test_open_link_is_below_the_map(): void
+    {
+        CompanyInfo::instance()->update(['map_embed' => '41.311081, 69.240562']);
+
+        $html = $this->get(route('site.contact', 'ru'))->assertOk()->getContent();
+        $this->assertLessThan(strpos($html, __('site.contact.open_map', [], 'ru')), strpos($html, 'map-widget/v1'));
+        $this->assertStringNotContainsString('absolute bottom-3 left-3', $html);
+    }
 }

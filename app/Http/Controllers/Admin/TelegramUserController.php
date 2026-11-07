@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -77,6 +78,10 @@ class TelegramUserController extends Controller
             'user' => $telegramUser,
             'conversations' => $conversations,
             'replyTo' => $conversations->firstWhere('channel', 'telegram'),
+            // Premium-account chats: can the bot write there (Telegram Business "reply" permission)?
+            'businessCanReply' => ($biz = $conversations->firstWhere('channel', 'business'))
+                ? (bool) TelegramBusinessConnection::where('connection_id', $biz->business_connection_id)->value('can_reply')
+                : null,
             'total' => $total,
             'leads' => ChatLead::whereIn('id', $telegramUser->conversations()->whereNotNull('chat_lead_id')->pluck('chat_lead_id'))->latest()->get(),
             'leadConversations' => $telegramUser->conversations()->whereNotNull('chat_lead_id')->pluck('id', 'chat_lead_id'),
@@ -92,26 +97,35 @@ class TelegramUserController extends Controller
     /** Admin-entered details; "ask_registration" makes the bot ask on the customer's next message. */
     public function update(Request $request, TelegramUser $telegramUser)
     {
-        $request->merge(['phone' => preg_replace('/[\s()\-]/', '', (string) $request->input('phone')) ?: null]);
+        if ($request->has('phone')) {
+            // Local Uzbek numbers (9 digits) get +998; others must include the country code.
+            $phone = preg_replace('/[\s()\-]/', '', (string) $request->input('phone'));
+            $request->merge(['phone' => $phone === '' ? null : (preg_match('/^\d{9}$/', $phone) ? '+998'.$phone : $phone)]);
+        }
 
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:60'],
-            'phone' => ['nullable', 'string', 'regex:/^\+?[0-9]{7,15}$/'],
+            'phone' => ['nullable', 'string', 'regex:/^(\+[0-9]{7,15}|[0-9]{11,15})$/'],
             'company' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'ask_registration' => ['sometimes', 'boolean'],
             'locale' => ['nullable', Rule::in(['uz', 'ru', 'en'])],
-        ], ['phone.regex' => 'Enter the phone as digits, e.g. +998901234567.']);
+        ], ['phone.regex' => 'Enter the phone with the country code, e.g. +998901234567 (or 9 digits like 90 123 45 67 for Uzbekistan).']);
 
         if (isset($data['phone']) && ! str_starts_with($data['phone'], '+')) {
             $data['phone'] = '+'.$data['phone'];
         }
         $data['ask_registration'] = $request->boolean('ask_registration') && ! $telegramUser->isRegistered();
+        // Ticking or unticking starts the questions over: a step left from an abandoned attempt must
+        // not turn the customer's next message into their name.
+        if (! config('services.telegram.replies') && $data['ask_registration'] !== $telegramUser->ask_registration && ! $telegramUser->isRegistered()) {
+            $data['step'] = TelegramUser::STEP_LANGUAGE;
+        }
 
         $telegramUser->update($data);
 
         return redirect()->route('admin.telegram-users.show', $telegramUser)->with('success', $data['ask_registration']
-            ? 'Saved. The bot will ask for language, name and phone the next time this customer writes to it.'
+            ? 'Saved. The bot will ask for this customer\'s details the next time they write (bot chat or Premium-account chat).'
             : 'Saved.');
     }
 }
