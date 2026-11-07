@@ -96,7 +96,7 @@ class CompanySocialLinksEdgeCasesTest extends TestCase
             'address_uz' => 'Toshkent, Amir Temur ko‘chasi', 'address_ru' => 'Ташкент', 'address_en' => 'Tashkent',
             'slogan_en' => 'Slogan', 'about_ru' => 'О компании',
             'phone' => '+998 71 000 00 00', 'email' => 'info@example.uz',
-            'telegram' => '@bdb_uz', 'map_embed' => '<iframe src="https://maps.example"></iframe>',
+            'telegram' => '@bdb_uz', 'map_embed' => '41.311081, 69.240562',
             'google_analytics' => 'G-TEST', 'yandex_metrika' => '123',
         ])->assertSessionHasNoErrors();
 

@@ -4,6 +4,7 @@ namespace App\Services\Telegram;
 
 use App\Models\ChatConversation;
 use App\Models\TelegramBusinessConnection;
+use App\Models\TelegramUser;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -55,6 +56,11 @@ class TelegramRecorder
         $conversation = $this->conversation('business', $message['chat'], $connection, $message['from'] ?? [], $edited);
 
         $this->store($conversation, $message, $fromOwner ? 'owner' : 'user', $edited);
+
+        // The customer side of a Premium-account chat is listed under Telegram → Users.
+        if (! $fromOwner && ! $edited && isset($message['from']['id']) && (string) $message['from']['id'] === (string) $message['chat']['id']) {
+            TelegramUser::fromTelegram($message['from'], 'business');
+        }
     }
 
     public function businessDeleted(array $deleted): void

@@ -75,14 +75,13 @@ class TelegramBot
             unset($message['text']);
         }
 
-        $user = TelegramUser::firstOrNew(['telegram_id' => (string) $chatId]);
-        $user->username = is_string($from['username'] ?? null) ? $from['username'] : null;
-        $profile = trim(implode(' ', array_filter([$from['first_name'] ?? null, $from['last_name'] ?? null], 'is_string')));
-        $user->profile_name = $profile !== '' ? mb_substr($profile, 0, 255) : $user->profile_name;
-        $user->save();
+        // The customer is created from their chat info; the private chat ID is their user ID.
+        $user = TelegramUser::fromTelegram(['id' => $chatId] + $from, 'bot');
 
         $locale = $user->locale ?? 'ru';
         $replies = (bool) config('services.telegram.replies');
+        // Record-only mode, but an admin ticked "ask for registration info" for this customer.
+        $asking = ! $replies && $user->ask_registration && ! $user->isRegistered();
 
         // Every message is recorded: text as text, anything else by type and Telegram file ID.
         $messageId = is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null;
@@ -91,13 +90,14 @@ class TelegramBot
                 'message_id' => $messageId,
                 'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
             ],
-            aside: $replies && $user->step !== TelegramUser::STEP_DONE,
+            aside: ($replies || $asking) && $user->step !== TelegramUser::STEP_DONE,
             awaitsReply: $replies,
         );
         $this->messageId = $messageId;
 
-        // Record-only mode (TELEGRAM_BOT_REPLIES=false): no reply, registration or AI call.
-        if (! $replies) {
+        // Record-only mode (TELEGRAM_BOT_REPLIES=false): no reply, registration or AI call —
+        // unless an admin asked for this customer's registration info.
+        if (! $replies && ! $asking) {
             return;
         }
 
@@ -126,7 +126,7 @@ class TelegramBot
             // Names are validated as typed, emoji included.
             TelegramUser::STEP_NAME => $this->receiveName($user, trim((string) ($message['text'] ?? ''))),
             TelegramUser::STEP_PHONE => $this->receivePhone($user, $message),
-            TelegramUser::STEP_DONE => $this->chat($user, $message, $text),
+            TelegramUser::STEP_DONE => $replies ? $this->chat($user, $message, $text) : null,
             default => $this->receiveLanguage($user, $text),
         };
     }
@@ -268,10 +268,14 @@ class TelegramBot
             'phone' => '+'.ltrim((string) $contact['phone_number'], '+'),
             'step' => TelegramUser::STEP_DONE,
             'registered_at' => now(),
+            'ask_registration' => false,
         ]);
 
+        // Without AI replies, no suggested-question buttons (nobody would answer them).
         $this->api->sendMessage($user->telegram_id, __('chat.tg_registered', [], $user->locale), [
-            'reply_markup' => $this->keyboard((array) __('chat.starters', [], $user->locale), false, $user->locale),
+            'reply_markup' => config('services.telegram.replies')
+                ? $this->keyboard((array) __('chat.starters', [], $user->locale), false, $user->locale)
+                : ['remove_keyboard' => true],
         ]);
     }
 

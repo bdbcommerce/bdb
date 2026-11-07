@@ -153,6 +153,7 @@ return [
         'ai_title' => 'Need an answer right now?',
         'ai_text' => 'Our AI assistant Belgi answers questions about equipment and marking 24/7 and can request a callback from a specialist.',
         'map' => 'Map',
+        'open_map' => 'Open in Yandex Maps',
     ],
 
     'news' => [

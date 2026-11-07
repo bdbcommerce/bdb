@@ -26,7 +26,7 @@
             <div class="min-w-0">
                 <p class="text-base font-semibold text-slate-900 truncate">{{ $user->displayName() ?? 'No name yet' }}</p>
                 <p class="text-[11px] font-medium mt-0.5 inline-block rounded-full px-2 py-0.5 {{ $user->isRegistered() ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">
-                    {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Registration not finished (step: '.$user->step.')' : 'Not registered') }}
+                    {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Registration not finished (step: '.$user->step.')' : ($user->ask_registration ? 'Will be asked to register' : 'Not registered')) }}
                 </p>
             </div>
         </div>
@@ -82,7 +82,74 @@
                     @endforelse
                 </dd>
             </div>
+            @if($user->company || $user->notes)
+                <div>
+                    <dt class="text-xs text-slate-400">Company / notes</dt>
+                    <dd class="text-slate-800 whitespace-pre-line break-words">{{ $user->company }}@if($user->company && $user->notes)<br>@endif{{ $user->notes }}</dd>
+                </div>
+            @endif
+            <div>
+                <dt class="text-xs text-slate-400">First seen via</dt>
+                <dd class="text-slate-800">{{ \App\Models\TelegramUser::SOURCES[$user->source] ?? 'Bot' }}</dd>
+            </div>
         </dl>
+
+        {{-- Admin-entered details --}}
+        <form method="POST" action="{{ route('admin.telegram-users.update', $user) }}" class="mt-5 pt-5 border-t border-slate-100 space-y-3"
+              x-data="{ open: {{ $errors->any() ? 'true' : 'false' }} }">
+            @csrf @method('PUT')
+            <button type="button" @click="open = ! open" :aria-expanded="open.toString()"
+                    class="flex w-full items-center justify-between text-sm font-medium text-slate-900">
+                Edit details
+                <svg class="w-4 h-4 text-slate-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
+                </svg>
+            </button>
+            <div x-show="open" x-cloak class="space-y-3">
+                @php $input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400'; @endphp
+                <div>
+                    <label for="tg-name" class="block text-xs font-medium text-slate-600 mb-1">Name</label>
+                    <input id="tg-name" name="name" maxlength="60" value="{{ old('name', $user->name) }}" placeholder="{{ $user->profile_name }}" class="{{ $input }}">
+                    @error('name')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="tg-phone" class="block text-xs font-medium text-slate-600 mb-1">Mobile phone</label>
+                    <input id="tg-phone" name="phone" type="tel" inputmode="tel" maxlength="20" value="{{ old('phone', $user->phone) }}" placeholder="+998 90 123 45 67" class="{{ $input }}">
+                    @error('phone')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="tg-company" class="block text-xs font-medium text-slate-600 mb-1">Company</label>
+                    <input id="tg-company" name="company" maxlength="120" value="{{ old('company', $user->company) }}" class="{{ $input }}">
+                    @error('company')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="tg-locale" class="block text-xs font-medium text-slate-600 mb-1">Language</label>
+                    <select id="tg-locale" name="locale" class="{{ $input }}">
+                        <option value="">—</option>
+                        @foreach(['uz' => 'Oʻzbekcha', 'ru' => 'Русский', 'en' => 'English'] as $code => $label)
+                            <option value="{{ $code }}" @selected(old('locale', $user->locale) === $code)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="tg-notes" class="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                    <textarea id="tg-notes" name="notes" rows="3" maxlength="2000" class="{{ $input }}">{{ old('notes', $user->notes) }}</textarea>
+                    @error('notes')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                </div>
+                @unless($user->isRegistered())
+                    <label class="flex items-start gap-2 text-sm text-slate-700">
+                        <input type="hidden" name="ask_registration" value="0">
+                        <input type="checkbox" name="ask_registration" value="1" @checked(old('ask_registration', $user->ask_registration))
+                               class="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                        <span>
+                            Ask for registration info on the next conversation
+                            <span class="block text-xs text-slate-400">When the customer next writes to the bot, it asks for language, name and the phone linked to their Telegram. Works only in bot chats.</span>
+                        </span>
+                    </label>
+                @endunless
+                <button type="submit" class="w-full bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700 transition-colors">Save</button>
+            </div>
+        </form>
     </aside>
 
     {{-- Conversation history --}}

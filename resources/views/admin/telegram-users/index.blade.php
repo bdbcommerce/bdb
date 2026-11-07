@@ -9,7 +9,7 @@
 @endphp
 
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <p class="text-xs text-slate-500">Everyone who has written to the bot. Open a customer to see their details and every conversation.</p>
+    <p class="text-xs text-slate-500">Customers from the bot and the Premium account, created from their Telegram chat info. Open a customer to see and edit their details and every conversation.</p>
     <nav class="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1" aria-label="Filter users">
         @foreach($filters as $key => $label)
             <a href="{{ route('admin.telegram-users.index', array_filter(['filter' => $key === 'all' ? null : $key, 'q' => $search ?: null])) }}"
@@ -47,11 +47,16 @@
                         <p class="text-sm font-medium text-slate-900 truncate">{{ $user->displayName() ?? 'No name yet' }}</p>
                         <p class="text-xs text-slate-500 truncate">
                             {{ $user->phone ?? 'No phone' }}
+                            @if($user->company) · {{ $user->company }} @endif
                             @if($user->username) · {{ '@'.$user->username }} @endif
                             @if($user->locale) · <span class="uppercase">{{ $user->locale }}</span> @endif
                         </p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0 ml-13 sm:ml-0">
+                        <span class="text-[11px] font-medium rounded-full px-2 py-0.5 border border-slate-200 text-slate-500">{{ \App\Models\TelegramUser::SOURCES[$user->source] ?? 'Bot' }}</span>
+                        @if($user->ask_registration && ! $user->isRegistered())
+                            <span class="text-[11px] font-medium rounded-full px-2 py-0.5 border border-slate-400 text-slate-700">Will be asked to register</span>
+                        @endif
                         <span class="text-[11px] font-medium rounded-full px-2 py-0.5 {{ $user->isRegistered() ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">
                             {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Step: '.$user->step : 'Not registered') }}
                         </span>

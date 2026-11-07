@@ -104,7 +104,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('chat-conversations/{chatConversation}/reply', [ChatConversationController::class, 'reply'])->middleware('throttle:30,1')->name('chat-conversations.reply');
         Route::post('chat-conversations/{chatConversation}/suggest', [ChatConversationController::class, 'suggest'])->middleware('throttle:20,1')->name('chat-conversations.suggest');
 
-        Route::resource('telegram-users', TelegramUserController::class)->only(['index', 'show']);
+        Route::resource('telegram-users', TelegramUserController::class)->only(['index', 'show', 'update']);
         Route::get('awaiting-replies', [AwaitingReplyController::class, 'index'])->name('awaiting-replies.index');
         Route::get('telegram-chats', [ChatConversationController::class, 'index'])->name('telegram-chats.index');
         Route::post('chat-conversations/{chatConversation}/handled', [AwaitingReplyController::class, 'handled'])->name('chat-conversations.handled');

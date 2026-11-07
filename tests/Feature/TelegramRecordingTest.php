@@ -122,7 +122,8 @@ class TelegramRecordingTest extends TestCase
         $this->assertSame(['photo', 'large_photo_456', 'This one?'], [$photo['type'], $photo['file_id'], $photo['caption']]);
 
         $this->assertSame(0, $this->sentMessages());
-        $this->assertSame(0, TelegramUser::count());
+        // The customer (not the owner) is listed under Telegram → Users.
+        $this->assertSame(['555', 'business', 'Aziz'], [TelegramUser::sole()->telegram_id, TelegramUser::sole()->source, TelegramUser::sole()->profile_name]);
     }
 
     public function test_business_edits_and_deletions_are_recorded(): void

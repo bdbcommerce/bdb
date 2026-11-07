@@ -7,6 +7,7 @@ use App\Models\ChatConversation;
 use App\Models\ChatLead;
 use App\Models\TelegramUser;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Telegram customers of the bot: a searchable list, and each customer's details with their
@@ -39,7 +40,7 @@ class TelegramUserController extends Controller
 
                 $query->where(function ($q) use ($variants, $like, $digits) {
                     foreach ($variants as $variant) {
-                        foreach (['name', 'profile_name', 'username', 'telegram_id'] as $column) {
+                        foreach (['name', 'profile_name', 'username', 'telegram_id', 'company'] as $column) {
                             $q->orWhereRaw("{$column} LIKE ? ESCAPE '!'", [$like($variant)]);
                         }
                     }
@@ -86,5 +87,31 @@ class TelegramUserController extends Controller
                 'unanswered' => $conversations->sum('unanswered_count'),
             ],
         ]);
+    }
+
+    /** Admin-entered details; "ask_registration" makes the bot ask on the customer's next message. */
+    public function update(Request $request, TelegramUser $telegramUser)
+    {
+        $request->merge(['phone' => preg_replace('/[\s()\-]/', '', (string) $request->input('phone')) ?: null]);
+
+        $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:60'],
+            'phone' => ['nullable', 'string', 'regex:/^\+?[0-9]{7,15}$/'],
+            'company' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'ask_registration' => ['sometimes', 'boolean'],
+            'locale' => ['nullable', Rule::in(['uz', 'ru', 'en'])],
+        ], ['phone.regex' => 'Enter the phone as digits, e.g. +998901234567.']);
+
+        if (isset($data['phone']) && ! str_starts_with($data['phone'], '+')) {
+            $data['phone'] = '+'.$data['phone'];
+        }
+        $data['ask_registration'] = $request->boolean('ask_registration') && ! $telegramUser->isRegistered();
+
+        $telegramUser->update($data);
+
+        return redirect()->route('admin.telegram-users.show', $telegramUser)->with('success', $data['ask_registration']
+            ? 'Saved. The bot will ask for language, name and phone the next time this customer writes to it.'
+            : 'Saved.');
     }
 }

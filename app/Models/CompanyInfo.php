@@ -131,6 +131,80 @@ class CompanyInfo extends Model
         return $base.(str_contains($base, '?') ? '&' : '?').$utm.($fragment !== null ? '#'.$fragment : '');
     }
 
+    /** Yandex Maps URL parameters kept from a link or embed code (everything else is dropped). */
+    private const YANDEX_MAP_PARAMS = ['ll', 'z', 'pt', 'pl', 'oid', 'ol', 'um', 'mode', 'whatshere', 'text', 'l', 'spn', 'sll', 'sspn', 'source', 'll_type'];
+
+    /** Map languages the Yandex widget supports, per site locale. */
+    private const YANDEX_MAP_LANG = ['uz' => 'uz_UZ', 'ru' => 'ru_RU', 'en' => 'en_US'];
+
+    /**
+     * The map location as Yandex Maps query parameters, from whatever the admin pasted:
+     * a yandex.uz/maps link, the "Share → Embed" iframe code, a Map Constructor script, or
+     * "latitude, longitude". Null when it is not a usable Yandex Maps location.
+     * Short links (yandex.uz/maps/-/…) carry no location and are not accepted.
+     */
+    public static function yandexMapQuery(?string $input): ?string
+    {
+        $input = trim((string) $input);
+        if ($input === '' || strlen($input) > 4000) {
+            return null;
+        }
+
+        // "41.311081, 69.240562" (latitude, longitude)
+        if (preg_match('/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/', $input, $m)
+            && abs((float) $m[1]) <= 90 && abs((float) $m[2]) <= 180) {
+            $point = $m[2].','.$m[1];
+
+            return http_build_query(['ll' => $point, 'z' => '16', 'pt' => $point.',pm2rdm']);
+        }
+
+        // The first URL in the text (an embed code holds it in src="…").
+        if (! preg_match('#https?://[^\s"\'<>]+#i', html_entity_decode($input, ENT_QUOTES | ENT_HTML5), $url)) {
+            return null;
+        }
+        $parts = parse_url($url[0]);
+        $host = strtolower($parts['host'] ?? '');
+        $path = $parts['path'] ?? '/';
+        $yandex = preg_match('/^(www\.)?yandex\.(uz|ru|com|kz|by|com\.tr)$/', $host)
+            && (str_starts_with($path, '/maps') || str_starts_with($path, '/map-widget/'));
+        $constructor = $host === 'api-maps.yandex.ru' && str_starts_with($path, '/services/constructor/');
+        if ((! $yandex && ! $constructor) || str_starts_with($path, '/maps/-/')) {
+            return null;
+        }
+
+        parse_str($parts['query'] ?? '', $query);
+        $query = array_filter(
+            array_intersect_key($query, array_flip(self::YANDEX_MAP_PARAMS)),
+            fn ($v) => is_string($v) ? strlen($v) <= 1000 : is_array($v) && count($v) <= 5 && array_filter($v, 'is_string') === $v,
+        );
+
+        // A map needs a place: coordinates, an organisation, a constructor map or a search.
+        return array_intersect_key($query, array_flip(['ll', 'pt', 'oid', 'um', 'text', 'whatshere'])) ? http_build_query($query) : null;
+    }
+
+    /** True when the pasted value is a Yandex short link (they hold no location). */
+    public static function isYandexShortLink(?string $input): bool
+    {
+        return (bool) preg_match('#https?://(www\.)?yandex\.[a-z.]+/maps/-/#i', (string) $input);
+    }
+
+    /** The Yandex Maps widget to embed on the contact page, in the visitor's language. */
+    public function yandexMapEmbedUrl(?string $locale = null): ?string
+    {
+        $query = self::yandexMapQuery($this->map_embed);
+        $lang = self::YANDEX_MAP_LANG[$locale ?? app()->getLocale()] ?? 'ru_RU';
+
+        return $query === null ? null : 'https://yandex.uz/map-widget/v1/?'.$query.'&lang='.$lang;
+    }
+
+    /** The same place opened in Yandex Maps (route planning, the mobile app…). */
+    public function yandexMapLink(): ?string
+    {
+        $query = self::yandexMapQuery($this->map_embed);
+
+        return $query === null ? null : 'https://yandex.uz/maps/?'.$query;
+    }
+
     /** The shop's host for display, e.g. "mylabel.uz". */
     public function shopHost(): ?string
     {

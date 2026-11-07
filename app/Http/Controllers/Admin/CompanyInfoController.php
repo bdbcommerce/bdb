@@ -35,6 +35,13 @@ class CompanyInfoController extends Controller
                     $fail('Enter the public shop address, like https://mylabel.uz.');
                 }
             }],
+            'map_embed' => ['nullable', 'string', 'max:4000', function ($attribute, $value, $fail) {
+                if (CompanyInfo::isYandexShortLink($value)) {
+                    $fail('Short Yandex links (yandex.uz/maps/-/…) can\'t be shown on the site. Open the link, then copy the full address from the browser bar, or use Share → Embed code.');
+                } elseif (CompanyInfo::yandexMapQuery($value) === null) {
+                    $fail('Paste a Yandex Maps link (yandex.uz/maps/…), the Yandex embed code, or coordinates like 41.311081, 69.240562.');
+                }
+            }],
         ] + $socialRules);
 
         // Store every link as a full https URL, whatever form the admin typed.

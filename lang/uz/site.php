@@ -153,6 +153,7 @@ return [
         'ai_title' => 'Hoziroq javob kerakmi?',
         'ai_text' => 'Belgi SI yordamchisi uskunalar va markirovka haqidagi savollarga kecha-kunduz javob beradi va mutaxassis qoʻngʻirogʻiga buyurtma bera oladi.',
         'map' => 'Xarita',
+        'open_map' => 'Yandex Xaritalarda ochish',
     ],
 
     'news' => [

@@ -132,18 +132,29 @@
             @endforeach
         </div>
 
-        {{-- Google Maps --}}
+        {{-- Yandex Maps --}}
         <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
             <div class="flex items-center gap-2 mb-1">
                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z"/>
                 </svg>
-                <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Google Maps Embed</h2>
+                <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Yandex Maps (contact page)</h2>
             </div>
-            <textarea name="map_embed" rows="3"
+            <label for="map_embed" class="sr-only">Yandex Maps location</label>
+            <textarea id="map_embed" name="map_embed" rows="3"
                       class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
-                      placeholder='<iframe src="https://maps.google.com/..." ...></iframe>'>{{ old('map_embed', $info->map_embed) }}</textarea>
-            <p class="text-xs text-slate-400">Paste the full iframe embed code from Google Maps "Share → Embed a map".</p>
+                      placeholder="https://yandex.uz/maps/?ll=69.240562%2C41.311081&z=16&pt=…">{{ old('map_embed', $info->map_embed) }}</textarea>
+            @error('map_embed')<p class="text-xs text-red-700">{{ $message }}</p>@enderror
+            <p class="text-xs text-slate-400">
+                Any of these works: the address from the browser bar on yandex.uz/maps after selecting the office,
+                the code from Share → Embed (Поделиться → Встроить карту), a Map Constructor code, or coordinates like
+                <code class="bg-slate-100 px-1 rounded">41.311081, 69.240562</code>. Leave empty to hide the map.
+            </p>
+            @if ($info->map_embed && ! \App\Models\CompanyInfo::yandexMapQuery($info->map_embed))
+                <p role="alert" class="text-xs text-red-700">The saved map is not a Yandex Maps location (e.g. an old Google Maps code), so the contact page shows no map. Replace it.</p>
+            @elseif ($preview = $info->yandexMapEmbedUrl('ru'))
+                <iframe src="{{ $preview }}" title="Map preview" loading="lazy" class="block w-full h-56 rounded-lg border border-slate-200"></iframe>
+            @endif
         </div>
 
         {{-- Analytics --}}

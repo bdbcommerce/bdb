@@ -20,13 +20,19 @@ class TelegramUser extends Model
 
     public const STEP_DONE = 'done';
 
-    protected $fillable = ['telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'registered_at'];
+    protected $fillable = [
+        'telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'company', 'notes',
+        'ask_registration', 'source', 'registered_at',
+    ];
+
+    /** Where the customer was first seen. */
+    public const SOURCES = ['bot' => 'Bot', 'business' => 'Premium account'];
 
     protected $attributes = ['step' => self::STEP_LANGUAGE];
 
     protected function casts(): array
     {
-        return ['registered_at' => 'datetime'];
+        return ['registered_at' => 'datetime', 'ask_registration' => 'boolean'];
     }
 
     public function scopeRegistered(Builder $query): void
@@ -41,6 +47,29 @@ class TelegramUser extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(ChatConversation::class, 'external_id', 'telegram_id')->whereIn('channel', ['telegram', 'business']);
+    }
+
+    /** Create or refresh a customer from a Telegram user object (from a bot or Business chat). */
+    public static function fromTelegram(array $from, string $source): ?self
+    {
+        if (! is_scalar($from['id'] ?? null) || (string) $from['id'] === '') {
+            return null;
+        }
+
+        $user = static::firstOrNew(['telegram_id' => (string) $from['id']]);
+        if (! $user->exists) {
+            $user->source = $source;
+        }
+        if (is_string($from['username'] ?? null)) {
+            $user->username = $from['username'];
+        }
+        $profile = trim(implode(' ', array_filter([$from['first_name'] ?? null, $from['last_name'] ?? null], 'is_string')));
+        if ($profile !== '') {
+            $user->profile_name = mb_substr($profile, 0, 255);
+        }
+        $user->save();
+
+        return $user;
     }
 
     /** The registered name, else the Telegram profile name, else @username. */
