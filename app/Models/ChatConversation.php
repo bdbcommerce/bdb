@@ -63,10 +63,11 @@ class ChatConversation extends Model
     /**
      * Record a message as it arrives (Telegram bot): {content} or {type, file_id, caption?}, plus
      * message_id and time. Text starts as "aside"; appendReply() makes it a question once answered.
+     * $aside also marks non-text (e.g. the phone shared during registration) as a bot step, not a file.
      */
-    public function appendIncoming(array $entry): void
+    public function appendIncoming(array $entry, bool $aside = false): void
     {
-        $this->messages = [...$this->freshMessages(), ['role' => 'user'] + $entry + (isset($entry['content']) ? ['aside' => true] : [])];
+        $this->messages = [...$this->freshMessages(), ['role' => 'user'] + $entry + (isset($entry['content']) || $aside ? ['aside' => true] : [])];
         $this->message_count = count($this->messages);
         $this->save();
     }
@@ -76,9 +77,19 @@ class ChatConversation extends Model
     {
         $messages = $this->freshMessages();
         $found = false;
-        for ($i = count($messages) - 1; $messageId !== null && $i >= 0; $i--) {
-            if (($messages[$i]['message_id'] ?? null) === $messageId && ($messages[$i]['role'] ?? null) === 'user') {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            $m = $messages[$i];
+            // Telegram always sends message_id; without one, the latest recorded aside text is ours.
+            $ours = $messageId !== null
+                ? ($m['message_id'] ?? null) === $messageId
+                : ! empty($m['aside']) && isset($m['content']) && ($m['message_id'] ?? null) === null;
+            if ($ours && ($m['role'] ?? null) === 'user') {
                 unset($messages[$i]['aside']);
+                // The dialogue keeps the question the AI saw (button emoji removed); the raw text stays alongside.
+                if ($m['content'] !== $question) {
+                    $messages[$i]['raw'] = $m['content'];
+                    $messages[$i]['content'] = $question;
+                }
                 $found = true;
                 break;
             }

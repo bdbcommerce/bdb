@@ -47,9 +47,10 @@
                 @php
                     $userMessages = collect($conversation->messages)->where('role', 'user');
                     $recorded = in_array($conversation->channel, ['business', 'group'], true);
-                    $first = $recorded ? collect($conversation->messages)->last() : $userMessages->first();
+                    $first = $recorded ? collect($conversation->messages)->last()
+                        : ($userMessages->first(fn ($m) => empty($m['aside'])) ?? $userMessages->first());
                     $questions = $userMessages->whereNotNull('content')->filter(fn ($m) => empty($m['aside']))->count();
-                    $media = $userMessages->whereNull('content')->count();
+                    $media = $userMessages->whereNull('content')->filter(fn ($m) => empty($m['aside']))->count();
                 @endphp
                 <a href="{{ route('admin.chat-conversations.show', $conversation) }}" class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50">
                     <div class="min-w-0 flex-1">

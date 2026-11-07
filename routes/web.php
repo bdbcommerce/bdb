@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\IndustryController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\TelegramSettingsController;
+use App\Http\Controllers\Admin\TelegramUserController;
 use App\Http\Controllers\Admin\UploadController;
 use App\Http\Controllers\Site\AboutController;
 use App\Http\Controllers\Site\BrandsController;
@@ -102,6 +103,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('chat-conversations/{chatConversation}/reply', [ChatConversationController::class, 'reply'])->middleware('throttle:30,1')->name('chat-conversations.reply');
         Route::post('chat-conversations/{chatConversation}/suggest', [ChatConversationController::class, 'suggest'])->middleware('throttle:20,1')->name('chat-conversations.suggest');
 
+        Route::resource('telegram-users', TelegramUserController::class)->only(['index', 'show']);
         Route::get('telegram', [TelegramSettingsController::class, 'edit'])->name('telegram.edit');
         Route::get('telegram/media/{fileId}', [ChatConversationController::class, 'media'])->where('fileId', '[A-Za-z0-9_-]{10,255}')->name('telegram.media');
         Route::post('telegram/connect', [TelegramSettingsController::class, 'connect'])->name('telegram.connect');

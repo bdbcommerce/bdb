@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A Telegram bot customer and their registration progress:
@@ -31,6 +32,15 @@ class TelegramUser extends Model
     public function scopeRegistered(Builder $query): void
     {
         $query->whereNotNull('registered_at');
+    }
+
+    /**
+     * Chats with this customer: with the bot, and with the connected Premium account
+     * (a private chat's ID is the user's Telegram ID). Groups are not included.
+     */
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(ChatConversation::class, 'external_id', 'telegram_id')->whereIn('channel', ['telegram', 'business']);
     }
 
     public function isRegistered(): bool

@@ -82,7 +82,7 @@ class TelegramBot
 
         // Every message is recorded: text as text, anything else by type and Telegram file ID.
         $messageId = is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null;
-        $this->conversation($user)->appendIncoming(TelegramRecorder::describe($message) + [
+        $this->conversation($user)->appendIncoming(aside: $user->step !== TelegramUser::STEP_DONE, entry: TelegramRecorder::describe($message) + [
             'message_id' => $messageId,
             'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
         ]);
