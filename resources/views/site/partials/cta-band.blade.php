@@ -26,7 +26,8 @@
                     </div>
                 </div>
 
-                @if($companyInfo->phone || $companyInfo->email || $companyInfo->getTranslation('address', $__locale, false))
+                @php $tgBot = $companyInfo->telegramBot(); @endphp
+                @if($companyInfo->phone || $companyInfo->email || $tgBot || $companyInfo->getTranslation('address', $__locale, false))
                     <ul class="lg:col-span-2 space-y-3 text-sm">
                         @if($companyInfo->phone)
                             <li>
@@ -47,6 +48,18 @@
                                         <span class="block text-xs text-gray-500">{{ __('Email') }}</span>
                                         <span class="block font-medium text-gray-900 group-hover:text-brand-600 transition-colors truncate">{{ $companyInfo->email }}</span>
                                     </span>
+                                </a>
+                            </li>
+                        @endif
+                        @if($tgBot)
+                            <li>
+                                <a href="{{ $tgBot['url'] }}" target="_blank" rel="noopener" class="contact-row group">
+                                    <span class="icon-tile">@include('site.partials.icon', ['name' => 'paper-airplane', 'class' => 'size-5'])</span>
+                                    <span class="min-w-0">
+                                        <span class="block text-xs text-gray-500">{{ __('site.contact.telegram_bot') }}</span>
+                                        <span class="block font-medium text-gray-900 group-hover:text-brand-600 transition-colors truncate">{{ $tgBot['handle'] }}</span>
+                                    </span>
+                                    <span class="sr-only">{{ __('site.shop.new_tab') }}</span>
                                 </a>
                             </li>
                         @endif

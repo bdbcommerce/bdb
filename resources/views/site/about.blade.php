@@ -57,7 +57,8 @@
             <aside class="space-y-6 lg:sticky lg:top-24 self-start" aria-labelledby="about-contacts">
                 <div class="rounded-2xl border border-gray-200 bg-gray-50 p-6">
                     <h2 id="about-contacts" class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 mb-5">{{ __('Contacts') }}</h2>
-                    @if($companyInfo->phone || $companyInfo->email || $companyInfo->getTranslation('address', $locale, false))
+                    @php $tgBot = $companyInfo->telegramBot(); @endphp
+                    @if($companyInfo->phone || $companyInfo->email || $tgBot || $companyInfo->getTranslation('address', $locale, false))
                         <ul class="space-y-4 text-sm">
                             @if($companyInfo->phone)
                                 <li class="flex items-start gap-3">
@@ -69,6 +70,15 @@
                                 <li class="flex items-start gap-3">
                                     @include('site.partials.icon', ['name' => 'envelope', 'class' => 'size-5 shrink-0 text-gray-400'])
                                     <a href="mailto:{{ $companyInfo->email }}" class="text-gray-900 font-medium hover:text-brand-600 transition-colors break-all">{{ $companyInfo->email }}</a>
+                                </li>
+                            @endif
+                            @if($tgBot)
+                                <li class="flex items-start gap-3">
+                                    @include('site.partials.icon', ['name' => 'paper-airplane', 'class' => 'size-5 shrink-0 text-gray-400'])
+                                    <a href="{{ $tgBot['url'] }}" target="_blank" rel="noopener" class="text-gray-900 font-medium hover:text-brand-600 transition-colors break-all">
+                                        {{ $tgBot['handle'] }} <span class="text-gray-500 font-normal">· {{ __('site.contact.telegram_bot') }}</span>
+                                        <span class="sr-only">{{ __('site.shop.new_tab') }}</span>
+                                    </a>
                                 </li>
                             @endif
                             @if($companyInfo->getTranslation('address', $locale, false))

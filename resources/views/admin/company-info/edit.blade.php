@@ -104,6 +104,13 @@
                 </div>
             @endforeach
             <div>
+                <label for="telegram_bot" class="block text-sm font-medium text-slate-700 mb-1">Telegram bot (contact)</label>
+                <input type="text" id="telegram_bot" name="telegram_bot" value="{{ old('telegram_bot', $info->telegram_bot) }}" placeholder="@bdb_uz_bot"
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+                @error('telegram_bot')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                <p class="text-xs text-slate-400 mt-1">The bot's @username or t.me link. Shown with the phone and email everywhere contact details appear (header menu, footer, Contact and About pages, contact blocks).</p>
+            </div>
+            <div>
                 <label for="shop_url" class="block text-sm font-medium text-slate-700 mb-1">Online shop (catalog link)</label>
                 <input type="url" id="shop_url" name="shop_url" value="{{ old('shop_url', $info->shop_url) }}" placeholder="https://mylabel.uz"
                        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">

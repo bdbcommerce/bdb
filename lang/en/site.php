@@ -104,6 +104,8 @@ return [
         'customers_count' => 'customer in this industry|customers in this industry',
         'no_customers' => 'Customer stories for this industry will be published soon.',
         'see_customers' => 'See customers',
+        'customers_here' => 'Our customers in this industry',
+        'customers_note' => 'Companies in this industry already use BDB identification and marking solutions.',
     ],
 
     'customers' => [
@@ -154,6 +156,7 @@ return [
         'ai_text' => 'Our AI assistant Belgi answers questions about equipment and marking 24/7 and can request a callback from a specialist.',
         'map' => 'Map',
         'open_map' => 'Open in Yandex Maps',
+        'telegram_bot' => 'Telegram bot',
     ],
 
     'news' => [

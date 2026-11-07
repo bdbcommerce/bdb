@@ -13,7 +13,7 @@ class Industry extends Model
 
     public array $translatable = ['name', 'description'];
 
-    protected $fillable = ['name', 'description', 'icon', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'description', 'icon', 'extra_customers', 'sort_order', 'is_active'];
 
     protected function casts(): array
     {
@@ -28,5 +28,14 @@ class Industry extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true)->orderBy('sort_order');
+    }
+
+    /**
+     * Customers shown for this industry on the home page: active listed customers (needs
+     * withCount('customers') with the active scope) plus the admin's extra, unlisted customers.
+     */
+    public function customerTotal(): int
+    {
+        return (int) ($this->customers_count ?? 0) + (int) $this->extra_customers;
     }
 }

@@ -104,6 +104,8 @@ return [
         'customers_count' => 'ta mijoz ushbu sohada|ta mijoz ushbu sohada',
         'no_customers' => 'Ushbu soha mijozlari haqidagi maʼlumotlar tez orada eʼlon qilinadi.',
         'see_customers' => 'Mijozlarni koʻrish',
+        'customers_here' => 'Ushbu sohadagi mijozlarimiz',
+        'customers_note' => 'Ushbu soha kompaniyalari allaqachon BDB identifikatsiya va markirovkalash yechimlaridan foydalanmoqda.',
     ],
 
     'customers' => [
@@ -154,6 +156,7 @@ return [
         'ai_text' => 'Belgi SI yordamchisi uskunalar va markirovka haqidagi savollarga kecha-kunduz javob beradi va mutaxassis qoʻngʻirogʻiga buyurtma bera oladi.',
         'map' => 'Xarita',
         'open_map' => 'Yandex Xaritalarda ochish',
+        'telegram_bot' => 'Telegram bot',
     ],
 
     'news' => [

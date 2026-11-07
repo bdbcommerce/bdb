@@ -17,7 +17,7 @@ class CompanyInfo extends Model
     protected $fillable = [
         'address', 'slogan', 'about',
         'phone', 'email',
-        'telegram', 'instagram', 'facebook', 'youtube', 'linkedin',
+        'telegram', 'telegram_bot', 'instagram', 'facebook', 'youtube', 'linkedin',
         'map_embed', 'google_analytics', 'yandex_metrika',
         'shop_url',
     ];
@@ -246,6 +246,29 @@ class CompanyInfo extends Model
         $query = self::yandexMapQuery($this->map_embed);
 
         return $query === null ? null : 'https://yandex.uz/maps/?'.$query;
+    }
+
+    /**
+     * A bot username from "@name", "name" or a t.me link; null when it is not a valid one
+     * (Telegram bot usernames are 5–32 letters, digits or _ and end with "bot").
+     */
+    public static function botUsername(?string $input): ?string
+    {
+        $value = trim((string) $input);
+        if (preg_match('#^(?:https?://)?(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)/?(?:\?.*)?$#i', $value, $m)) {
+            $value = $m[1];
+        }
+        $value = ltrim($value, '@');
+
+        return preg_match('/^[A-Za-z][A-Za-z0-9_]{1,28}bot$/i', $value) ? $value : null;
+    }
+
+    /** The Telegram bot contact: ['handle' => '@name_bot', 'url' => 'https://t.me/name_bot'], or null. */
+    public function telegramBot(): ?array
+    {
+        $name = self::botUsername($this->telegram_bot) ?? self::botUsername(config('services.telegram.bot_username'));
+
+        return $name ? ['handle' => '@'.$name, 'url' => 'https://t.me/'.$name] : null;
     }
 
     /** The shop's host for display, e.g. "mylabel.uz". */

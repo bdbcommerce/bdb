@@ -297,55 +297,104 @@
                 'text'  => __('site.industries.empty_text'),
             ])
         @else
-            {{-- One card per industry: what it is and how many customers BDB serves there (no names). --}}
-            <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
-                @foreach($industries as $industry)
-                    @php
-                        $indCustomers = (int) $industry->customers_count;
-                        $indDesc = $industry->getTranslation('description', $locale, false);
-                    @endphp
-                    <li>
-                        @if($indCustomers)
-                            <a href="{{ route('site.customers', $locale) }}#industry-{{ $industry->id }}"
-                               aria-labelledby="ind-name-{{ $industry->id }}" aria-describedby="ind-count-{{ $industry->id }}"
-                               class="group flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-colors hover:border-brand-200 hover:bg-brand-50/30
-                                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-                        @else
-                            <div class="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6">
-                        @endif
-                            <div class="flex items-start justify-between gap-4">
-                                <span class="icon-tile size-11 text-brand-600">
+            {{-- Industry tabs + a panel with how many customers BDB serves there (counts only, never names). --}}
+            @php $indCount = $industries->count(); @endphp
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8"
+                 x-data="{
+                     active: 0,
+                     count: {{ $indCount }},
+                     go(i) { this.active = (i + this.count) % this.count; this.$nextTick(() => this.$refs['tab' + this.active]?.focus()); }
+                 }">
+                {{-- Tabs: horizontal scrolling chips on mobile, vertical list on lg --}}
+                <div class="min-w-0 lg:col-span-4">
+                    <div role="tablist" aria-label="{{ __('Industries') }}"
+                         class="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 pb-1 sm:mx-0 sm:px-0 lg:flex-col lg:overflow-visible lg:pb-0">
+                        @foreach($industries as $i => $industry)
+                            @php $tabCustomers = $industry->customerTotal(); @endphp
+                            <button type="button" role="tab" id="ind-tab-{{ $industry->id }}"
+                                    aria-controls="ind-panel-{{ $industry->id }}"
+                                    x-ref="tab{{ $i }}"
+                                    aria-selected="{{ $i === 0 ? 'true' : 'false' }}" tabindex="{{ $i === 0 ? 0 : -1 }}"
+                                    :aria-selected="(active === {{ $i }}).toString()"
+                                    :tabindex="active === {{ $i }} ? 0 : -1"
+                                    @click="active = {{ $i }}"
+                                    @keydown.arrow-right.prevent="go({{ $i }} + 1)" @keydown.arrow-down.prevent="go({{ $i }} + 1)"
+                                    @keydown.arrow-left.prevent="go({{ $i }} - 1)" @keydown.arrow-up.prevent="go({{ $i }} - 1)"
+                                    @keydown.home.prevent="go(0)" @keydown.end.prevent="go(count - 1)"
+                                    class="group flex shrink-0 items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors lg:w-full
+                                           hover:border-gray-400 hover:text-gray-900
+                                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600
+                                           aria-selected:border-brand-600 aria-selected:bg-brand-50/60 aria-selected:text-gray-900">
+                                <span class="text-gray-400 transition-colors group-aria-selected:text-brand-600">
                                     @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-5'])
                                 </span>
-                                @if($indCustomers)
-                                    <span id="ind-count-{{ $industry->id }}" class="text-right leading-none">
-                                        <span class="block text-3xl font-semibold tracking-tight text-gray-900 tabular-nums">{{ $indCustomers }}</span>
-                                        <span class="mt-1 block text-xs text-gray-500">{{ trans_choice('site.industries.customers_count', $indCustomers) }}</span>
+                                <span class="whitespace-nowrap lg:min-w-0 lg:flex-1 lg:whitespace-normal lg:break-words">{{ $industry->getTranslation('name', $locale) }}</span>
+                                @if($tabCustomers)
+                                    <span class="inline-flex min-w-6 shrink-0 justify-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 tabular-nums
+                                                 group-aria-selected:bg-brand-600 group-aria-selected:text-white">
+                                        {{ $tabCustomers }}<span class="sr-only"> {{ trans_choice('site.industries.customers_count', $tabCustomers) }}</span>
                                     </span>
                                 @endif
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                {{-- Panels --}}
+                <div class="min-w-0 lg:col-span-8">
+                    @foreach($industries as $i => $industry)
+                        @php
+                            $indCustomers = $industry->customerTotal();
+                            $indDesc = $industry->getTranslation('description', $locale, false);
+                        @endphp
+                        <div role="tabpanel" id="ind-panel-{{ $industry->id }}" aria-labelledby="ind-tab-{{ $industry->id }}" tabindex="0"
+                             x-show="active === {{ $i }}" @if($i > 0) style="display: none;" @endif
+                             class="rounded-2xl border border-gray-200 bg-white p-6 md:p-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+                            <div class="flex items-start gap-4">
+                                <span class="icon-tile size-12 text-brand-600">
+                                    @include('site.partials.icon', ['name' => $industry->icon, 'class' => 'size-6'])
+                                </span>
+                                <div class="min-w-0">
+                                    <h3 class="text-xl font-semibold text-gray-900 break-words">{{ $industry->getTranslation('name', $locale) }}</h3>
+                                    @if($indDesc)
+                                        <p class="mt-2 text-gray-600 leading-relaxed break-words">{{ $indDesc }}</p>
+                                    @endif
+                                </div>
                             </div>
-                            <h3 id="ind-name-{{ $industry->id }}" class="mt-5 text-lg font-semibold text-gray-900 break-words">{{ $industry->getTranslation('name', $locale) }}</h3>
-                            @if($indDesc)
-                                <p class="mt-2 text-sm leading-relaxed text-gray-600 line-clamp-3 break-words">{{ $indDesc }}</p>
-                            @endif
-                            <p class="mt-auto pt-5 text-sm">
+
+                            {{-- Customers in this industry: the number only --}}
+                            <div class="mt-8 border-t border-gray-100 pt-6">
+                                <p class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">{{ __('site.industries.customers_here') }}</p>
                                 @if($indCustomers)
-                                    <span class="link-arrow">
-                                        {{ __('site.industries.see_customers') }}
-                                        @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4 transition-transform group-hover:translate-x-0.5'])
-                                    </span>
+                                    <div class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-5 sm:p-6">
+                                        <span class="absolute inset-y-0 left-0 w-1 bg-brand-600" aria-hidden="true"></span>
+                                        <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                                            <div class="flex min-w-0 items-center gap-4">
+                                                <span class="hidden size-12 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 sm:inline-flex" aria-hidden="true">
+                                                    @include('site.partials.icon', ['name' => 'users', 'class' => 'size-6'])
+                                                </span>
+                                                <div class="min-w-0">
+                                                    <p class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                                        <span class="text-4xl font-semibold leading-none tracking-tight text-gray-900 tabular-nums sm:text-5xl">{{ $indCustomers }}</span>
+                                                        <span class="text-sm font-medium text-gray-700">{{ trans_choice('site.industries.customers_count', $indCustomers) }}</span>
+                                                    </p>
+                                                    <p class="mt-2 text-sm text-gray-500">{{ __('site.industries.customers_note') }}</p>
+                                                </div>
+                                            </div>
+                                            <a href="{{ route('site.customers', $locale) }}#industry-{{ $industry->id }}" class="btn-secondary shrink-0 self-start sm:self-auto">
+                                                {{ __('site.industries.see_customers') }}
+                                                @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4'])
+                                            </a>
+                                        </div>
+                                    </div>
                                 @else
-                                    <span class="text-gray-500">{{ __('site.industries.no_customers') }}</span>
+                                    <p class="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-5 py-4 text-sm text-gray-500">{{ __('site.industries.no_customers') }}</p>
                                 @endif
-                            </p>
-                        @if($indCustomers)
-                            </a>
-                        @else
                             </div>
-                        @endif
-                    </li>
-                @endforeach
-            </ul>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
         @endif
     </div>
 </section>

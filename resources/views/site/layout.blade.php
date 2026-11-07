@@ -75,6 +75,9 @@
         if ($_slogan) $_ld['slogan'] = $_slogan;
         if ($companyInfo->phone) $_ld['telephone'] = $companyInfo->phone;
         if ($companyInfo->email) $_ld['email'] = $companyInfo->email;
+        if ($_bot = $companyInfo->telegramBot()) {
+            $_ld['contactPoint'] = [['@type' => 'ContactPoint', 'contactType' => 'customer support', 'url' => $_bot['url'], 'availableLanguage' => ['uz', 'ru', 'en']]];
+        }
         $_addr = $companyInfo->getTranslation('address', $locale, false);
         if ($_addr) $_ld['address'] = ['@type' => 'PostalAddress', 'streetAddress' => $_addr, 'addressCountry' => 'UZ'];
         if ($_socials) $_ld['sameAs'] = array_values($_socials);
@@ -210,6 +213,15 @@
                     </a>
                 @endforeach
             </nav>
+            @if($_mBot = $companyInfo->telegramBot())
+                {{-- Telegram bot contact: always next to the contact details --}}
+                <a href="{{ $_mBot['url'] }}" target="_blank" rel="noopener"
+                   class="mt-1 flex items-center gap-2 px-3 py-2.5 rounded-md text-base font-medium text-(color:--site-nav-text) hover:text-(color:--site-nav-hover) hover:bg-(color:--site-nav-hover-bg)">
+                    @include('site.partials.icon', ['name' => 'paper-airplane', 'class' => 'size-5 opacity-70'])
+                    {{ __('site.contact.telegram_bot') }} <span class="text-sm font-normal opacity-70">{{ $_mBot['handle'] }}</span>
+                    <span class="sr-only">{{ __('site.shop.new_tab') }}</span>
+                </a>
+            @endif
             <div class="mt-3 pt-3 border-t border-(color:--site-header-border) flex items-center justify-between gap-3 px-3">
                 <div class="flex gap-1.5" role="group" aria-label="{{ __('site.a11y.language') }}">
                     @foreach($_languages as $lc => $langName)
@@ -309,6 +321,12 @@
                         <li class="flex gap-2.5">
                             @include('site.partials.icon', ['name' => 'envelope', 'class' => 'size-4 mt-0.5 shrink-0 opacity-70'])
                             <a href="mailto:{{ $companyInfo->email }}" class="{{ $_fLink }} break-all">{{ $companyInfo->email }}</a>
+                        </li>
+                    @endif
+                    @if($_tgBot = $companyInfo->telegramBot())
+                        <li class="flex gap-2.5">
+                            @include('site.partials.icon', ['name' => 'paper-airplane', 'class' => 'size-4 mt-0.5 shrink-0 opacity-70'])
+                            <a href="{{ $_tgBot['url'] }}" target="_blank" rel="noopener" class="{{ $_fLink }} break-all">{{ $_tgBot['handle'] }}<span class="sr-only"> — {{ __('site.contact.telegram_bot') }}, {{ __('site.shop.new_tab') }}</span></a>
                         </li>
                     @endif
                     @if($_addr)

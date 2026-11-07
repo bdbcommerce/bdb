@@ -149,6 +149,7 @@ class SeoFiles
                 'Address' => $t($info, 'address'),
                 'Phone' => $info->phone,
                 'Email' => $info->email,
+                'Telegram bot' => $info->telegramBot()['url'] ?? null,
                 'Opening hours' => $settings->opening_hours,
                 'Online shop' => $info->shopUrl('llms'),
                 'Map' => $info->yandexMapLink(),

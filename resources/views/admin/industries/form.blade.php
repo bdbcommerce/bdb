@@ -48,6 +48,18 @@
                        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
                 <p class="text-xs text-slate-400 mt-1">Enter a Heroicon name slug, e.g. <code class="bg-slate-100 px-1 rounded">building-office</code>, <code class="bg-slate-100 px-1 rounded">truck</code>, <code class="bg-slate-100 px-1 rounded">chart-bar</code>. Browse all icons at <span class="font-mono">heroicons.com</span>.</p>
             </div>
+            <div>
+                <label for="extra_customers" class="block text-sm font-medium text-slate-700 mb-1">Extra customers (not listed)</label>
+                <input id="extra_customers" type="number" name="extra_customers" min="0" max="1000000"
+                       value="{{ old('extra_customers', $industry->extra_customers ?? 0) }}"
+                       class="w-40 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+                @error('extra_customers')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                @php $listed = $industry->exists ? $industry->customers()->active()->count() : 0; @endphp
+                <p class="text-xs text-slate-400 mt-1">
+                    Customers you serve in this industry but don't list by name. The home page shows
+                    listed customers ({{ $listed }}) + this number{{ $industry->exists ? ' = '.($listed + (int) old('extra_customers', $industry->extra_customers ?? 0)) : '' }}.
+                </p>
+            </div>
             <div class="flex gap-4 items-end">
                 <div class="w-24">
                     <label class="block text-sm font-medium text-slate-700 mb-1">Sort order</label>

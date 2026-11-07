@@ -26,7 +26,8 @@
                 {{-- Contact details --}}
                 <div>
                     <h2 class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 mb-5">{{ __('Contacts') }}</h2>
-                    @if($companyInfo->phone || $companyInfo->email || $address)
+                    @php $tgBot = $companyInfo->telegramBot(); @endphp
+                    @if($companyInfo->phone || $companyInfo->email || $address || $tgBot)
                         <ul class="space-y-3">
                             @if($companyInfo->phone)
                                 <li>
@@ -49,6 +50,19 @@
                                             <span class="block text-xs text-gray-500">{{ __('Email') }}</span>
                                             <span class="block font-semibold text-gray-900 group-hover:text-brand-600 transition-colors break-all">{{ $companyInfo->email }}</span>
                                         </span>
+                                    </a>
+                                </li>
+                            @endif
+                            @if($tgBot)
+                                <li>
+                                    <a href="{{ $tgBot['url'] }}" target="_blank" rel="noopener"
+                                       class="group flex items-center gap-4 rounded-xl border border-gray-200 p-4 hover:border-brand-200 transition-colors">
+                                        <span class="icon-tile">@include('site.partials.icon', ['name' => 'paper-airplane', 'class' => 'size-5'])</span>
+                                        <span class="min-w-0">
+                                            <span class="block text-xs text-gray-500">{{ __('site.contact.telegram_bot') }}</span>
+                                            <span class="block font-semibold text-gray-900 group-hover:text-brand-600 transition-colors break-all">{{ $tgBot['handle'] }}</span>
+                                        </span>
+                                        <span class="sr-only">{{ __('site.shop.new_tab') }}</span>
                                     </a>
                                 </li>
                             @endif

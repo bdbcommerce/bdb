@@ -41,7 +41,8 @@ class HomeController extends Controller
         $founded = (int) $info->getAttribute('founded_year');
         $years = $founded > 1900 && $founded <= (int) date('Y') ? (int) date('Y') - $founded : 0;
         $projects = (int) $info->getAttribute('projects_count');
-        $clients = Customer::active()->count();
+        // Listed customers plus the unlisted ones admins count per industry.
+        $clients = Customer::active()->reorder()->count() + (int) Industry::active()->reorder()->sum('extra_customers'); // reorder(): no ORDER BY in aggregates (PostgreSQL)
 
         return array_values(array_filter([
             ['value' => $years,         'label' => 'years'],

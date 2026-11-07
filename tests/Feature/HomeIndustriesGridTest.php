@@ -8,8 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Home page "Industries & customers" block: a grid of industry cards with a customer count,
- * linking to /{locale}/customers#industry-{id} only when the industry has active customers.
+ * Home page "Industries & customers" block: industry tabs with a panel per industry showing a
+ * customer count (never names), linking to /{locale}/customers#industry-{id} only when it has customers.
  */
 class HomeIndustriesGridTest extends TestCase
 {
@@ -62,7 +62,7 @@ class HomeIndustriesGridTest extends TestCase
         }
     }
 
-    public function test_cards_with_zero_one_and_many_customers(): void
+    public function test_tabs_with_zero_one_and_many_customers(): void
     {
         $none = $this->industry('Logistics', 'Warehouses');
         $one = $this->industry('Retail', 'Shops');
@@ -80,9 +80,19 @@ class HomeIndustriesGridTest extends TestCase
             $this->assertStringNotContainsString('Client ', $section);
             $this->assertStringNotContainsString('Hidden ', $section);
 
-            // Three cards, one heading each.
-            $this->assertSame(3, substr_count($section, '<li>'));
+            // Three tabs and three panels, one heading each; only the first panel is visible initially.
+            $this->assertStringContainsString('role="tablist"', $section);
+            $this->assertSame(3, substr_count($section, 'role="tab"'));
+            $this->assertSame(3, substr_count($section, 'role="tabpanel"'));
             $this->assertSame(3, substr_count($section, '<h3'));
+            $this->assertSame(2, substr_count($section, 'style="display: none;"'));
+            foreach ([$none, $one, $many] as $ind) {
+                $this->assertStringContainsString("aria-controls=\"ind-panel-{$ind->id}\"", $section);
+                $this->assertStringContainsString("aria-labelledby=\"ind-tab-{$ind->id}\"", $section);
+            }
+            $this->assertSame(1, substr_count($section, 'aria-selected="true"'));
+            $this->assertStringContainsString('@keydown.home.prevent', $section);
+            $this->assertStringContainsString('@keydown.end.prevent', $section);
             foreach (['Logistics', 'Retail', 'Pharma'] as $name) {
                 $this->assertStringContainsString("{$name} {$locale}", $section);
             }
@@ -102,18 +112,15 @@ class HomeIndustriesGridTest extends TestCase
             $this->assertStringContainsString(e(__('site.industries.no_customers', [], $locale)), $section);
             $this->assertSame(2, substr_count($section, e(__('site.industries.see_customers', [], $locale))));
 
-            // Balanced card wrappers from the @if/@else open/close pattern.
+            // Balanced markup.
             $this->assertSame(substr_count($section, '<div'), substr_count($section, '</div>'), "unbalanced divs in {$locale}");
             $this->assertSame(preg_match_all('/<p[\s>]/', $section), substr_count($section, '</p>'));
             $this->assertSame(substr_count($section, '<span'), substr_count($section, '</span>'));
 
-            // No leftover tab widget.
-            $this->assertStringNotContainsString('role="tab', $section);
-            $this->assertStringNotContainsString('x-data', $section);
-            $this->assertStringNotContainsString('x-show', $section);
-            $this->assertStringNotContainsString('ind-panel-', $section);
+            // No customer logos.
+            $this->assertStringNotContainsString('<img', $section);
 
-            // Nothing is nested inside the card links (no <a> in <a>).
+            // No nested links.
             preg_match_all('#<a\b[^>]*>(.*?)</a>#s', $section, $links);
             foreach ($links[1] as $inner) {
                 $this->assertStringNotContainsString('<a ', $inner);
@@ -139,10 +146,26 @@ class HomeIndustriesGridTest extends TestCase
 
         foreach (self::LOCALES as $locale) {
             $section = $this->section($this->get("/{$locale}")->assertOk()->getContent());
-            $this->assertSame(1, substr_count($section, '<li>'));
-            $this->assertStringContainsString('line-clamp-3', $section);
+            $this->assertSame(1, substr_count($section, 'role="tab"'));
+            $this->assertStringContainsString('break-words', $section);
+            $this->assertStringContainsString(e($long), $section);
             $this->assertStringNotContainsString('<a ', $section);
             $this->assertStringContainsString(e(__('site.industries.no_customers', [], $locale)), $section);
+        }
+    }
+
+    public function test_count_includes_unlisted_customers(): void
+    {
+        $industry = $this->industry('Retail');
+        $industry->update(['extra_customers' => 4]);
+        $this->customers($industry, 1);
+
+        foreach (self::LOCALES as $locale) {
+            $section = $this->section($this->get("/{$locale}")->assertOk()->getContent());
+            $this->assertMatchesRegularExpression('/>\s*5\s*</', $section);
+            $this->assertStringContainsString(e(trans_choice('site.industries.customers_count', 5, [], $locale)), $section);
+            $this->assertStringContainsString(route('site.customers', $locale)."#industry-{$industry->id}\"", $section);
+            $this->assertStringNotContainsString('Client ', $section);
         }
     }
 

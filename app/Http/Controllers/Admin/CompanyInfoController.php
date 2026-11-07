@@ -30,6 +30,11 @@ class CompanyInfoController extends Controller
         $request->validate([
             'phone' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:100',
+            'telegram_bot' => ['nullable', 'string', 'max:100', function ($attribute, $value, $fail) {
+                if (CompanyInfo::botUsername($value) === null) {
+                    $fail('Enter the bot username like @bdb_uz_bot (it must end with “bot”) or its t.me link.');
+                }
+            }],
             'shop_url' => ['nullable', 'url:http,https', 'max:255', function ($attribute, $value, $fail) {
                 if (! CompanyInfo::isValidShopUrl($value)) {
                     $fail('Enter the public shop address, like https://mylabel.uz.');
@@ -70,6 +75,7 @@ class CompanyInfoController extends Controller
             'phone' => $request->input('phone'),
             'email' => $request->input('email'),
             'shop_url' => $request->input('shop_url'),
+            'telegram_bot' => CompanyInfo::botUsername($request->input('telegram_bot')),
             ...$socials,
             'map_embed' => $request->input('map_embed'),
             'google_analytics' => $request->input('google_analytics'),

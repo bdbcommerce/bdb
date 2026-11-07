@@ -10,7 +10,7 @@ class IndustryController extends Controller
 {
     public function index()
     {
-        $industries = Industry::orderBy('sort_order')->get();
+        $industries = Industry::withCount(['customers' => fn ($q) => $q->active()])->orderBy('sort_order')->get();
 
         return view('admin.industries.index', compact('industries'));
     }
@@ -26,6 +26,7 @@ class IndustryController extends Controller
             'name_uz' => 'required|string|max:200',
             'name_ru' => 'required|string|max:200',
             'name_en' => 'required|string|max:200',
+            'extra_customers' => 'nullable|integer|min:0|max:1000000',
         ]);
 
         Industry::create($this->prepareData($request));
@@ -44,6 +45,7 @@ class IndustryController extends Controller
             'name_uz' => 'required|string|max:200',
             'name_ru' => 'required|string|max:200',
             'name_en' => 'required|string|max:200',
+            'extra_customers' => 'nullable|integer|min:0|max:1000000',
         ]);
 
         $industry->update($this->prepareData($request));
@@ -64,6 +66,7 @@ class IndustryController extends Controller
             'name' => ['uz' => $request->name_uz, 'ru' => $request->name_ru, 'en' => $request->name_en],
             'description' => ['uz' => $request->description_uz, 'ru' => $request->description_ru, 'en' => $request->description_en],
             'icon' => $request->input('icon'),
+            'extra_customers' => $request->integer('extra_customers', 0),
             'sort_order' => $request->integer('sort_order', 0),
             'is_active' => $request->boolean('is_active'),
         ];

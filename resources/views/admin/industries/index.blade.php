@@ -26,6 +26,7 @@
                 <tr>
                     <th class="text-left px-4 py-3 font-medium text-slate-600">Name</th>
                     <th class="text-left px-4 py-3 font-medium text-slate-600">Icon</th>
+                    <th class="text-left px-4 py-3 font-medium text-slate-600">Customers on home</th>
                     <th class="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                     <th class="text-left px-4 py-3 font-medium text-slate-600">Order</th>
                     <th class="px-4 py-3 w-20"></th>
@@ -36,6 +37,7 @@
                 <tr class="hover:bg-slate-50">
                     <td class="px-4 py-3 font-medium text-slate-900">{{ $industry->getTranslation('name', 'en') }}</td>
                     <td class="px-4 py-3 text-slate-500 font-mono text-xs">{{ $industry->icon ?: '—' }}</td>
+                    <td class="px-4 py-3 text-slate-700 tabular-nums">{{ $industry->customerTotal() }}<span class="text-xs text-slate-400"> ({{ $industry->customers_count }} listed + {{ (int) $industry->extra_customers }})</span></td>
                     <td class="px-4 py-3">
                         <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full {{ $industry->is_active ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500' }}">
                             {{ $industry->is_active ? 'Active' : 'Inactive' }}

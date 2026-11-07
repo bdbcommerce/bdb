@@ -173,6 +173,7 @@ class McpServer
             'address' => $this->tr($info, 'address', $locale),
             'phone' => $info->phone,
             'email' => $info->email,
+            'telegram_bot' => $info->telegramBot()['url'] ?? null,
             'opening_hours' => $seo->opening_hours,
             'map' => $info->yandexMapLink(),
             'online_shop' => $info->shopUrl('mcp'),
@@ -196,7 +197,7 @@ class McpServer
             ->map(fn (Industry $i) => array_filter([
                 'name' => $this->tr($i, 'name', $locale),
                 'description' => $this->plain($this->tr($i, 'description', $locale), 500),
-                'customers' => $i->customers_count,
+                'customers' => $i->customerTotal(),
             ], fn ($v) => $v !== null && $v !== ''))->values()->all(), 'page' => SeoFiles::publicUrl(route('site.industries', $locale))];
     }
 
