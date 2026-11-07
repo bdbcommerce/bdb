@@ -27,6 +27,7 @@ class TelegramSettingsController extends Controller
         return view('admin.telegram.edit', [
             'env' => array_map(fn (string $key) => filled(config($key)), self::ENV),
             'webhookUrl' => $webhook->url(),
+            'replies' => (bool) config('services.telegram.replies'),
             'status' => $request->boolean('check') ? ($webhook->status() ?? false) : null,
             'users' => [
                 'registered' => TelegramUser::registered()->count(),

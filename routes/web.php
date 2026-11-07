@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AiModelController;
 use App\Http\Controllers\Admin\ArticleCategoryController;
 use App\Http\Controllers\Admin\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\AwaitingReplyController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\ChatConversationController;
@@ -104,6 +105,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('chat-conversations/{chatConversation}/suggest', [ChatConversationController::class, 'suggest'])->middleware('throttle:20,1')->name('chat-conversations.suggest');
 
         Route::resource('telegram-users', TelegramUserController::class)->only(['index', 'show']);
+        Route::get('awaiting-replies', [AwaitingReplyController::class, 'index'])->name('awaiting-replies.index');
+        Route::get('telegram-chats', [ChatConversationController::class, 'index'])->name('telegram-chats.index');
+        Route::post('chat-conversations/{chatConversation}/handled', [AwaitingReplyController::class, 'handled'])->name('chat-conversations.handled');
         Route::get('telegram', [TelegramSettingsController::class, 'edit'])->name('telegram.edit');
         Route::get('telegram/media/{fileId}', [ChatConversationController::class, 'media'])->where('fileId', '[A-Za-z0-9_-]{10,255}')->name('telegram.media');
         Route::post('telegram/connect', [TelegramSettingsController::class, 'connect'])->name('telegram.connect');

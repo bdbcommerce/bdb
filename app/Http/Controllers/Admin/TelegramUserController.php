@@ -39,7 +39,7 @@ class TelegramUserController extends Controller
 
                 $query->where(function ($q) use ($variants, $like, $digits) {
                     foreach ($variants as $variant) {
-                        foreach (['name', 'username', 'telegram_id'] as $column) {
+                        foreach (['name', 'profile_name', 'username', 'telegram_id'] as $column) {
                             $q->orWhereRaw("{$column} LIKE ? ESCAPE '!'", [$like($variant)]);
                         }
                     }

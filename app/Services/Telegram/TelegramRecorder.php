@@ -117,7 +117,10 @@ class TelegramRecorder
             }
         }
         if ($edited) {
-            $entry['edited'] = true; // the original is in an older conversation or arrived before recording
+            // The original is in an older conversation or arrived before recording: kept, but it is
+            // not a new message (does not put the chat back on "Waiting for reply").
+            $entry['edited'] = true;
+            $entry['late_edit'] = true;
         }
 
         $messages[] = $entry;

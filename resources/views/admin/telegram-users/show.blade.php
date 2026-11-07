@@ -1,5 +1,5 @@
 @extends('admin.layout')
-@section('title', $user->name ?? 'Telegram user')
+@section('title', $user->displayName() ?? 'Telegram user')
 @section('heading', 'Telegram user')
 
 @section('content')
@@ -21,12 +21,12 @@
     <aside class="bg-white border border-slate-200 rounded-xl p-5 h-fit lg:order-2">
         <div class="flex items-center gap-3 mb-4">
             <span class="flex size-11 shrink-0 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-600 uppercase" aria-hidden="true">
-                {{ mb_substr($user->name ?? $user->username ?? '?', 0, 1) }}
+                {{ mb_substr($user->displayName() ?? '?', 0, 1) }}
             </span>
             <div class="min-w-0">
-                <p class="text-base font-semibold text-slate-900 truncate">{{ $user->name ?? 'No name yet' }}</p>
+                <p class="text-base font-semibold text-slate-900 truncate">{{ $user->displayName() ?? 'No name yet' }}</p>
                 <p class="text-[11px] font-medium mt-0.5 inline-block rounded-full px-2 py-0.5 {{ $user->isRegistered() ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">
-                    {{ $user->isRegistered() ? 'Registered' : 'Registration not finished (step: '.$user->step.')' }}
+                    {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Registration not finished (step: '.$user->step.')' : 'Not registered') }}
                 </p>
             </div>
         </div>

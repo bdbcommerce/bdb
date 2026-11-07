@@ -18,7 +18,8 @@ use Illuminate\Support\Str;
  * phone number linked to their Telegram account. Only then are text questions
  * answered by ChatAssistant (briefly). Other messages (photos, voice, files…) are
  * not answered; only their type and Telegram file ID are stored in the conversation.
- * Only private chats are answered. Telegram Business chats (a Premium account that connected
+ * Only private chats are answered, and only with TELEGRAM_BOT_REPLIES=true (otherwise
+ * they are just recorded). Telegram Business chats (a Premium account that connected
  * the bot) and groups are recorded without replies by TelegramRecorder.
  */
 class TelegramBot
@@ -76,17 +77,29 @@ class TelegramBot
 
         $user = TelegramUser::firstOrNew(['telegram_id' => (string) $chatId]);
         $user->username = is_string($from['username'] ?? null) ? $from['username'] : null;
+        $profile = trim(implode(' ', array_filter([$from['first_name'] ?? null, $from['last_name'] ?? null], 'is_string')));
+        $user->profile_name = $profile !== '' ? mb_substr($profile, 0, 255) : $user->profile_name;
         $user->save();
 
         $locale = $user->locale ?? 'ru';
+        $replies = (bool) config('services.telegram.replies');
 
         // Every message is recorded: text as text, anything else by type and Telegram file ID.
         $messageId = is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null;
-        $this->conversation($user)->appendIncoming(aside: $user->step !== TelegramUser::STEP_DONE, entry: TelegramRecorder::describe($message) + [
-            'message_id' => $messageId,
-            'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
-        ]);
+        $this->conversation($user)->appendIncoming(
+            TelegramRecorder::describe($message) + [
+                'message_id' => $messageId,
+                'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
+            ],
+            aside: $replies && $user->step !== TelegramUser::STEP_DONE,
+            awaitsReply: $replies,
+        );
         $this->messageId = $messageId;
+
+        // Record-only mode (TELEGRAM_BOT_REPLIES=false): no reply, registration or AI call.
+        if (! $replies) {
+            return;
+        }
 
         if (! RateLimiter::attempt("telegram-chat:{$chatId}", 15, fn () => true, 60)) {
             $this->api->sendMessage($chatId, __('chat.tg_too_fast', [], $locale));
@@ -337,9 +350,14 @@ class TelegramBot
         $conversation = ChatConversation::where('channel', 'telegram')->where('external_id', $chatId)
             ->latest('updated_at')->latest('id')->first();
         if (! $conversation || $messageId === null || ! $conversation->applyEdit($messageId, $content)) {
+            // A late edit goes into the latest session however old (like Business chats), without
+            // reopening it: a session holding only an edit must not hide a chat that is waiting.
             $user = TelegramUser::firstWhere('telegram_id', $chatId);
-            if ($user) {
-                $this->conversation($user)->appendIncoming($content + ['message_id' => $messageId, 'at' => date('c'), 'edited' => true]);
+            $target = $conversation ?? ($user ? $this->conversation($user) : null);
+            if ($target) {
+                $target->timestamps = ! $target->exists;
+                $target->appendIncoming($content + ['message_id' => $messageId, 'at' => date('c'), 'edited' => true, 'late_edit' => true], awaitsReply: (bool) config('services.telegram.replies'));
+                $target->timestamps = true;
             }
         }
     }

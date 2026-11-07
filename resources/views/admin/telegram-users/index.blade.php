@@ -41,10 +41,10 @@
             @foreach($users as $user)
                 <a href="{{ route('admin.telegram-users.show', $user) }}" class="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-slate-50">
                     <span class="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-semibold text-slate-600 uppercase" aria-hidden="true">
-                        {{ mb_substr($user->name ?? $user->username ?? '?', 0, 1) }}
+                        {{ mb_substr($user->displayName() ?? '?', 0, 1) }}
                     </span>
                     <div class="min-w-0 flex-1">
-                        <p class="text-sm font-medium text-slate-900 truncate">{{ $user->name ?? 'No name yet' }}</p>
+                        <p class="text-sm font-medium text-slate-900 truncate">{{ $user->displayName() ?? 'No name yet' }}</p>
                         <p class="text-xs text-slate-500 truncate">
                             {{ $user->phone ?? 'No phone' }}
                             @if($user->username) · {{ '@'.$user->username }} @endif
@@ -53,7 +53,7 @@
                     </div>
                     <div class="flex items-center gap-2 shrink-0 ml-13 sm:ml-0">
                         <span class="text-[11px] font-medium rounded-full px-2 py-0.5 {{ $user->isRegistered() ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">
-                            {{ $user->isRegistered() ? 'Registered' : 'Step: '.$user->step }}
+                            {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Step: '.$user->step : 'Not registered') }}
                         </span>
                         <span class="text-xs text-slate-500">{{ $user->conversations_count }} {{ Str::plural('chat', $user->conversations_count) }}</span>
                         <span class="text-xs text-slate-400 w-24 text-right">

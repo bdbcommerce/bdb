@@ -27,8 +27,13 @@ class ChatConversationController extends Controller
 
     public function index(Request $request)
     {
+        // Conversations: every chat, any source. Telegram → Chats: only the bot's chats (customer + assistant).
+        $telegramOnly = $request->routeIs('admin.telegram-chats.index');
+        $channels = ChatConversation::CHANNELS;
+
         $filter = is_string($f = $request->query('filter')) && array_key_exists($f, self::FILTERS) ? $f : 'all';
-        $channel = is_string($ch = $request->query('channel')) && array_key_exists($ch, ChatConversation::CHANNELS) ? $ch : null;
+        $channel = $telegramOnly ? 'telegram'
+            : (is_string($ch = $request->query('channel')) && array_key_exists($ch, $channels) ? $ch : null);
 
         $conversations = ChatConversation::query()
             ->with('telegramUser')
@@ -44,8 +49,10 @@ class ChatConversationController extends Controller
             'filter' => $filter,
             'filters' => self::FILTERS,
             'channel' => $channel,
-            'channels' => ChatConversation::CHANNELS,
+            'channels' => $channels,
             'keepDays' => ChatConversation::KEEP_DAYS,
+            'indexRoute' => $telegramOnly ? 'admin.telegram-chats.index' : 'admin.chat-conversations.index',
+            'telegramOnly' => $telegramOnly,
         ]);
     }
 

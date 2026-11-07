@@ -20,7 +20,7 @@ class TelegramUser extends Model
 
     public const STEP_DONE = 'done';
 
-    protected $fillable = ['telegram_id', 'username', 'locale', 'step', 'name', 'phone', 'registered_at'];
+    protected $fillable = ['telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'registered_at'];
 
     protected $attributes = ['step' => self::STEP_LANGUAGE];
 
@@ -41,6 +41,12 @@ class TelegramUser extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(ChatConversation::class, 'external_id', 'telegram_id')->whereIn('channel', ['telegram', 'business']);
+    }
+
+    /** The registered name, else the Telegram profile name, else @username. */
+    public function displayName(): ?string
+    {
+        return $this->name ?? $this->profile_name ?? ($this->username ? '@'.$this->username : null);
     }
 
     public function isRegistered(): bool

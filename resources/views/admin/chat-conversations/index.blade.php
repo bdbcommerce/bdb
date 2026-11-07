@@ -1,27 +1,35 @@
 @extends('admin.layout')
-@section('title', 'Conversations')
-@section('heading', 'Conversations')
+@section('title', $telegramOnly ? 'Telegram bot chats' : 'Conversations')
+@section('heading', $telegramOnly ? 'Telegram bot chats' : 'Conversations')
 
 @section('content')
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <p class="text-xs text-slate-500">Every chat with the AI assistant (website, Telegram bot), plus recorded Telegram Business and group chats. Kept for {{ $keepDays }} days.</p>
+    <p class="text-xs text-slate-500">
+        @if($telegramOnly)
+            Chats with the Telegram bot: customer messages and the assistant's replies. Premium-account and group chats are under Conversations. Kept for {{ $keepDays }} days.
+        @else
+            Every chat with the AI assistant (website, Telegram bot), plus recorded Telegram Business and group chats. Kept for {{ $keepDays }} days.
+        @endif
+    </p>
     <div class="flex flex-wrap gap-2">
         @php
             $tab = fn (bool $active) => 'text-xs font-medium rounded-md px-3 py-1.5 transition-colors '
                 .($active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900');
             $query = fn (?string $f, ?string $c) => array_filter(['filter' => $f === 'all' ? null : $f, 'channel' => $c]);
         @endphp
+        @unless($telegramOnly)
         <nav class="flex gap-1 bg-slate-100 rounded-lg p-1" aria-label="Conversation type">
-            <a href="{{ route('admin.chat-conversations.index', $query($filter, null)) }}"
+            <a href="{{ route($indexRoute, $query($filter, null)) }}"
                @if(! $channel) aria-current="true" @endif class="{{ $tab(! $channel) }}">All types</a>
             @foreach($channels as $key => $label)
-                <a href="{{ route('admin.chat-conversations.index', $query($filter, $key)) }}"
+                <a href="{{ route($indexRoute, $query($filter, $key)) }}"
                    @if($channel === $key) aria-current="true" @endif class="{{ $tab($channel === $key) }}">{{ $label }}</a>
             @endforeach
         </nav>
+        @endunless
         <nav class="flex gap-1 bg-slate-100 rounded-lg p-1" aria-label="Filter conversations">
             @foreach($filters as $key => $label)
-                <a href="{{ route('admin.chat-conversations.index', $query($key, $channel)) }}"
+                <a href="{{ route($indexRoute, $query($key, $channel)) }}"
                    @if($filter === $key) aria-current="true" @endif class="{{ $tab($filter === $key) }}">{{ $label }}</a>
             @endforeach
         </nav>
@@ -68,15 +76,15 @@
                                 · <span class="uppercase">{{ $conversation->locale }}</span>
                             @endif
                             @if($recorded)
-                            @elseif($conversation->channel === 'telegram' && $conversation->telegramUser?->name)
-                                · {{ $conversation->telegramUser->name }}
+                            @elseif($conversation->channel === 'telegram' && $conversation->telegramUser?->displayName())
+                                · {{ $conversation->telegramUser->displayName() }}
                             @elseif($conversation->page && $conversation->channel === 'web')
                                 · {{ $conversation->page }}
                             @endif
                         </p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <span class="text-xs font-medium px-2 py-0.5 rounded-full border {{ $conversation->channel === 'web' ? 'border-slate-200 text-slate-500' : 'border-slate-400 text-slate-700' }}">{{ $channels[$conversation->channel] ?? ucfirst($conversation->channel) }}</span>
+                        <span title="Source" class="text-xs font-medium px-2 py-0.5 rounded-full border {{ $conversation->channel === 'web' ? 'border-slate-200 text-slate-500' : 'border-slate-400 text-slate-700' }}">{{ $channels[$conversation->channel] ?? ucfirst($conversation->channel) }}</span>
                         @if($conversation->unanswered_count)
                             <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{{ $conversation->unanswered_count }} unanswered</span>
                         @endif

@@ -37,6 +37,17 @@
                 </div>
             @endforeach
         </dl>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+            <p class="font-medium text-slate-900">Mode: {{ $replies ? 'Bot answers customers' : 'Record only' }}</p>
+            <p class="text-xs text-slate-500 mt-1">
+                @if($replies)
+                    Customers register and get AI answers. Set <code class="bg-white px-1 rounded">TELEGRAM_BOT_REPLIES=false</code> to only save conversations.
+                @else
+                    Every message is saved; the bot sends nothing (no registration, no AI answers). Staff can still reply from a conversation.
+                    Set <code class="bg-white px-1 rounded">TELEGRAM_BOT_REPLIES=true</code> to switch replies on.
+                @endif
+            </p>
+        </div>
         <p class="text-xs text-slate-500">
             Customers: {{ $users['registered'] }} registered, {{ $users['pending'] }} started but not finished registration.
         </p>

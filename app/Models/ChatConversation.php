@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * One chat session (website or Telegram bot). Messages are stored as
@@ -30,9 +31,82 @@ class ChatConversation extends Model
         'uuid', 'channel', 'external_id', 'business_connection_id', 'locale', 'page', 'title', 'messages', 'message_count', 'unanswered_count', 'chat_lead_id',
     ];
 
+    /** Chats a person can answer in Telegram: the bot (staff reply from the panel) and the Premium account. */
+    public const REPLY_CHANNELS = ['telegram', 'business'];
+
     protected function casts(): array
     {
-        return ['messages' => 'array'];
+        return ['messages' => 'array', 'awaiting_reply' => 'boolean', 'last_message_at' => 'datetime'];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $conversation) {
+            if (in_array($conversation->channel, self::REPLY_CHANNELS, true)
+                && ($conversation->isDirty('messages') || $conversation->isDirty('handled_count') || ! $conversation->exists)) {
+                $conversation->forceFill($conversation->replyState());
+            }
+        });
+    }
+
+    /**
+     * Whether the customer is waiting: the last message (deleted ones ignored) is theirs — not a
+     * bot step the bot already handled — and staff have not marked the chat answered since.
+     *
+     * @return array{awaiting_reply: bool, last_message_at: Carbon|null}
+     */
+    public function replyState(): array
+    {
+        // Deleted messages and late edits (of a message from an older session) don't count.
+        $relevant = collect($this->messages ?? [])->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit']))->values();
+        $last = $relevant->last();
+        $awaiting = in_array($this->channel, self::REPLY_CHANNELS, true)
+            && ($last['role'] ?? null) === 'user' && empty($last['aside'])
+            && $this->countedMessages() > (int) $this->handled_count;
+
+        // Waiting since the first of the customer's unanswered messages; otherwise the last message.
+        $since = $last;
+        if ($awaiting) {
+            foreach ($relevant->reverse() as $m) {
+                if (($m['role'] ?? null) !== 'user' || ! empty($m['aside'])) {
+                    break;
+                }
+                $since = $m;
+            }
+        }
+        $at = isset($since['at']) && is_string($since['at']) ? rescue(fn () => Carbon::parse($since['at']), null, false) : null;
+
+        return [
+            'awaiting_reply' => $awaiting,
+            'last_message_at' => $at ?? ($last ? ($this->updated_at ?? now()) : null),
+        ];
+    }
+
+    /** Messages that count as new for "Mark answered" (late edits do not). */
+    private function countedMessages(): int
+    {
+        return collect($this->messages ?? [])->reject(fn ($m) => ! empty($m['late_edit']))->count();
+    }
+
+    /** Waiting chats, only the latest session of each chat (a newer session supersedes older ones). */
+    public function scopeAwaitingReply(Builder $query): void
+    {
+        $query->where('awaiting_reply', true)
+            ->whereIn('channel', self::REPLY_CHANNELS)
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('chat_conversations as newer')
+                ->whereColumn('newer.channel', 'chat_conversations.channel')
+                ->whereColumn('newer.external_id', 'chat_conversations.external_id')
+                ->whereRaw("coalesce(newer.business_connection_id, '') = coalesce(chat_conversations.business_connection_id, '')")
+                ->whereColumn('newer.id', '>', 'chat_conversations.id'));
+    }
+
+    /** Staff answered outside the panel / Telegram (e.g. by phone): off the list until the customer writes again. */
+    public function markHandled(): void
+    {
+        $this->handled_count = $this->countedMessages();
+        $this->timestamps = false;
+        $this->save();
+        $this->timestamps = true;
     }
 
     /** Channels where the assistant answers (and client requests come from); the others are only recorded. */
@@ -65,9 +139,11 @@ class ChatConversation extends Model
      * message_id and time. Text starts as "aside"; appendReply() makes it a question once answered.
      * $aside also marks non-text (e.g. the phone shared during registration) as a bot step, not a file.
      */
-    public function appendIncoming(array $entry, bool $aside = false): void
+    public function appendIncoming(array $entry, bool $aside = false, bool $awaitsReply = true): void
     {
-        $this->messages = [...$this->freshMessages(), ['role' => 'user'] + $entry + (isset($entry['content']) || $aside ? ['aside' => true] : [])];
+        // Record-only mode ($awaitsReply false): a plain customer message, nothing is pending.
+        $aside = $aside || ($awaitsReply && isset($entry['content']));
+        $this->messages = [...$this->freshMessages(), ['role' => 'user'] + $entry + ($aside ? ['aside' => true] : [])];
         $this->message_count = count($this->messages);
         $this->save();
     }

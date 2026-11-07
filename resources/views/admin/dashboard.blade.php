@@ -61,6 +61,18 @@
 </div>
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
     <div class="grid grid-cols-2 lg:grid-cols-1 gap-4">
+        <a href="{{ route('admin.awaiting-replies.index') }}" class="col-span-2 lg:col-span-1 bg-white border {{ $stats['awaiting'] ? 'border-slate-900' : 'border-slate-200' }} rounded-xl p-5 hover:border-slate-400 transition-colors">
+            <div class="flex items-start justify-between mb-3">
+                <p class="text-2xl font-bold text-slate-900">{{ $stats['awaiting'] }}</p>
+                <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-sm font-medium text-slate-700">Waiting for reply</p>
+            <p class="text-xs text-slate-400 mt-0.5">Telegram chats where the customer wrote last</p>
+        </a>
         <a href="{{ route('admin.chat-leads.index') }}" class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-400 transition-colors">
             <div class="flex items-start justify-between mb-3">
                 <p class="text-2xl font-bold text-slate-900">{{ $stats['new_leads'] }}</p>

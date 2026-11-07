@@ -6,6 +6,12 @@
 @php $recordedChat = in_array($conversation->channel, ['business', 'group'], true); @endphp
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <a href="{{ route('admin.chat-conversations.index') }}" class="text-sm text-slate-500 hover:text-slate-900">&larr; All conversations</a>
+    @if($conversation->awaiting_reply)
+        <form method="POST" action="{{ route('admin.chat-conversations.handled', $conversation) }}" class="ml-auto">
+            @csrf
+            <button class="text-xs font-medium text-slate-600 border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">Mark as answered</button>
+        </form>
+    @endif
     <form method="POST" action="{{ route('admin.chat-conversations.destroy', $conversation) }}" onsubmit="return confirm('Delete this conversation?')">
         @csrf @method('DELETE')
         <button class="text-xs text-slate-400 hover:text-red-600">Delete</button>
@@ -57,7 +63,7 @@
                 </div>
                 <textarea id="reply-message" name="message" rows="3" maxlength="4000" required x-ref="message" x-model="message"
                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                          placeholder="Sent from the bot to {{ $conversation->telegramUser?->name ?? 'the customer' }}">{{ old('message') }}</textarea>
+                          placeholder="Sent from the bot to {{ $conversation->telegramUser?->displayName() ?? 'the customer' }}">{{ old('message') }}</textarea>
                 <p x-show="error" x-text="error" x-cloak role="alert" class="text-xs text-red-700"></p>
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <p class="text-xs text-slate-400">The customer sees it as a message from the bot. Check AI suggestions and replace any [TO FILL: …] before sending.</p>
@@ -97,7 +103,7 @@
                 <div>
                     <dt class="text-xs text-slate-400">Telegram customer</dt>
                     <dd class="text-slate-800">
-                        <a href="{{ route('admin.telegram-users.show', $tgUser) }}" class="font-medium underline">{{ $tgUser->name ?? 'Not registered yet' }}</a>@if($tgUser->phone), {{ $tgUser->phone }}@endif
+                        <a href="{{ route('admin.telegram-users.show', $tgUser) }}" class="font-medium underline">{{ $tgUser->displayName() ?? 'Not registered yet' }}</a>@if($tgUser->phone), {{ $tgUser->phone }}@endif
                         @if($tgUser->username)
                             <br><a href="https://t.me/{{ $tgUser->username }}" target="_blank" rel="noopener" class="underline">{{ '@'.$tgUser->username }}</a>
                         @endif

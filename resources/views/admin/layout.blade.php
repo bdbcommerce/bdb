@@ -19,10 +19,11 @@
      * Each item: route (link target), match (route patterns that mark it active), label, icon (Heroicons outline path "d" values).
      * Badge counts must stay cheap (single indexed count query).
      */
-    $newLeadsCount = $openRequestsCount = 0;
+    $newLeadsCount = $openRequestsCount = $awaitingCount = 0;
     try {
         $newLeadsCount = \App\Models\ChatLead::where('is_handled', false)->count();
         $openRequestsCount = \App\Models\ClientRequest::where('status', 'open')->count();
+        $awaitingCount = \App\Models\ChatConversation::awaitingReply()->count();
     } catch (\Throwable $e) {
         // Table may not exist yet (e.g. migrations pending) — never break the admin shell.
     }
@@ -94,6 +95,11 @@
             'key' => 'telegram',
             'label' => 'Telegram',
             'items' => [
+                ['route' => 'admin.awaiting-replies.index', 'match' => ['admin.awaiting-replies.*'], 'label' => 'Waiting for reply',
+                 'badge' => $awaitingCount, 'badge_label' => 'chats waiting for a reply',
+                 'icon' => ['M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z']],
+                ['route' => 'admin.telegram-chats.index', 'match' => ['admin.telegram-chats.*'], 'label' => 'Chats',
+                 'icon' => ['M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z']],
                 ['route' => 'admin.telegram-users.index', 'match' => ['admin.telegram-users.*'], 'label' => 'Users',
                  'icon' => ['M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z']],
                 ['route' => 'admin.telegram.edit', 'match' => ['admin.telegram.*'], 'label' => 'Bot settings',
