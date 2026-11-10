@@ -17,18 +17,20 @@ use App\Http\Controllers\Admin\CompanyInfoController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\IndustryController;
+use App\Http\Controllers\Admin\JobApplicationController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\McpSettingController;
 use App\Http\Controllers\Admin\SeoSettingController;
 use App\Http\Controllers\Admin\TelegramSettingsController;
 use App\Http\Controllers\Admin\TelegramUserController;
 use App\Http\Controllers\Admin\UploadController;
+use App\Http\Controllers\Admin\VacancyController;
 use App\Http\Controllers\McpController;
 use App\Http\Controllers\Site\AboutController;
 use App\Http\Controllers\Site\BrandsController;
+use App\Http\Controllers\Site\CareersController;
 use App\Http\Controllers\Site\ChatController;
 use App\Http\Controllers\Site\ContactController;
-use App\Http\Controllers\Site\CustomersController;
 use App\Http\Controllers\Site\FaqController;
 use App\Http\Controllers\Site\HomeController;
 use App\Http\Controllers\Site\IndustriesController;
@@ -41,8 +43,8 @@ use App\Http\Middleware\TrackPageView;
 use Illuminate\Support\Facades\Route;
 
 // AI chat assistant
-Route::post('/chat/message', [ChatController::class, 'message'])->middleware('throttle:20,1')->name('chat.message');
-Route::post('/chat/lead', [ChatController::class, 'lead'])->middleware('throttle:5,1')->name('chat.lead');
+Route::post('/chat/message', [ChatController::class, 'message'])->middleware('throttle:chat-message')->name('chat.message');
+Route::post('/chat/lead', [ChatController::class, 'lead'])->middleware('throttle:chat-lead')->name('chat.lead');
 
 // Telegram bot (same assistant), secured by the X-Telegram-Bot-Api-Secret-Token header
 Route::post('/telegram/webhook', TelegramWebhookController::class)->name('telegram.webhook');
@@ -71,9 +73,12 @@ Route::prefix('{locale}')
         Route::get('/about', AboutController::class)->name('about');
         Route::get('/brands', BrandsController::class)->name('brands');
         Route::get('/industries', IndustriesController::class)->name('industries');
-        Route::get('/customers', CustomersController::class)->name('customers');
+        // Customer names are not public: the old Customers page sends visitors to Industries (counts only).
+        Route::get('/customers', fn (string $locale) => redirect()->route('site.industries', $locale, 301))->name('customers');
         Route::get('/contact', ContactController::class)->name('contact');
         Route::get('/faq', FaqController::class)->name('faq');
+        Route::get('/careers', [CareersController::class, 'index'])->name('careers');
+        Route::post('/careers', [CareersController::class, 'apply'])->middleware('throttle:careers')->name('careers.apply');
         Route::get('/news', [NewsController::class, 'index'])->name('news');
         Route::get('/news/{categorySlug}', [NewsController::class, 'category'])->name('news.category');
         Route::get('/news/{categorySlug}/{slug}', [NewsController::class, 'show'])->name('news.show');
@@ -109,6 +114,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('brands', BrandController::class)->except(['show']);
         Route::resource('industries', IndustryController::class)->except(['show']);
         Route::resource('customers', CustomerController::class)->except(['show']);
+
+        // Careers: vacancies on the public page and the CVs sent from it
+        Route::resource('vacancies', VacancyController::class)->except(['show']);
+        Route::get('job-applications/{jobApplication}/cv', [JobApplicationController::class, 'download'])->name('job-applications.cv');
+        Route::resource('job-applications', JobApplicationController::class)->only(['index', 'show', 'update', 'destroy']);
 
         Route::resource('knowledge', KnowledgeEntryController::class)->except(['show']);
         // AI settings: models per task, tried by priority

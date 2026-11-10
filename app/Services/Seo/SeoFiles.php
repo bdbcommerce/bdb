@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\CompanyInfo;
 use App\Models\Industry;
 use App\Models\SeoSetting;
+use App\Models\Vacancy;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -20,7 +21,7 @@ class SeoFiles
 {
     public const LOCALES = ['uz', 'ru', 'en'];
 
-    private const STATIC_PAGES = ['site.home', 'site.about', 'site.brands', 'site.industries', 'site.customers', 'site.contact', 'site.news'];
+    private const STATIC_PAGES = ['site.home', 'site.about', 'site.brands', 'site.industries', 'site.contact', 'site.news', 'site.careers'];
 
     public function robots(): string
     {
@@ -164,9 +165,9 @@ class SeoFiles
                 'site.about' => ['About the company', 'who BDB is and what it does'],
                 'site.brands' => ['Brands', 'equipment brands BDB supplies and services'],
                 'site.industries' => ['Industries', 'solutions by industry'],
-                'site.customers' => ['Customers', 'companies that work with BDB'],
                 'site.news' => ['News and articles', 'Auto ID, Asl Belgi marking, tax policy'],
                 'site.contact' => ['Contact', 'address, phone, map'],
+                'site.careers' => ['Careers', 'open positions at BDB and a form to send a CV'],
             ] + ($settings->faq_enabled ? ['site.faq' => ['FAQ', 'answers to common customer questions']] : []) as $route => [$title, $about]) {
                 $out[] = "- [{$title}](".self::publicUrl(route($route, 'en'))."): {$about} (Russian: ".self::publicUrl(route($route, 'ru')).', Uzbek: '.self::publicUrl(route($route, 'uz')).')';
             }
@@ -184,6 +185,14 @@ class SeoFiles
                 $out = [...$out, '', '## Industries', ''];
                 foreach ($industries as $industry) {
                     $out[] = '- '.$t($industry, 'name').(($d = $line($t($industry, 'description'))) ? ': '.$d : '');
+                }
+            }
+
+            $vacancies = Vacancy::active()->get();
+            if ($vacancies->isNotEmpty()) {
+                $out = [...$out, '', '## Open positions ('.self::publicUrl(route('site.careers', 'en')).')', ''];
+                foreach ($vacancies as $vacancy) {
+                    $out[] = '- '.$line($vacancy->titleIn('en'), 160).' — '.__('site.careers.departments.'.$vacancy->department, [], 'en');
                 }
             }
 

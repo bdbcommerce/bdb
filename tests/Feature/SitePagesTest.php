@@ -17,7 +17,7 @@ class SitePagesTest extends TestCase
 
     private const LOCALES = ['uz', 'ru', 'en'];
 
-    private const PAGES = ['', '/about', '/brands', '/industries', '/customers', '/contact', '/news'];
+    private const PAGES = ['', '/about', '/brands', '/industries', '/contact', '/news'];
 
     private function t(string $value): array
     {
@@ -105,7 +105,8 @@ class SitePagesTest extends TestCase
             ->assertSee(__('site.stats.clients', [], 'en'))
             ->assertSee('Hello &quot;world&quot; en', false);
 
-        $this->get('/en/customers')->assertOk()->assertSee('Korzinka')->assertSee('Retail en');
+        $this->get('/en/customers')->assertRedirect(route('site.industries', 'en'));
+        $this->get('/en/industries')->assertOk()->assertDontSee('Korzinka')->assertSee('Retail en');
         $this->get('/en/brands')->assertOk()->assertSee('Zebra en')->assertSee('https://example.com', false);
     }
 

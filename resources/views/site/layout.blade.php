@@ -20,7 +20,6 @@
         ['url' => route('site.about', $locale),      'label' => __('About'),      'route' => 'site.about'],
         ['url' => route('site.brands', $locale),     'label' => __('Brands'),     'route' => 'site.brands'],
         ['url' => route('site.industries', $locale), 'label' => __('Industries'), 'route' => 'site.industries'],
-        ['url' => route('site.customers', $locale),  'label' => __('Customers'),  'route' => 'site.customers'],
         ['url' => route('site.news', $locale),       'label' => __('News'),       'route' => 'site.news*'],
         ['url' => route('site.contact', $locale),    'label' => __('Contact'),    'route' => 'site.contact'],
     ];
@@ -212,6 +211,11 @@
                         {{ $link['label'] }}
                     </a>
                 @endforeach
+                @php $active = request()->routeIs('site.careers'); @endphp
+                <a href="{{ route('site.careers', $locale) }}" @click="open = false" @if($active) aria-current="page" @endif
+                   class="block px-3 py-2.5 rounded-md text-base font-medium {{ $active ? 'text-(color:--site-nav-active) bg-(color:--site-nav-active-bg)' : 'text-(color:--site-nav-text) hover:text-(color:--site-nav-hover) hover:bg-(color:--site-nav-hover-bg)' }}">
+                    {{ __('site.careers.nav') }}
+                </a>
             </nav>
             @if($_mBot = $companyInfo->telegramBot())
                 {{-- Telegram bot contact: always next to the contact details --}}
@@ -279,6 +283,7 @@
                     @if($_seo->faq_enabled)
                         <li><a href="{{ route('site.faq', $locale) }}" class="{{ $_fLink }}">{{ __('site.faq.nav') }}</a></li>
                     @endif
+                    <li><a href="{{ route('site.careers', $locale) }}" class="{{ $_fLink }}">{{ __('site.careers.nav') }}</a></li>
                     @if($_shopUrl)
                         <li>
                             <a href="{{ $companyInfo->shopUrl('footer') }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 {{ $_fLink }}">

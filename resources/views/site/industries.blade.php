@@ -32,13 +32,12 @@
                         @if($industry->getTranslation('description', $locale, false))
                             <p class="mt-2 text-sm text-gray-600 leading-relaxed">{{ $industry->getTranslation('description', $locale) }}</p>
                         @endif
-                        @if($industry->customers_count > 0)
-                            <div class="mt-auto pt-6">
-                                <a href="{{ route('site.customers', $locale) }}#industry-{{ $industry->id }}" class="link-arrow">
-                                    {{ __('site.industries.see_customers') }}
-                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 tabular-nums">{{ $industry->customers_count }}</span>
-                                </a>
-                            </div>
+                        @if($industry->customerTotal() > 0)
+                            {{-- Only how many customers BDB serves here; names are not public. --}}
+                            <p class="mt-auto pt-6 flex items-baseline gap-2">
+                                <span class="text-2xl font-semibold tracking-tight text-gray-900 tabular-nums">{{ $industry->customerTotal() }}</span>
+                                <span class="text-sm text-gray-600">{{ trans_choice('site.industries.customers_count', $industry->customerTotal()) }}</span>
+                            </p>
                         @endif
                     </li>
                 @endforeach

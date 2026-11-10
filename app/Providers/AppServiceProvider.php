@@ -9,7 +9,11 @@ use App\Models\CompanyInfo;
 use App\Models\Industry;
 use App\Models\KnowledgeEntry;
 use App\Models\SeoSetting;
+use App\Models\Vacancy;
 use App\Services\Seo\IndexNow;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -27,11 +31,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Own counter per public endpoint (a plain throttle:N,M shares one key per IP across routes).
+        RateLimiter::for('chat-message', fn (Request $r) => Limit::perMinute(20)->by('chat-message|'.$r->ip()));
+        RateLimiter::for('chat-lead', fn (Request $r) => Limit::perMinute(5)->by('chat-lead|'.$r->ip()));
+        RateLimiter::for('careers', fn (Request $r) => [
+            Limit::perMinutes(10, 5)->by('careers|'.$r->ip()),
+            Limit::perDay(200)->by('careers|all'), // caps CV storage growth even from many IPs
+        ]);
         $this->app->register(ViewServiceProvider::class);
 
         // Public content changed: sitemap.xml and llms.txt are rebuilt on the next request.
         foreach ([Article::class, ArticleCategory::class, Brand::class,
-            Industry::class, CompanyInfo::class, KnowledgeEntry::class] as $model) {
+            Industry::class, CompanyInfo::class, KnowledgeEntry::class, Vacancy::class] as $model) {
             $model::saved(fn () => SeoSetting::flush());
             $model::deleted(fn () => SeoSetting::flush());
         }

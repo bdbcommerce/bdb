@@ -97,20 +97,17 @@ class HomeIndustriesGridTest extends TestCase
                 $this->assertStringContainsString("{$name} {$locale}", $section);
             }
 
-            // Links only for industries with active customers.
-            $customersUrl = route('site.customers', $locale);
-            $this->assertStringNotContainsString("#industry-{$none->id}\"", $section);
-            $this->assertStringContainsString("{$customersUrl}#industry-{$one->id}\"", $section);
-            $this->assertStringContainsString("{$customersUrl}#industry-{$many->id}\"", $section);
-            $this->assertSame(2, substr_count($section, '<a '));
-            $this->assertSame(2, substr_count($section, '</a>'));
+            // The Customers page is gone: no links to customers at all.
+            $this->assertStringNotContainsString('/customers', $section);
+            $this->assertSame(0, substr_count($section, '<a '));
+            $this->assertSame(0, substr_count($section, '</a>'));
 
             // Counts with the correct plural form.
             $this->assertStringContainsString(e(trans_choice('site.industries.customers_count', 1, [], $locale)), $section);
             $this->assertStringContainsString(e(trans_choice('site.industries.customers_count', 21, [], $locale)), $section);
             $this->assertMatchesRegularExpression('/>\s*21\s*</', $section);
             $this->assertStringContainsString(e(__('site.industries.no_customers', [], $locale)), $section);
-            $this->assertSame(2, substr_count($section, e(__('site.industries.see_customers', [], $locale))));
+            $this->assertSame(0, substr_count($section, e(__('site.industries.see_customers', [], $locale))));
 
             // Balanced markup.
             $this->assertSame(substr_count($section, '<div'), substr_count($section, '</div>'), "unbalanced divs in {$locale}");
@@ -164,24 +161,21 @@ class HomeIndustriesGridTest extends TestCase
             $section = $this->section($this->get("/{$locale}")->assertOk()->getContent());
             $this->assertMatchesRegularExpression('/>\s*5\s*</', $section);
             $this->assertStringContainsString(e(trans_choice('site.industries.customers_count', 5, [], $locale)), $section);
-            $this->assertStringContainsString(route('site.customers', $locale)."#industry-{$industry->id}\"", $section);
             $this->assertStringNotContainsString('Client ', $section);
         }
     }
 
-    public function test_customers_page_supports_industry_hash_from_home_links(): void
+    public function test_customers_page_is_gone_and_names_stay_private(): void
     {
         $a = $this->industry('Retail');
-        $b = $this->industry('Pharma');
-        $this->customers($a, 1);
-        $this->customers($b, 2);
+        $this->customers($a, 2);
 
         foreach (self::LOCALES as $locale) {
-            $this->get("/{$locale}/customers")
-                ->assertOk()
-                ->assertSee('#industry-(\d+)', false)
-                ->assertSee("x-ref=\"f{$a->id}\"", false)
-                ->assertSee("x-ref=\"f{$b->id}\"", false);
+            $this->get("/{$locale}/customers")->assertStatus(301)->assertRedirect(route('site.industries', $locale));
+            $html = $this->get(route('site.industries', $locale))->assertOk()->getContent();
+            $this->assertStringNotContainsString('Client ', $html);
+            $this->assertStringContainsString(e(trans_choice('site.industries.customers_count', 2, [], $locale)), $html);
+            $this->assertStringNotContainsString(route('site.customers', $locale), $this->get("/{$locale}")->getContent()); // not in the menu
         }
     }
 }

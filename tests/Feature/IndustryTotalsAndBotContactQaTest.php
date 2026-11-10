@@ -16,7 +16,7 @@ class IndustryTotalsAndBotContactQaTest extends TestCase
 
     private const LOCALES = ['uz', 'ru', 'en'];
 
-    private const PAGES = ['site.home', 'site.about', 'site.brands', 'site.industries', 'site.customers', 'site.contact', 'site.news'];
+    private const PAGES = ['site.home', 'site.about', 'site.brands', 'site.industries', 'site.contact', 'site.news'];
 
     private function industry(string $name, int $extra = 0, bool $active = true): Industry
     {

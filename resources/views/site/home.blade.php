@@ -381,10 +381,6 @@
                                                     <p class="mt-2 text-sm text-gray-500">{{ __('site.industries.customers_note') }}</p>
                                                 </div>
                                             </div>
-                                            <a href="{{ route('site.customers', $locale) }}#industry-{{ $industry->id }}" class="btn-secondary shrink-0 self-start sm:self-auto">
-                                                {{ __('site.industries.see_customers') }}
-                                                @include('site.partials.icon', ['name' => 'arrow-right', 'class' => 'size-4'])
-                                            </a>
                                         </div>
                                     </div>
                                 @else

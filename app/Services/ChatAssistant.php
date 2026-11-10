@@ -8,9 +8,9 @@ use App\Models\Article;
 use App\Models\Brand;
 use App\Models\ClientRequest;
 use App\Models\CompanyInfo;
-use App\Models\Customer;
 use App\Models\Industry;
 use App\Models\KnowledgeEntry;
+use App\Models\Vacancy;
 use App\Services\Ai\AiClient;
 use Illuminate\Support\Facades\Cache;
 
@@ -598,15 +598,20 @@ $rules
                 $lines[] = '- '.$t($brand, 'name').': '.mb_strimwidth($t($brand, 'description'), 0, 200, '…');
             }
 
-            $lines[] = "\n## Industries served ({$base}/industries)";
-            foreach (Industry::active()->get() as $industry) {
-                $lines[] = '- '.$t($industry, 'name').': '.mb_strimwidth($t($industry, 'description'), 0, 200, '…');
+            // Customer names are confidential: only how many customers BDB serves per industry.
+            $lines[] = "\n## Industries served ({$base}/industries) — customer names are confidential, never name customers";
+            foreach (Industry::active()->withCount(['customers' => fn ($q) => $q->active()])->get() as $industry) {
+                $count = $industry->customerTotal();
+                $lines[] = '- '.$t($industry, 'name').($count ? " ({$count} customers)" : '').': '.mb_strimwidth($t($industry, 'description'), 0, 200, '…');
             }
 
-            $customers = Customer::active()->pluck('name')->filter()->implode(', ');
-            if ($customers) {
-                $lines[] = "\n## Customers ({$base}/customers)\n".$customers;
-            }
+            // Open positions: job seekers are sent to the Careers page to apply with a CV.
+            $vacancies = Vacancy::active()->get();
+            $lines[] = "
+## Careers ({$base}/careers) — job seekers apply there with a CV form";
+            $lines[] = $vacancies->isEmpty() ? '- No open positions now; a CV can still be sent on the Careers page.'
+                : $vacancies->map(fn (Vacancy $v) => '- '.$v->titleIn($locale).' ('.__('site.careers.departments.'.$v->department, [], $locale).')')->implode('
+');
 
             // Searchable knowledge entries (only the matching ones are sent).
             $entries = KnowledgeEntry::active()->get()->map(function (KnowledgeEntry $entry) use ($t) {
@@ -647,7 +652,7 @@ $rules
                 $lines[] = "\n## Articles on {$base}/news (titles)\n".implode("\n", $titles);
             }
 
-            $lines[] = "\n## Site pages\nAbout {$base}/about, Brands {$base}/brands, Industries {$base}/industries, Customers {$base}/customers, News {$base}/news, Contact {$base}/contact";
+            $lines[] = "\n## Site pages\nAbout {$base}/about, Brands {$base}/brands, Industries {$base}/industries, News {$base}/news, Careers {$base}/careers, Contact {$base}/contact";
 
             return ['base' => implode("\n", $lines), 'entries' => $entries, 'articles' => $articles];
         });

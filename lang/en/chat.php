@@ -20,7 +20,6 @@ return [
         'default' => 'Need help choosing equipment? Ask me!',
         'site.brands' => 'Not sure which brand fits your business? I can compare them.',
         'site.industries' => 'Tell me your industry and I will suggest a setup.',
-        'site.customers' => 'Want a solution like our customers have? Ask me how.',
         'site.contact' => 'Prefer a callback? I can arrange it in 10 seconds.',
         'site.news' => 'Questions about Asl Belgi marking? I can explain.',
     ],

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ChatLead;
+use App\Models\JobApplication;
 use App\Services\Seo\SeoFiles;
 use App\Services\Telegram\TelegramApi;
 
@@ -40,6 +41,31 @@ class TelegramNotifier
         }
         $lines[] = '';
         $lines[] = '<a href="'.$e(SeoFiles::publicUrl(route('admin.chat-leads.index')).'#lead-'.$lead->id).'">Open in admin</a>';
+
+        $this->send(implode("\n", $lines));
+    }
+
+    /** New CV from the Careers page (the file itself stays on the server; staff open it in the admin). */
+    public function newApplication(JobApplication $application): void
+    {
+        $e = fn (?string $s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $lines = [
+            '<b>New CV — Careers page</b>',
+            '',
+            '<b>Position:</b> '.$e($application->vacancy_title ?: 'General application'),
+        ];
+        if ($application->department) {
+            $lines[] = '<b>Department:</b> '.$e(__('site.careers.departments.'.$application->department, [], 'en'));
+        }
+        $lines[] = '<b>Name:</b> '.$e($application->name);
+        $lines[] = '<b>Phone:</b> '.$e($application->phone);
+        if ($application->email) {
+            $lines[] = '<b>Email:</b> '.$e($application->email);
+        }
+        $lines[] = '<b>Language:</b> '.strtoupper($application->locale);
+        $lines[] = '';
+        $lines[] = '<a href="'.$e(SeoFiles::publicUrl(route('admin.job-applications.show', $application))).'">Open in admin</a>';
 
         $this->send(implode("\n", $lines));
     }

@@ -20,7 +20,6 @@ return [
         'default' => 'Uskuna tanlashda yordam kerakmi? Mendan soʻrang!',
         'site.brands' => 'Qaysi brend mos kelishini bilmayapsizmi? Solishtirib beraman.',
         'site.industries' => 'Sohangizni ayting — yechim taklif qilaman.',
-        'site.customers' => 'Mijozlarimiznikidek yechim kerakmi? Soʻrang.',
         'site.contact' => 'Qayta qoʻngʻiroq kerakmi? 10 soniyada rasmiylashtiraman.',
         'site.news' => 'Asl Belgi markirovkasi boʻyicha savollar bormi? Tushuntiraman.',
     ],
