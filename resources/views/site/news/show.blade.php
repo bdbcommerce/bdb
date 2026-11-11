@@ -71,7 +71,7 @@
                 @endif
             </div>
 
-            <h1 class="mt-4 max-w-4xl text-3xl md:text-5xl font-semibold tracking-tight text-gray-900 leading-tight text-balance">{{ $title }}</h1>
+            <h1 class="mt-4 max-w-4xl text-3xl md:text-5xl font-semibold tracking-tight text-gray-900 leading-tight text-balance break-words">{{ $title }}</h1>
 
             @if($excerpt)
                 <p class="mt-6 max-w-3xl text-lg text-gray-600 leading-relaxed text-pretty">{{ $excerpt }}</p>
@@ -96,7 +96,7 @@
                 </div>
             @endif
 
-            <div class="mt-10 pt-8 border-t border-gray-200">
+            <div class="mt-10 pt-8 border-t border-gray-200 max-w-3xl">
                 <a href="{{ $catSlug ? route('site.news.category', [$locale, $catSlug]) : route('site.news', $locale) }}"
                    class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
                     @include('site.partials.icon', ['name' => 'arrow-left', 'class' => 'size-4'])
@@ -118,7 +118,7 @@
             {{-- Share --}}
             <div class="rounded-2xl border border-gray-200 p-6"
                  x-data="{ copied: false, copy() { navigator.clipboard?.writeText(location.href).then(() => { this.copied = true; setTimeout(() => this.copied = false, 2000); }); } }">
-                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">{{ __('site.news.share') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">{{ rtrim(__('site.news.share'), ': ') }}</p>
                 <div class="mt-4 flex flex-wrap gap-2 text-sm">
                     <a href="https://t.me/share/url?url={{ urlencode(url()->current()) }}&text={{ urlencode($title) }}" target="_blank" rel="noopener noreferrer"
                        class="rounded-lg border border-gray-200 px-3 py-1.5 font-medium text-gray-700 hover:border-gray-400 transition-colors">Telegram</a>

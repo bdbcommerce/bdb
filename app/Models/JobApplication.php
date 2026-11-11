@@ -48,13 +48,18 @@ class JobApplication extends Model
                 return false;
             }
 
-            $this->deleteFile();
+            // Record the Telegram copy first; the local file is deleted only once that is saved,
+            // so a failed save (e.g. migration not run) never leaves the CV unreachable.
+            $localPath = $this->cv_path;
             $this->update([
                 'cv_file_id' => $sent['file_id'],
                 'cv_chat_id' => $sent['chat_id'],
                 'cv_message_id' => $sent['message_id'],
                 'cv_path' => null,
             ]);
+            if (self::isSafeCvPath($localPath)) {
+                Storage::disk('local')->delete($localPath);
+            }
 
             return true;
         });
@@ -95,7 +100,12 @@ class JobApplication extends Model
     /** True only for the server-generated name: cvs/<40 random chars>.<allowed extension>. */
     public function hasSafePath(): bool
     {
-        return (bool) preg_match('#^'.self::CV_DIR.'/[A-Za-z0-9]{40}\.(pdf|docx?|rtf|odt)$#D', (string) $this->cv_path);
+        return self::isSafeCvPath($this->cv_path);
+    }
+
+    private static function isSafeCvPath(?string $path): bool
+    {
+        return (bool) preg_match('#^'.self::CV_DIR.'/[A-Za-z0-9]{40}\.(pdf|docx?|rtf|odt)$#D', (string) $path);
     }
 
     /** Safe download name: the applicant's original file name without path or odd characters. */

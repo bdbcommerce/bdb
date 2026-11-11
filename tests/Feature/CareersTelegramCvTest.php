@@ -102,6 +102,23 @@ class CareersTelegramCvTest extends TestCase
         $this->assertCount(1, Http::recorded(fn ($r) => str_ends_with($r->url(), '/sendMessage')));
     }
 
+    public function test_cv_is_kept_on_the_server_when_saving_the_file_id_fails(): void
+    {
+        $this->fakeTelegramOk();
+        // Simulate a server where the migration has not run: the update after the upload fails.
+        JobApplication::updating(fn () => throw new \RuntimeException('no such column: cv_file_id'));
+
+        $this->post(route('site.careers.apply', 'en'), [
+            'name' => 'Aziz Karimov',
+            'phone' => '+998 90 123 45 67',
+            'cv' => UploadedFile::fake()->create('Aziz CV.pdf', 200, 'application/pdf'),
+            'consent' => '1',
+        ]);
+
+        $app = JobApplication::sole();
+        Storage::disk('local')->assertExists($app->cv_path);
+    }
+
     public function test_deleting_an_application_deletes_the_telegram_message(): void
     {
         $this->fakeTelegramOk();
