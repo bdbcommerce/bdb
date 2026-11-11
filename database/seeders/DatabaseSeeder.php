@@ -37,8 +37,16 @@ class DatabaseSeeder extends Seeder
             HeroBannerSeeder::class,
             AiModelSeeder::class, // free AI models, switched off until a key is added
             ColorThemeSeeder::class, // default site colours + designer presets
-            DemoContentSeeder::class,
         ]);
+
+        // Placeholder brands/industries/customers, starter knowledge base and articles:
+        // never on production. Load the knowledge base or articles there on purpose with
+        // --class=KnowledgeBaseSeeder / --class=ArticleSeeder after review.
+        if (app()->isProduction()) {
+            $this->command?->warn('Production: skipping demo content (DemoContentSeeder).');
+        } else {
+            $this->call(DemoContentSeeder::class);
+        }
 
     }
 }

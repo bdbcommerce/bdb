@@ -24,7 +24,7 @@
             @endif
             @if($article->published_at)
                 @if($article->category)<span aria-hidden="true" class="text-gray-300">/</span>@endif
-                <time datetime="{{ $article->published_at->toDateString() }}">{{ $article->published_at->copy()->locale($__locale)->isoFormat('D MMM YYYY') }}</time>
+                <time datetime="{{ $article->published_at->toDateString() }}">{{ $article->published_at->copy()->locale($__locale === 'uz' ? 'uz_Latn' : $__locale)->isoFormat('D MMM YYYY') }}</time>
             @endif
         </div>
         <{{ $__tag }} class="font-semibold text-gray-900 leading-snug line-clamp-2 group-hover:text-brand-600 transition-colors">

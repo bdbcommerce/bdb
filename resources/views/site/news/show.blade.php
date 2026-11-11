@@ -67,7 +67,7 @@
                     <span class="eyebrow">{{ $catName }}</span>
                 @endif
                 @if($article->published_at)
-                    <time datetime="{{ $article->published_at->toIso8601String() }}">{{ $article->published_at->copy()->locale($locale)->isoFormat('D MMMM YYYY') }}</time>
+                    <time datetime="{{ $article->published_at->toIso8601String() }}">{{ $article->published_at->copy()->locale($locale === 'uz' ? 'uz_Latn' : $locale)->isoFormat('D MMMM YYYY') }}</time>
                 @endif
             </div>
 
