@@ -24,3 +24,8 @@ Homestead.yaml
 Thumbs.db
 CLAUDE.md
 DEPLOYMENT.md
+
+# Generated at runtime by SeoFiles - a static copy would hide the dynamic one
+/public/sitemap.xml
+/public/robots.txt
+/public/llms.txt
