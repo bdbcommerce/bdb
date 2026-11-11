@@ -610,7 +610,25 @@ $rules
             $lines[] = "
 ## Careers ({$base}/careers) — job seekers apply there with a CV form";
             $lines[] = $vacancies->isEmpty() ? '- No open positions now; a CV can still be sent on the Careers page.'
-                : $vacancies->map(fn (Vacancy $v) => '- '.$v->titleIn($locale).' ('.__('site.careers.departments.'.$v->department, [], $locale).')')->implode('
+                : $vacancies->map(function (Vacancy $v) use ($locale) {
+                    // Like other admin content: no tags, one line (no fake prompt sections), length-capped
+                    // because this block is sent with every question.
+                    $clean = fn (?string $s, int $max) => mb_strimwidth(trim(preg_replace('/\s+/u', ' ', strip_tags((string) $s))), 0, $max, '…');
+                    $about = $clean($v->getTranslation('description', $locale, false), 300);
+                    $needs = $clean(implode('; ', $v->lines('requirements', $locale)), 300);
+                    $offer = $clean(implode('; ', $v->lines('offer', $locale)), 300);
+
+                    return '- '.$clean($v->titleIn($locale), 120)
+                        .' ('.implode(', ', array_filter([
+                            __('site.careers.departments.'.$v->department, [], $locale),
+                            __('site.careers.types.'.$v->employment_type, [], $locale),
+                            $clean($v->getTranslation('location', $locale, false), 80),
+                            $v->salary ? 'salary '.$clean($v->salary, 120) : null,
+                        ])).')'
+                        .($about !== '' ? ': '.$about : '')
+                        .($needs !== '' ? ' Requirements: '.$needs.'.' : '')
+                        .($offer !== '' ? ' Offer: '.$offer.'.' : '');
+                })->take(15)->implode('
 ');
 
             // Searchable knowledge entries (only the matching ones are sent).

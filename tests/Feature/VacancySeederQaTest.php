@@ -130,7 +130,8 @@ class VacancySeederQaTest extends TestCase
             $this->assertStringContainsString('/'.$l.'/careers', $sitemap);
         }
 
-        $titles = ['uz' => ['Sotuv menejeri (Savdo)', 'Haydovchi-ekspeditor (Ombor va logistika)'], 'ru' => ['Менеджер по продажам (Продажи)', 'Водитель-экспедитор (Склад и логистика)'], 'en' => ['Sales manager (Sales)', 'Delivery driver (Warehouse & logistics)']];
+        // "- Title (Department, type, location, salary …): details"
+        $titles = ['uz' => ['Sotuv menejeri (Savdo,', 'Haydovchi-ekspeditor (Ombor va logistika,'], 'ru' => ['Менеджер по продажам (Продажи,', 'Водитель-экспедитор (Склад и логистика,'], 'en' => ['Sales manager (Sales,', 'Delivery driver (Warehouse & logistics,']];
         foreach ($titles as $l => $expect) {
             $prompt = app(ChatAssistant::class)->promptPreview($l, 'web');
             foreach ($expect as $t) {

@@ -30,6 +30,17 @@
             'streetAddress' => $address ?: null,
             'addressCountry' => 'UZ',
         ])],
+        'baseSalary' => ($pay = $v->salaryRange()) ? [
+            '@type' => 'MonetaryAmount',
+            'currency' => $pay['currency'],
+            'value' => array_filter([
+                '@type' => 'QuantitativeValue',
+                'value' => $pay['min'] !== null && $pay['min'] === $pay['max'] ? $pay['min'] : null,
+                'minValue' => $pay['min'] !== $pay['max'] ? $pay['min'] : null,
+                'maxValue' => $pay['min'] !== $pay['max'] ? $pay['max'] : null,
+                'unitText' => $pay['unit'],
+            ], fn ($v) => $v !== null),
+        ] : null,
         'directApply' => true,
     ]))->values()->all();
 
