@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\JobApplication;
 use App\Models\Vacancy;
+use App\Services\Telegram\TelegramApi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -59,18 +60,28 @@ class JobApplicationController extends Controller
     {
         $jobApplication->delete(); // the CV file is removed too
 
-        return redirect()->route('admin.job-applications.index')->with('success', 'Application and CV deleted.');
+        return redirect()->route('admin.job-applications.index')->with('success', 'Application deleted. The CV message in Telegram is removed too where Telegram allows it (older than 48 hours: only if the bot is a group admin).');
     }
 
-    /** Download the CV (private disk; never served publicly). */
-    public function download(JobApplication $jobApplication)
+    /** Download the CV: fetched from Telegram through the bot, or from the private disk if it was never sent. */
+    public function download(JobApplication $jobApplication, TelegramApi $api)
     {
+        $headers = [
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+        ];
+
+        if ($jobApplication->cv_file_id) {
+            $file = $api->downloadFile($jobApplication->cv_file_id);
+            abort_if($file === null, 404, 'Telegram could not provide this CV.');
+
+            return response()->streamDownload(fn () => print ($file['body']), $jobApplication->cv_name,
+                ['Content-Type' => 'application/octet-stream'] + $headers);
+        }
+
         $disk = Storage::disk('local');
         abort_unless($jobApplication->hasSafePath() && $disk->exists($jobApplication->cv_path), 404);
 
-        return $disk->download($jobApplication->cv_path, $jobApplication->cv_name, [
-            'X-Content-Type-Options' => 'nosniff',
-            'Content-Security-Policy' => "default-src 'none'; sandbox",
-        ]);
+        return $disk->download($jobApplication->cv_path, $jobApplication->cv_name, $headers);
     }
 }

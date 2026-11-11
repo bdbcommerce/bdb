@@ -49,7 +49,7 @@
 <article>
     <header class="relative overflow-hidden border-b border-gray-200 bg-white">
         <div class="absolute inset-0 bg-grid mask-fade-r pointer-events-none" aria-hidden="true"></div>
-        <div class="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-12 md:pt-14">
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-12 md:pt-14">
             <nav aria-label="{{ __('site.a11y.breadcrumb') }}" class="mb-8">
                 <ol class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
                     <li><a href="{{ route('site.home', $locale) }}" class="hover:text-gray-900 transition-colors">{{ __('Home') }}</a></li>
@@ -71,59 +71,65 @@
                 @endif
             </div>
 
-            <h1 class="mt-4 text-3xl md:text-5xl font-semibold tracking-tight text-gray-900 leading-tight text-balance">{{ $title }}</h1>
+            <h1 class="mt-4 max-w-4xl text-3xl md:text-5xl font-semibold tracking-tight text-gray-900 leading-tight text-balance">{{ $title }}</h1>
 
             @if($excerpt)
-                <p class="mt-6 text-lg text-gray-600 leading-relaxed text-pretty">{{ $excerpt }}</p>
+                <p class="mt-6 max-w-3xl text-lg text-gray-600 leading-relaxed text-pretty">{{ $excerpt }}</p>
             @endif
         </div>
     </header>
 
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-        @if($article->featured_image)
-            <figure class="mb-10 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 aspect-video">
-                <img src="{{ Storage::url($article->featured_image) }}" alt="{{ $title }}"
-                     decoding="async" fetchpriority="high" width="1280" height="720"
-                     class="size-full object-cover">
-            </figure>
-        @endif
+    {{-- Same 1280px container as the rest of the site: text column (readable line length) + side column --}}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-16">
+        <div class="min-w-0">
+            @if($article->featured_image)
+                <figure class="mb-10 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 aspect-video">
+                    <img src="{{ Storage::url($article->featured_image) }}" alt="{{ $title }}"
+                         decoding="async" fetchpriority="high" width="1280" height="720"
+                         class="size-full object-cover">
+                </figure>
+            @endif
 
-        @if($article->getTranslation('content', $locale, false))
-            <div class="article-content">
-                {!! $article->getTranslation('content', $locale) !!}
-            </div>
-        @endif
+            @if($article->getTranslation('content', $locale, false))
+                <div class="article-content max-w-3xl">
+                    {!! $article->getTranslation('content', $locale) !!}
+                </div>
+            @endif
 
-        {{-- Ask the assistant about this topic --}}
-        <aside class="mt-12 rounded-2xl border border-gray-200 bg-gray-50 p-6 flex flex-col sm:flex-row sm:items-center gap-4" x-data>
-            <span class="icon-tile text-brand-600">@include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-5'])</span>
-            <div class="flex-1">
-                <p class="font-semibold text-gray-900">{{ __('site.news.ask_title') }}</p>
-                <p class="mt-1 text-sm text-gray-600">{{ __('site.news.ask_text') }}</p>
-            </div>
-            <button type="button" @click="$dispatch('belgi-open', { message: @js(__('site.news.ask_prompt', ['title' => Str::limit($title, 120)])) })"
-                    class="btn-secondary !py-2.5 shrink-0">{{ __('site.cta.ask_ai') }}</button>
-        </aside>
-
-        {{-- Share / back --}}
-        <div class="mt-10 pt-8 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4"
-             x-data="{ copied: false, copy() { navigator.clipboard?.writeText(location.href).then(() => { this.copied = true; setTimeout(() => this.copied = false, 2000); }); } }">
-            <a href="{{ $catSlug ? route('site.news.category', [$locale, $catSlug]) : route('site.news', $locale) }}"
-               class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-                @include('site.partials.icon', ['name' => 'arrow-left', 'class' => 'size-4'])
-                {{ __('Back to news') }}
-            </a>
-            <div class="flex items-center gap-2 text-sm">
-                <span class="text-gray-500">{{ __('site.news.share') }}</span>
-                <a href="https://t.me/share/url?url={{ urlencode(url()->current()) }}&text={{ urlencode($title) }}" target="_blank" rel="noopener noreferrer"
-                   class="rounded-lg border border-gray-200 px-3 py-1.5 font-medium text-gray-700 hover:border-gray-400 transition-colors">Telegram</a>
-                <button type="button" @click="copy()"
-                        class="rounded-lg border border-gray-200 px-3 py-1.5 font-medium text-gray-700 hover:border-gray-400 transition-colors">
-                    <span x-show="!copied">{{ __('site.news.copy_link') }}</span>
-                    <span x-show="copied" x-cloak role="status">{{ __('site.news.copied') }}</span>
-                </button>
+            <div class="mt-10 pt-8 border-t border-gray-200">
+                <a href="{{ $catSlug ? route('site.news.category', [$locale, $catSlug]) : route('site.news', $locale) }}"
+                   class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+                    @include('site.partials.icon', ['name' => 'arrow-left', 'class' => 'size-4'])
+                    {{ __('Back to news') }}
+                </a>
             </div>
         </div>
+
+        <aside class="space-y-6 lg:sticky lg:top-24 lg:self-start">
+            {{-- Ask the assistant about this topic --}}
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-6" x-data>
+                <span class="icon-tile text-brand-600">@include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-5'])</span>
+                <p class="mt-4 font-semibold text-gray-900">{{ __('site.news.ask_title') }}</p>
+                <p class="mt-1 text-sm text-gray-600">{{ __('site.news.ask_text') }}</p>
+                <button type="button" @click="$dispatch('belgi-open', { message: @js(__('site.news.ask_prompt', ['title' => Str::limit($title, 120)])) })"
+                        class="btn-secondary !py-2.5 mt-5 w-full justify-center">{{ __('site.cta.ask_ai') }}</button>
+            </div>
+
+            {{-- Share --}}
+            <div class="rounded-2xl border border-gray-200 p-6"
+                 x-data="{ copied: false, copy() { navigator.clipboard?.writeText(location.href).then(() => { this.copied = true; setTimeout(() => this.copied = false, 2000); }); } }">
+                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">{{ __('site.news.share') }}</p>
+                <div class="mt-4 flex flex-wrap gap-2 text-sm">
+                    <a href="https://t.me/share/url?url={{ urlencode(url()->current()) }}&text={{ urlencode($title) }}" target="_blank" rel="noopener noreferrer"
+                       class="rounded-lg border border-gray-200 px-3 py-1.5 font-medium text-gray-700 hover:border-gray-400 transition-colors">Telegram</a>
+                    <button type="button" @click="copy()"
+                            class="rounded-lg border border-gray-200 px-3 py-1.5 font-medium text-gray-700 hover:border-gray-400 transition-colors">
+                        <span x-show="!copied">{{ __('site.news.copy_link') }}</span>
+                        <span x-show="copied" x-cloak role="status">{{ __('site.news.copied') }}</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
     </div>
 </article>
 

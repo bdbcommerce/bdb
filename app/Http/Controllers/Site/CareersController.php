@@ -107,7 +107,8 @@ class CareersController extends Controller
             'locale' => $locale,
         ]);
 
-        rescue(fn () => $notifier->newApplication($application), report: true);
+        // After the response: post the CV to the admin Telegram chat, then delete it from the server.
+        defer(fn () => rescue(fn () => $application->sendCvToTelegram($notifier), report: true));
 
         return redirect()->to(route('site.careers', $locale).'#apply')->with('careers_sent', true);
     }

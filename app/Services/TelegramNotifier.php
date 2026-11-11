@@ -6,6 +6,7 @@ use App\Models\ChatLead;
 use App\Models\JobApplication;
 use App\Services\Seo\SeoFiles;
 use App\Services\Telegram\TelegramApi;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Posts new chat leads to the sales team's Telegram chat.
@@ -45,8 +46,45 @@ class TelegramNotifier
         $this->send(implode("\n", $lines));
     }
 
-    /** New CV from the Careers page (the file itself stays on the server; staff open it in the admin). */
-    public function newApplication(JobApplication $application): void
+    /**
+     * New CV from the Careers page: the file is sent to the chat with the details as its caption.
+     * Returns where it went, or null when the file could not be sent: then the CV stays on the
+     * server and, unless $textFallback is false (retries), the details go out as a text message.
+     *
+     * @return array{file_id: string, chat_id: string, message_id: int|null}|null
+     */
+    public function newApplication(JobApplication $application, bool $textFallback = true): ?array
+    {
+        $caption = $this->applicationText($application);
+
+        if ($this->enabled() && $application->hasSafePath() && Storage::disk('local')->exists($application->cv_path)) {
+            $chatId = (string) config('services.telegram.chat_id');
+            $message = $this->api->sendDocument(
+                $chatId,
+                Storage::disk('local')->get($application->cv_path),
+                $application->cv_name,
+                ['caption' => $caption, 'parse_mode' => 'HTML'],
+            );
+            if ($fileId = $message['document']['file_id'] ?? null) {
+                return ['file_id' => $fileId, 'chat_id' => $chatId, 'message_id' => $message['message_id'] ?? null];
+            }
+        }
+
+        if ($textFallback) {
+            $this->send($caption);
+        }
+
+        return null;
+    }
+
+    /** Remove a CV message from the chat (best effort: Telegram may refuse, e.g. old messages in some chats). */
+    public function deleteMessage(string $chatId, int $messageId): bool
+    {
+        return $this->api->configured()
+            && $this->api->call('deleteMessage', ['chat_id' => $chatId, 'message_id' => $messageId]) !== null;
+    }
+
+    private function applicationText(JobApplication $application): string
     {
         $e = fn (?string $s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
@@ -67,7 +105,7 @@ class TelegramNotifier
         $lines[] = '';
         $lines[] = '<a href="'.$e(SeoFiles::publicUrl(route('admin.job-applications.show', $application))).'">Open in admin</a>';
 
-        $this->send(implode("\n", $lines));
+        return implode("\n", $lines);
     }
 
     public function send(string $html): bool

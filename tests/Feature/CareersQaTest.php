@@ -224,7 +224,8 @@ class CareersQaTest extends TestCase
 
         $this->post(route('site.careers.apply', 'en'), $this->form(['vacancy_id' => $v->id, 'name' => '<b>Bob</b>', 'message' => '<script>x</script>hi']))
             ->assertSessionHasNoErrors();
-        Http::assertSent(fn ($r) => str_contains($r['text'], 'New CV') && ! str_contains($r['text'], '<b>Bob') && ! str_contains($r['text'], '</script><b>x'));
+        // The faked sendDocument fails, so the details go out as a text message.
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/sendMessage') && str_contains($r['text'], 'New CV') && ! str_contains($r['text'], '<b>Bob') && ! str_contains($r['text'], '</script><b>x'));
 
         $admin = User::factory()->create(['is_admin' => true]);
         $app = JobApplication::sole();

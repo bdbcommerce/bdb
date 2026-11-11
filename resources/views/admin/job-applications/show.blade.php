@@ -42,7 +42,15 @@
             </svg>
             <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium text-slate-900 break-all">{{ $application->cv_name }}</p>
-                <p class="text-xs text-slate-400">{{ $size }}</p>
+                <p class="text-xs text-slate-400">{{ $size }} ·
+                    @if($application->cv_file_id)
+                        stored in the Telegram admin chat
+                    @elseif($application->cv_path)
+                        on the server — not yet sent to Telegram (retried every hour)
+                    @else
+                        file missing
+                    @endif
+                </p>
             </div>
             <a href="{{ route('admin.job-applications.cv', $application) }}"
                class="bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700 transition-colors">Download CV</a>

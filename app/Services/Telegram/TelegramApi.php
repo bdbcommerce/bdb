@@ -82,6 +82,38 @@ class TelegramApi
         ];
     }
 
+    /**
+     * Upload a file to a chat (multipart; bots may upload up to 50 MB).
+     *
+     * @return array<string, mixed>|null the sent message, or null on failure
+     */
+    public function sendDocument(int|string $chatId, string $contents, string $filename, array $extra = [], int $timeout = 60): ?array
+    {
+        if (! $this->configured()) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout($timeout)
+                ->attach('document', $contents, $filename)
+                ->post('https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendDocument', ['chat_id' => $chatId] + $extra);
+        } catch (Throwable $e) {
+            Log::warning('Telegram sendDocument failed', [
+                'error' => str_replace((string) config('services.telegram.bot_token'), '***', $e->getMessage()),
+            ]);
+
+            return null;
+        }
+
+        if ($response->failed() || ! $response->json('ok')) {
+            Log::warning('Telegram sendDocument failed', ['status' => $response->status(), 'body' => $response->body()]);
+
+            return null;
+        }
+
+        return (array) $response->json('result');
+    }
+
     public function sendMessage(int|string $chatId, string $text, array $extra = [], int $timeout = 10): bool
     {
         return $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text] + $extra, $timeout) !== null;
