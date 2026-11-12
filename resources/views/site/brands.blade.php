@@ -29,13 +29,14 @@
                         $desc = $brand->getTranslation('description', $locale, false);
                     @endphp
                     <li class="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-colors hover:border-brand-200">
-                        <div class="flex h-20 items-center justify-center rounded-xl bg-gray-50 px-6">
+                        {{-- White logo on a dark tile; real colours on a light tile on hover / focus. --}}
+                        <div class="flex h-20 items-center justify-center rounded-xl bg-gray-900 px-6 transition-colors duration-300 group-hover:bg-gray-50 group-focus-within:bg-gray-50">
                             @if($brand->logo)
                                 <img src="{{ Storage::url($brand->logo) }}" alt="{{ $name }}"
                                      loading="lazy" decoding="async"
-                                     class="max-h-12 max-w-full object-contain grayscale opacity-70 transition duration-300 group-hover:grayscale-0 group-hover:opacity-100">
+                                     class="max-h-12 max-w-full object-contain brightness-0 invert transition duration-300 group-hover:brightness-100 group-hover:invert-0 group-focus-within:brightness-100 group-focus-within:invert-0">
                             @else
-                                <span class="text-lg font-semibold tracking-wide text-gray-500">{{ $name }}</span>
+                                <span class="text-lg font-semibold tracking-wide text-white transition-colors duration-300 group-hover:text-gray-900 group-focus-within:text-gray-900">{{ $name }}</span>
                             @endif
                         </div>
                         <h2 class="mt-5 text-base font-semibold text-gray-900">{{ $name }}</h2>

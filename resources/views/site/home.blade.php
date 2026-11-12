@@ -258,16 +258,17 @@
                 'text'  => __('site.brands.empty_text'),
             ])
         @else
-            <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200">
+            {{-- White logos on dark tiles; a tile turns light with the logo's real colours on hover. --}}
+            <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-px overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
                 @foreach($brands->take(12) as $brand)
-                    <li class="group flex h-28 items-center justify-center bg-white p-6 transition-colors hover:bg-gray-50"
+                    <li class="group flex h-28 items-center justify-center bg-gray-900 p-6 transition-colors duration-300 hover:bg-white"
                         title="{{ $brand->getTranslation('name', $locale) }}">
                         @if($brand->logo)
                             <img src="{{ Storage::url($brand->logo) }}" alt="{{ $brand->getTranslation('name', $locale) }}"
                                  loading="lazy" decoding="async"
-                                 class="max-h-10 max-w-full object-contain grayscale opacity-70 transition duration-300 group-hover:grayscale-0 group-hover:opacity-100">
+                                 class="max-h-10 max-w-full object-contain brightness-0 invert transition duration-300 group-hover:brightness-100 group-hover:invert-0">
                         @else
-                            <span class="text-sm font-semibold tracking-wide text-gray-500 group-hover:text-gray-900 transition-colors text-center">
+                            <span class="text-sm font-semibold tracking-wide text-white group-hover:text-gray-900 transition-colors duration-300 text-center">
                                 {{ $brand->getTranslation('name', $locale) }}
                             </span>
                         @endif
