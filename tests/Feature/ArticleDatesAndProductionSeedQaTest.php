@@ -113,7 +113,9 @@ class ArticleDatesAndProductionSeedQaTest extends TestCase
         $this->seedAs('production');
 
         $this->assertBaseSeeded();
-        $this->assertSame(0, Brand::count(), 'brands');
+        // The real brands (BrandSeeder) are seeded everywhere; no "Demo …" placeholder brands on production.
+        $this->assertSame(23, Brand::count(), 'brands');
+        $this->assertSame(0, Brand::where('name->en', 'like', 'Demo%')->count(), 'demo brands');
         $this->assertSame(0, Industry::count(), 'industries');
         $this->assertSame(0, Customer::count(), 'customers');
         $this->assertSame(0, Article::count(), 'articles');
@@ -140,6 +142,6 @@ class ArticleDatesAndProductionSeedQaTest extends TestCase
         $this->artisan('db:seed', ['--class' => DatabaseSeeder::class, '--force' => true])->assertSuccessful();
 
         $this->assertSame($counts, [User::count(), ArticleCategory::count(), Banner::count(), AiModel::count(), ColorTheme::count()]);
-        $this->assertSame(0, Brand::count());
+        $this->assertSame(23, Brand::count(), 're-running adds no duplicate brands');
     }
 }

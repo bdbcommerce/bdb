@@ -9,7 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-/** BrandSeeder: 19 real brands with logo, website and uz/ru/en description; safe on existing data. */
+/** BrandSeeder: 23 real brands with logo, website and uz/ru/en description; safe on existing data. */
 class BrandSeederTest extends TestCase
 {
     use RefreshDatabase;
@@ -24,7 +24,7 @@ class BrandSeederTest extends TestCase
     {
         $this->seed(BrandSeeder::class);
 
-        $this->assertSame(19, Brand::count());
+        $this->assertSame(23, Brand::count());
         foreach (Brand::all() as $brand) {
             $name = $brand->getTranslation('name', 'en');
             $this->assertTrue($brand->is_active, $name);
@@ -58,7 +58,7 @@ class BrandSeederTest extends TestCase
         $this->seed(BrandSeeder::class);
         $this->seed(BrandSeeder::class); // re-run: nothing duplicated
 
-        $this->assertSame(19, Brand::count());
+        $this->assertSame(23, Brand::count());
         $honeywell->refresh();
         $this->assertSame('https://automation.honeywell.com', $honeywell->website);
         $this->assertSame('Own text', $honeywell->getTranslation('description', 'en'));

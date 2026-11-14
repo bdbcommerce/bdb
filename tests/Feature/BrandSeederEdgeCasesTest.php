@@ -38,10 +38,10 @@ class BrandSeederEdgeCasesTest extends TestCase
         $this->seed(BrandSeeder::class);
         $this->seed(BrandSeeder::class);
 
-        $this->assertSame(19, Brand::count());
+        $this->assertSame(23, Brand::count());
         $this->assertSame($before, Brand::orderBy('id')->get()->map->only(['id', 'logo', 'website', 'sort_order', 'is_active'])->all());
         $this->assertSame($desc, Brand::orderBy('id')->get()->map(fn ($b) => $b->getTranslations('description'))->all());
-        $this->assertCount(18, Storage::disk('public')->files('brands'));
+        $this->assertCount(22, Storage::disk('public')->files('brands'));
     }
 
     public function test_deleted_logo_file_is_restored_and_missing_bundled_logo_clears_broken_path(): void
@@ -65,7 +65,7 @@ class BrandSeederEdgeCasesTest extends TestCase
 
         $this->seed(BrandSeeder::class);
 
-        $this->assertSame(19, Brand::count());
+        $this->assertSame(23, Brand::count());
         $this->assertSame('brands/hprt-own.png', Brand::where('name->en', 'hprt')->value('logo'));
         $this->assertSame('hprt', Brand::where('name->en', 'hprt')->sole()->getTranslation('name', 'en'), 'name is not changed');
         $this->assertSame('https://asianwell.example', Brand::where('name->en', 'ASIANWELL')->value('website'));
@@ -77,7 +77,7 @@ class BrandSeederEdgeCasesTest extends TestCase
 
         $this->seed(BrandSeeder::class);
 
-        $this->assertSame(19, Brand::count());
+        $this->assertSame(23, Brand::count());
         $godex = Brand::where('name->ru', 'Годекс')->sole();
         $this->assertSame('https://www.godexintl.com', $godex->website);
         $this->assertSame('brands/godex.png', $godex->logo);
@@ -92,7 +92,7 @@ class BrandSeederEdgeCasesTest extends TestCase
         $lenovo = Brand::where('name->en', 'Lenovo')->sole();
         $this->assertFalse($lenovo->is_active);
         $this->assertSame(99, (int) $lenovo->sort_order);
-        $this->assertSame(18, Brand::active()->count());
+        $this->assertSame(22, Brand::active()->count());
         $this->assertGreaterThan(99, (int) Brand::where('name->en', 'Zebra Technologies')->value('sort_order'), 'new brands go after existing ones');
     }
 
@@ -103,7 +103,7 @@ class BrandSeederEdgeCasesTest extends TestCase
 
         $this->seed(BrandSeeder::class);
 
-        $this->assertSame(19, Brand::count() - 1);
+        $this->assertSame(23, Brand::count() - 1);
         $this->assertSame('brands/rongta.png', $a->fresh()->logo);
         $this->assertNull($b->fresh()->logo);
     }
@@ -115,13 +115,13 @@ class BrandSeederEdgeCasesTest extends TestCase
 
         $this->seed(BrandSeeder::class);
 
-        $this->assertSame(20, Brand::count());
+        $this->assertSame(24, Brand::count());
     }
 
     public function test_bundled_logos_are_valid_transparent_pngs_of_sensible_size(): void
     {
         $files = glob(database_path('seeders/data/brand-logos/*.png'));
-        $this->assertCount(18, $files);
+        $this->assertCount(22, $files);
         foreach ($files as $file) {
             $name = basename($file);
             $info = getimagesize($file);
@@ -158,13 +158,13 @@ class BrandSeederEdgeCasesTest extends TestCase
         }
     }
 
-    public function test_public_pages_in_all_locales_show_19_brands_and_12_on_home(): void
+    public function test_public_pages_in_all_locales_show_23_brands_and_12_on_home(): void
     {
         $this->seed(BrandSeeder::class);
 
         foreach (['uz', 'ru', 'en'] as $locale) {
             $html = $this->get("/{$locale}/brands")->assertOk()->getContent();
-            $this->assertSame(18, preg_match_all('#<img src="[^"]*/brands/[a-z-]+\.png"#', $html), "{$locale} brands logos");
+            $this->assertSame(22, preg_match_all('#<img src="[^"]*/brands/[a-z-]+\.png"#', $html), "{$locale} brands logos");
             foreach (['Asianwell'] as $name) {
                 $this->assertMatchesRegularExpression('#<span class="text-lg font-semibold[^"]*text-gray-600[^"]*">\s*'.$name.'\s*</span>#', $html, "{$locale} {$name} text tile");
             }

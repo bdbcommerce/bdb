@@ -37,6 +37,7 @@ class DatabaseSeeder extends Seeder
             HeroBannerSeeder::class,
             AiModelSeeder::class, // free AI models, switched off until a key is added
             ColorThemeSeeder::class, // default site colours + designer presets
+            BrandSeeder::class, // the real brands with logos; safe to re-run, keeps admin edits
         ]);
 
         // Placeholder brands/industries/customers, starter knowledge base and articles:

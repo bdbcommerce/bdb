@@ -245,6 +245,42 @@ class BrandSeeder extends Seeder
                     'en' => 'Laptops, desktops, tablets and monitors for business.',
                 ],
             ],
+            'sato' => [
+                'name' => 'SATO',
+                'website' => 'https://www.sato-global.com',
+                'description' => [
+                    'uz' => 'Yaponiya ishlab chiqaruvchisi: yorliq printerlari, RFID yechimlari va yorliqlar.',
+                    'ru' => 'Японский производитель принтеров этикеток, RFID-решений и этикеток.',
+                    'en' => 'Japanese maker of label printers, RFID solutions and labels.',
+                ],
+            ],
+            'canon' => [
+                'name' => 'Canon',
+                'website' => 'https://www.canon.com',
+                'description' => [
+                    'uz' => 'Ofis printerlari, hujjat skanerlari va koʻp funksiyali qurilmalar.',
+                    'ru' => 'Офисные принтеры, документ-сканеры и многофункциональные устройства.',
+                    'en' => 'Office printers, document scanners and multifunction devices.',
+                ],
+            ],
+            'epson' => [
+                'name' => 'Epson',
+                'website' => 'https://www.epson.com',
+                'description' => [
+                    'uz' => 'Chek printerlari, rangli yorliq printerlari va ofis printerlari.',
+                    'ru' => 'Чековые принтеры, цветные принтеры этикеток и офисные принтеры.',
+                    'en' => 'Receipt printers, colour label printers and office printers.',
+                ],
+            ],
+            'europos' => [ // Европос Групп
+                'name' => 'Europos',
+                'website' => 'https://europos.ru',
+                'description' => [
+                    'uz' => 'POS-materiallar va savdo joylari uchun jihozlar: narx ushlagichlari, javon va vitrina aksessuarlari.',
+                    'ru' => 'POS-материалы и оборудование для мест продаж: ценникодержатели, полочные и витринные аксессуары.',
+                    'en' => 'POS materials and retail display equipment: price tag holders, shelf and display accessories.',
+                ],
+            ],
         ];
     }
 }
