@@ -52,10 +52,15 @@ class TelegramApi
      *
      * @return array{body: string, type: string|null, name: string}|null
      */
-    public function downloadFile(string $fileId): ?array
+    public function downloadFile(string $fileId, ?int $maxBytes = null): ?array
     {
-        $path = $this->call('getFile', ['file_id' => $fileId])['file_path'] ?? null;
+        $info = $this->call('getFile', ['file_id' => $fileId]);
+        $path = $info['file_path'] ?? null;
         if (! $path) {
+            return null;
+        }
+        // $maxBytes: refuse before downloading when Telegram's own file_size is larger (checked again after).
+        if ($maxBytes !== null && is_numeric($info['file_size'] ?? null) && (int) $info['file_size'] > $maxBytes) {
             return null;
         }
 
@@ -72,6 +77,9 @@ class TelegramApi
         if ($response->failed()) {
             Log::warning('Telegram file download failed', ['status' => $response->status()]);
 
+            return null;
+        }
+        if ($maxBytes !== null && strlen($response->body()) > $maxBytes) {
             return null;
         }
 

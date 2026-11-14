@@ -6,9 +6,11 @@ use App\Models\ChatConversation;
 use App\Models\ChatLead;
 use App\Models\ClientRequest;
 use App\Models\TelegramUser;
+use App\Services\Ai\VoiceTranscriber;
 use App\Services\ChatAssistant;
 use App\Services\Invoices\InvoiceParser;
 use App\Services\TelegramNotifier;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
@@ -17,8 +19,9 @@ use Illuminate\Support\Str;
  *
  * A new customer first registers: picks a language, types a name and shares the
  * phone number linked to their Telegram account. Only then are text questions
- * answered by ChatAssistant (briefly). Other messages (photos, voice, files…) are
- * not answered; only their type and Telegram file ID are stored in the conversation.
+ * answered by ChatAssistant (briefly). Voice messages up to a minute are transcribed (Groq Whisper,
+ * VoiceTranscriber), the transcript is sent back and answered like text. Other messages (photos,
+ * files…) are not answered; only their type and Telegram file ID are stored in the conversation.
  * Only private chats are answered, and only with TELEGRAM_BOT_REPLIES=true (otherwise
  * they are just recorded). Telegram Business chats (a Premium account that connected
  * the bot) and groups are recorded without replies by TelegramRecorder.
@@ -44,7 +47,17 @@ class TelegramBot
         private ChatAssistant $assistant,
         private TelegramNotifier $notifier,
         private TelegramRecorder $recorder,
+        private VoiceTranscriber $transcriber,
     ) {}
+
+    /** Voice messages up to this long (seconds) are transcribed and answered. */
+    public const VOICE_MAX_SECONDS = 60;
+
+    /** Transcriptions per customer per hour. */
+    private const VOICE_PER_HOUR = 10;
+
+    /** Larger files are not sent for transcription (a minute of Telegram voice is about 0.3 MB, of a 192 kbit/s MP3 1.4 MB). */
+    private const VOICE_MAX_BYTES = 1536 * 1024;
 
     /** Telegram ID of the private message being handled (to mark it answered). */
     private ?int $messageId = null;
@@ -317,7 +330,11 @@ class TelegramBot
         $locale = $user->locale;
 
         if (! array_key_exists('text', $message)) {
-            return; // already recorded by type and file ID; not answered
+            if (is_array($message['voice'] ?? null) || is_array($message['audio'] ?? null)) {
+                $this->voice($user, $message);
+            }
+
+            return; // other files: already recorded by type and file ID; not answered
         }
 
         if ($text === '') {
@@ -337,6 +354,99 @@ class TelegramBot
 
             return;
         }
+
+        $this->answer($user, mb_substr($text, 0, 1000));
+    }
+
+    /**
+     * A voice message (or audio file) up to a minute: transcribed by Groq Whisper, the transcript is sent
+     * back as a reply to it, then answered like a typed message. Without a Groq key voice is not answered.
+     */
+    private function voice(TelegramUser $user, array $message): void
+    {
+        $locale = $user->locale;
+        $audio = is_array($message['voice'] ?? null) ? $message['voice'] : $message['audio'];
+        $fileId = is_string($audio['file_id'] ?? null) ? $audio['file_id'] : null;
+        $duration = is_numeric($audio['duration'] ?? null) ? (int) $audio['duration'] : null;
+
+        if (! $fileId || $this->messageId === null || ! $this->transcriber->available()) {
+            return;
+        }
+
+        $reply = fn (string $text) => $this->api->sendMessage($user->telegram_id, $text, [
+            'reply_parameters' => ['message_id' => $this->messageId, 'allow_sending_without_reply' => true],
+        ]);
+
+        $tooLong = fn () => $reply(__('chat.tg_voice_too_long', ['seconds' => self::VOICE_MAX_SECONDS], $locale));
+        $filename = VoiceTranscriber::filename(is_string($audio['file_name'] ?? null) ? $audio['file_name'] : null, (string) ($audio['mime_type'] ?? ''));
+        if ($duration === null || $duration < 1 || $filename === null) {
+            $reply(__('chat.tg_voice_failed', [], $locale)); // no length or a format Whisper can't read
+
+            return;
+        }
+        // A first check on what the sender's app claims; the real length is checked after the download.
+        if ($duration > self::VOICE_MAX_SECONDS
+            || (is_numeric($audio['file_size'] ?? null) && (int) $audio['file_size'] > self::VOICE_MAX_BYTES)) {
+            $tooLong();
+
+            return;
+        }
+
+        // Groq's free tier limits audio per hour/day: a per-customer cap, a daily message cap and a
+        // daily budget of audio seconds (as measured by Groq, so a mislabelled file still counts in full).
+        $day = now()->toDateString();
+        $dayKey = "telegram-voice:day:{$day}";
+        $secondsKey = "telegram-voice:seconds:{$day}";
+        Cache::add($dayKey, 0, now()->endOfDay());
+        Cache::add($secondsKey, 0, now()->endOfDay());
+        if (! RateLimiter::attempt("telegram-voice:{$user->telegram_id}", self::VOICE_PER_HOUR, fn () => true, 3600)
+            || (int) Cache::get($secondsKey, 0) >= max(0, (int) config('services.groq.voice_daily_seconds'))
+            || Cache::increment($dayKey) > max(0, (int) config('services.groq.voice_daily_limit'))) {
+            $reply(__('chat.tg_voice_limit', [], $locale));
+
+            return;
+        }
+
+        $this->api->call('sendChatAction', ['chat_id' => $user->telegram_id, 'action' => 'typing']);
+        $file = $this->api->downloadFile($fileId, self::VOICE_MAX_BYTES);
+        if (! $file) {
+            $this->transcriber->downloadFailed();
+            $reply(__('chat.tg_voice_failed', [], $locale));
+
+            return;
+        }
+        // Telegram voice is Ogg Opus: its real length is read from the file, not taken from the sender.
+        $real = VoiceTranscriber::oggSeconds($file['body']);
+        if ($real !== null && $real > self::VOICE_MAX_SECONDS + 1) {
+            $tooLong();
+
+            return;
+        }
+
+        $result = $this->transcriber->transcribe($file['body'], VoiceTranscriber::filename($file['name']) ?? $filename);
+        $measured = $result['seconds'] ?? $real ?? $duration;
+        if ($result !== null) {
+            Cache::increment($secondsKey, (int) ceil(max(1, $measured)));
+        }
+        if ($result !== null && $measured > self::VOICE_MAX_SECONDS + 1) {
+            $tooLong(); // a file whose header lied about its length (e.g. not Ogg): not answered
+
+            return;
+        }
+
+        $text = $result['text'] ?? null;
+        if ($text !== null && VoiceTranscriber::isHallucination($text)) {
+            $text = null; // silence: Whisper made up a subtitle credit or "thank you"
+        }
+        if ($text === null) {
+            $reply(__('chat.tg_voice_failed', [], $locale));
+
+            return;
+        }
+
+        $this->conversation($user)->setTranscript($this->messageId, $text);
+        // Plain text (no parse_mode): whatever was said is shown as is.
+        $reply(mb_substr('🎙 '.$text, 0, 4000));
 
         $this->answer($user, mb_substr($text, 0, 1000));
     }

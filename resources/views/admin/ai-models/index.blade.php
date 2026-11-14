@@ -19,6 +19,17 @@
         Add a few free models as backups. API keys are stored encrypted and never shown again.
     </p>
 
+    <div id="voice-status" class="rounded-lg border px-4 py-3 text-sm {{ $voice['on'] ? 'border-slate-200 bg-white text-slate-700' : 'border-amber-200 bg-amber-50 text-amber-900' }}">
+        <span class="font-medium">Telegram voice messages:</span>
+        @if($voice['on'])
+            on — voice messages up to 1 minute are transcribed by Groq Whisper ({{ $voice['model'] }}), the text is sent back to the customer and answered.
+            Key: {{ $voice['env'] ? 'GROQ_API_KEY in .env' : 'the key of a Groq model below' }}.
+        @else
+            off — add a Groq model below with its free key (any Groq model; it can stay switched off) or set GROQ_API_KEY in .env.
+            Until then voice messages are only saved in the chat.
+        @endif
+    </div>
+
     {{-- Configured models --}}
     <section class="bg-white border border-slate-200 rounded-xl overflow-hidden" aria-labelledby="models-heading">
         <h2 id="models-heading" class="px-5 pt-5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Models in use</h2>

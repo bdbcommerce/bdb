@@ -185,13 +185,35 @@ class ChatConversation extends Model
         $this->save();
     }
 
+    /**
+     * A recorded voice message $messageId was transcribed: its text becomes the message content (kept beside
+     * type and file_id, so admins still see the player). Pending like typed text until appendReply() answers it.
+     */
+    public function setTranscript(int $messageId, string $text): bool
+    {
+        $messages = $this->freshMessages();
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if (($messages[$i]['message_id'] ?? null) === $messageId && ($messages[$i]['role'] ?? null) === 'user' && isset($messages[$i]['type'])) {
+                $messages[$i] = ['content' => $text, 'transcribed' => true, 'aside' => true] + $messages[$i];
+                $this->messages = $messages;
+                $this->save();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** The sender edited message $messageId: replace its content. Returns false when it is not stored here. */
     public function applyEdit(int $messageId, array $content): bool
     {
         $messages = $this->freshMessages();
         for ($i = count($messages) - 1; $i >= 0; $i--) {
             if (($messages[$i]['message_id'] ?? null) === $messageId) {
-                $keep = array_intersect_key($messages[$i], array_flip(['role', 'sender', 'message_id', 'at', 'aside']));
+                // A voice message's transcript stays when only its caption is edited.
+                $keep = array_intersect_key($messages[$i], array_flip(['role', 'sender', 'message_id', 'at', 'aside',
+                    ...(! empty($messages[$i]['transcribed']) && isset($content['type']) ? ['content', 'transcribed'] : [])]));
                 $messages[$i] = $keep + $content + ['edited' => true];
                 $this->messages = $messages;
                 $this->timestamps = false; // an edit does not keep the session open

@@ -39,5 +39,7 @@
         <env name="TELEGRAM_ALERT_CHAT_ID" value="" force="true"/>
         <env name="TELEGRAM_BOT_REPLIES" value="true" force="true"/>
         <env name="GEMINI_API_KEY" value="" force="true"/>
+        <env name="GROQ_API_KEY" value="" force="true"/>
+        <env name="ANTHROPIC_API_KEY" value="" force="true"/>
     </php>
 </phpunit>

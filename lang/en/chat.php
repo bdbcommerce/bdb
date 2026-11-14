@@ -53,4 +53,7 @@ return [
     'tg_call_hint' => '👨‍💼 Want to talk to a specialist? Tap “📞 Request a call”.',
     'tg_followup' => "💬 An answer to your question “:question”:\n\n:answer",
     'tg_too_fast' => '⏳ You are sending messages too quickly. Please wait a minute.',
+    'tg_voice_too_long' => '🎙 I can listen to voice messages up to :seconds seconds. Please send a shorter one or type your question ✍️',
+    'tg_voice_limit' => '🎙 I can\'t listen to more voice messages right now. Please type your question ✍️',
+    'tg_voice_failed' => '🎙 Sorry, I couldn\'t make out the voice message. Please say it again or type your question ✍️',
 ];

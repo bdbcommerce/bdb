@@ -38,6 +38,16 @@ return [
         'key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    // Voice messages in the Telegram bot are transcribed by Groq Whisper. Without GROQ_API_KEY the key of
+    // any Groq model in Admin → AI settings is used; with no Groq key voice messages are not transcribed.
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'transcribe_model' => env('GROQ_TRANSCRIBE_MODEL', 'whisper-large-v3'),
+        'voice_daily_limit' => (int) env('TELEGRAM_VOICE_DAILY_LIMIT', 300),
+        // Audio seconds a day (Groq free tier: about 28 800 a day / 7 200 an hour for Whisper).
+        'voice_daily_seconds' => (int) env('TELEGRAM_VOICE_DAILY_SECONDS', 7200),
+    ],
+
     // One bot does both jobs: customers chat with the AI assistant in private
     // messages (webhook), and new leads are posted to the sales chat_id.
     'telegram' => [

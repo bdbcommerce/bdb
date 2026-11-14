@@ -6,6 +6,7 @@ use App\Console\Commands\AiCheckCommand;
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
 use App\Models\InvoiceParserSetting;
+use App\Services\Ai\VoiceTranscriber;
 use App\Services\AiErrorAlerts;
 use App\Services\ChatAssistant;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ use Illuminate\Validation\ValidationException;
  */
 class AiModelController extends Controller
 {
-    public function index(AiErrorAlerts $alerts)
+    public function index(AiErrorAlerts $alerts, VoiceTranscriber $voice)
     {
         return view('admin.ai-models.index', [
             'models' => $models = AiModel::orderBy('priority')->orderBy('id')->get(),
@@ -26,6 +27,7 @@ class AiModelController extends Controller
             'tasks' => AiModel::TASKS,
             'providers' => AiModel::PROVIDERS,
             'env' => ['model' => config('services.gemini.model'), 'key' => filled(config('services.gemini.key'))],
+            'voice' => ['on' => $voice->available(), 'env' => filled(config('services.groq.key')), 'model' => $voice->model()],
             'alertChat' => $alerts->chatId() && filled(config('services.telegram.bot_token')) ? $alerts->chatId() : null,
         ]);
     }

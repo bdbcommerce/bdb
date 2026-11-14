@@ -10,7 +10,7 @@
             @if($m['deleted'] ?? false) · <span class="font-medium text-red-700">deleted in Telegram</span> @endif
         </p>
     @endisset
-    @if(! isset($m['content']))
+    @if(! isset($m['content']) || ! empty($m['transcribed']))
         {{-- Telegram media: only type + file ID are stored; the file is fetched from Telegram on demand --}}
         @php
             $type = $m['type'] ?? 'other';
@@ -42,6 +42,10 @@
                 @isset($m['caption'])
                     <p class="text-slate-800 whitespace-pre-line break-words">{{ $m['caption'] }}</p>
                 @endisset
+                @if(! empty($m['transcribed']))
+                    <p class="text-slate-800 whitespace-pre-line break-words"><span class="text-xs font-medium text-slate-500">Transcript:</span> {{ $m['content'] }}</p>
+                    @if(! empty($m['aside']))<p class="text-[11px] text-slate-400">Not answered yet</p>@endif
+                @endif
                 @if($url && $player)
                     <template x-if="shown">
                         <div>

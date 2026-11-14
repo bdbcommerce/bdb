@@ -53,4 +53,7 @@ return [
     'tg_call_hint' => '👨‍💼 Mutaxassis bilan gaplashmoqchimisiz? “📞 Qoʻngʻiroqni soʻrash” tugmasini bosing.',
     'tg_followup' => "💬 Savolingizga javob «:question»:\n\n:answer",
     'tg_too_fast' => '⏳ Siz juda tez xabar yuboryapsiz. Iltimos, bir daqiqa kuting.',
+    'tg_voice_too_long' => '🎙 Men :seconds soniyagacha boʻlgan ovozli xabarlarni tinglay olaman. Qisqaroq yuboring yoki savolingizni yozing ✍️',
+    'tg_voice_limit' => '🎙 Hozir boshqa ovozli xabarlarni tinglay olmayman. Iltimos, savolingizni yozing ✍️',
+    'tg_voice_failed' => '🎙 Kechirasiz, ovozli xabarni tushuna olmadim. Qaytadan ayting yoki savolingizni yozing ✍️',
 ];
