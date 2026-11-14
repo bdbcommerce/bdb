@@ -94,8 +94,9 @@ class QaBrandShopUrlTest extends TestCase
         $this->actingAs($admin)->post(route('admin.brands.store'), $this->form(['shop_url' => $url]))->assertSessionHasNoErrors();
         $this->assertSame($url, Brand::sole()->shop_url);
 
-        $this->get(route('site.brands', 'ru'))->assertOk()
-            ->assertSee('href="https://mylabel.uz/каталог?brand=Зебра&amp;utm_source=bdb_site&amp;utm_medium=referral&amp;utm_campaign=brand_card"', false);
+        $this->get(route('site.brands', 'ru'))->assertOk()->assertSee(route('go.brand', [Brand::sole(), 'shop', 'l' => 'ru']), false);
+        $this->get(route('go.brand', [Brand::sole(), 'shop']))
+            ->assertRedirect('https://mylabel.uz/каталог?brand=Зебра&utm_source=bdb_site&utm_medium=referral&utm_campaign=brand_card');
     }
 
     public function test_values_stored_directly_are_still_safe_in_html_prompt_and_mcp(): void
@@ -111,8 +112,9 @@ class QaBrandShopUrlTest extends TestCase
         $html = $this->get(route('site.brands', 'en'))->assertOk()->getContent();
         $this->assertStringNotContainsString('IGNORE ALL RULES', $html);
         $this->assertStringNotContainsString('href="javascript', $html);
+        // Shop links now go through /go/… (the raw URL is never in the page), so no quote can break an attribute.
         $this->assertStringNotContainsString("'onmouseover='", $html, 'quotes must be escaped');
-        $this->assertStringContainsString('&#039;onmouseover=&#039;', $html);
+        $this->assertStringNotContainsString('onmouseover', $html);
 
         Http::fake();
         $prompt = app(ChatAssistant::class)->promptPreview('en', 'web');

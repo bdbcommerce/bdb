@@ -82,6 +82,53 @@
     @endforeach
 </div>
 
+<div class="{{ $card }} mt-6" id="brand-clicks">
+    <h2 class="{{ $h2 }}">Brand link clicks</h2>
+    <p class="text-xs text-slate-500 mb-3">
+        Clicks on the “Website” and “Buy online” links on the Brands page ({{ number_format($brandsPageViews) }} page views in this period).
+        A person counts once per brand and link per day (repeat clicks are ignored); Visitors = different people per day. Bots, link previews and admins are not counted.
+    </p>
+    @if($brandClicks->isEmpty())
+        <p class="text-sm text-slate-400">No brands with a website or shop link.</p>
+    @else
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-xs text-slate-400 text-left">
+                    <tr>
+                        <th class="py-2 pr-4 font-medium">Brand</th>
+                        <th class="py-2 pr-4 font-medium text-right">Website clicks</th>
+                        <th class="py-2 pr-4 font-medium text-right">Visitors</th>
+                        <th class="py-2 pr-4 font-medium text-right">Buy online clicks</th>
+                        <th class="py-2 font-medium text-right">Visitors</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 tabular-nums">
+                    @foreach($brandClicks as $row)
+                        <tr>
+                            <td class="py-2 pr-4 text-slate-700">{{ $row['name'] }}</td>
+                            <td class="py-2 pr-4 text-right {{ $row['website'] || $row['website_clicks'] ? 'text-slate-900 font-medium' : 'text-slate-300' }}">{{ $row['website'] || $row['website_clicks'] ? $row['website_clicks'] : '—' }}</td>
+                            <td class="py-2 pr-4 text-right text-slate-500">{{ $row['website'] || $row['website_clicks'] ? $row['website_visitors'] : '' }}</td>
+                            <td class="py-2 pr-4 text-right {{ $row['shop'] || $row['shop_clicks'] ? 'text-slate-900 font-medium' : 'text-slate-300' }}">{{ $row['shop'] || $row['shop_clicks'] ? $row['shop_clicks'] : '—' }}</td>
+                            <td class="py-2 text-right text-slate-500">{{ $row['shop'] || $row['shop_clicks'] ? $row['shop_visitors'] : '' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tfoot class="tabular-nums border-t border-slate-200">
+                    <tr>
+                        <td class="py-2 pr-4 text-xs font-semibold text-slate-500 uppercase">Total</td>
+                        {{-- Visitors are not added up: one person clicking two brands would count twice. --}}
+                        <td class="py-2 pr-4 text-right font-semibold">{{ $brandClicks->sum('website_clicks') }}</td>
+                        <td class="py-2 pr-4"></td>
+                        <td class="py-2 pr-4 text-right font-semibold">{{ $brandClicks->sum('shop_clicks') }}</td>
+                        <td class="py-2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <p class="text-xs text-slate-400 mt-3">“—” = the brand has no such link. To remove a link, clear the Website or Online shop field in <a href="{{ route('admin.brands.index') }}" class="underline">Brands</a>.</p>
+    @endif
+</div>
+
 <p class="text-xs text-slate-400 mt-6">
     Google Analytics and Yandex Metrica codes can still be added in <a href="{{ route('admin.company-info.edit') }}" class="underline">Profile &amp; SEO</a> for deeper reports.
     Crawler access is set in <a href="{{ route('admin.seo.edit') }}" class="underline">SEO &amp; AI visibility</a>.

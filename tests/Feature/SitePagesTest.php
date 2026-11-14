@@ -107,7 +107,7 @@ class SitePagesTest extends TestCase
 
         $this->get('/en/customers')->assertRedirect(route('site.industries', 'en'));
         $this->get('/en/industries')->assertOk()->assertDontSee('Korzinka')->assertSee('Retail en');
-        $this->get('/en/brands')->assertOk()->assertSee('Zebra en')->assertSee('https://example.com', false);
+        $this->get('/en/brands')->assertOk()->assertSee('Zebra en')->assertSee(route('go.brand', [$brand, 'website', 'l' => 'en']), false);
     }
 
     public function test_unknown_article_returns_404(): void

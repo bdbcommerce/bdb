@@ -44,8 +44,9 @@
                             <p class="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-4">{{ $desc }}</p>
                         @endif
                         <div class="mt-auto pt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
-                            @if($shop = $brand->shopUrl('brand_card'))
-                                <a href="{{ $shop }}" target="_blank" rel="noopener"
+                            {{-- Outbound links go through /go/… so clicks are counted (Admin → Site analytics). --}}
+                            @if($brand->shopUrl('brand_card'))
+                                <a href="{{ route('go.brand', [$brand, 'shop', 'l' => $locale]) }}" target="_blank" rel="noopener nofollow"
                                    title="{{ __('site.brands.shop_title', ['brand' => $name]) }}"
                                    class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 transition-colors rounded">
                                     @include('site.partials.icon', ['name' => 'shopping-cart', 'class' => 'size-4'])
@@ -59,8 +60,8 @@
                                 @include('site.partials.icon', ['name' => 'sparkles', 'class' => 'size-4'])
                                 {{ __('site.services.ask') }}
                             </button>
-                            @if($brand->website)
-                                <a href="{{ $brand->website }}" target="_blank" rel="noopener noreferrer nofollow"
+                            @if($brand->websiteUrl())
+                                <a href="{{ route('go.brand', [$brand, 'website', 'l' => $locale]) }}" target="_blank" rel="noopener noreferrer nofollow"
                                    class="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
                                     {{ __('site.brands.website') }}
                                     @include('site.partials.icon', ['name' => 'arrow-up-right', 'class' => 'size-3.5'])

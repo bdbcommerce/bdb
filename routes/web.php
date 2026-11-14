@@ -29,6 +29,7 @@ use App\Http\Controllers\Admin\UploadController;
 use App\Http\Controllers\Admin\VacancyController;
 use App\Http\Controllers\McpController;
 use App\Http\Controllers\Site\AboutController;
+use App\Http\Controllers\Site\BrandLinkController;
 use App\Http\Controllers\Site\BrandsController;
 use App\Http\Controllers\Site\CareersController;
 use App\Http\Controllers\Site\ChatController;
@@ -61,6 +62,10 @@ Route::get('/{key}.txt', [SeoController::class, 'indexNowKey'])->where('key', '[
 
 // MCP server for Claude and other AI clients (Admin → AI Assistant → MCP server; CSRF-exempt, own auth)
 Route::match(['get', 'post', 'delete'], '/mcp', McpController::class)->name('mcp');
+
+// Outbound brand links (website / shop): counted for Site analytics, then redirected
+Route::get('/go/brand/{brand}/{target}', BrandLinkController::class)->where('target', 'website|shop')
+    ->middleware('throttle:brand-links')->name('go.brand');
 
 // Root redirect to default locale
 Route::get('/', fn () => redirect('/uz'));

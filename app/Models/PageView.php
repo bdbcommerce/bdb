@@ -107,7 +107,7 @@ class PageView extends Model
                 return $bot;
             }
         }
-        if ($ua === '' || preg_match('/bot|crawl|spider|slurp|fetch|preview|headless|python-|curl\/|wget|httpclient|okhttp|go-http|java\//i', $ua)) {
+        if ($ua === '' || preg_match('/bot|crawl|spider|slurp|fetch|preview|headless|externalhit|whatsapp|python-|curl\/|wget|httpclient|okhttp|go-http|java\//i', $ua)) {
             return 'Other bot';
         }
 

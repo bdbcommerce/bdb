@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
+use App\Models\LinkClick;
 use App\Models\PageView;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /** Admin → Site analytics: visits, sources (incl. AI assistants), pages and crawler visits. */
 class AnalyticsController extends Controller
@@ -59,6 +62,41 @@ class AnalyticsController extends Controller
             'devices' => $count($people, 'device'),
             'utm' => $count($people, 'utm_source'),
             'keepDays' => PageView::KEEP_DAYS,
+            'brandClicks' => $this->brandClicks($from),
+            'brandsPageViews' => (clone $people)->where('route', 'site.brands')->count(),
         ]);
+    }
+
+    /**
+     * Clicks on each brand's website / shop link in the period (clicks and distinct visitors per day),
+     * including brands with links but no clicks, so it's clear which links nobody uses.
+     */
+    private function brandClicks(Carbon $from): Collection
+    {
+        $stats = LinkClick::where('clicked_at', '>=', $from)->toBase()
+            // visitor_hash already changes every day, so distinct hashes = visitors per day added up.
+            ->selectRaw('brand_id, brand_name, target, count(*) as clicks, count(distinct visitor_hash) as visitors')
+            ->groupBy('brand_id', 'brand_name', 'target')->get();
+
+        // Active brands with a link (even with no clicks), plus any brand that had clicks (also switched-off ones).
+        $clickedIds = $stats->pluck('brand_id')->filter()->unique();
+        $row = fn (Brand $b, string $suffix = '') => ['name' => $b->getTranslation('name', 'en').$suffix, 'website' => (bool) $b->websiteUrl(), 'shop' => (bool) $b->shopUrl()];
+        $rows = Brand::where('is_active', true)->orderBy('sort_order')->get()
+            ->filter(fn (Brand $b) => $b->websiteUrl() || $b->shopUrl() || $clickedIds->contains($b->id))
+            ->mapWithKeys(fn (Brand $b) => [$b->id => $row($b)])->all();
+        foreach (Brand::whereIn('id', $clickedIds)->where('is_active', false)->get() as $b) {
+            $rows[$b->id] = $row($b, ' (switched off)');
+        }
+
+        foreach ($stats as $s) {
+            // A deleted brand (brand_id null) keeps its own row by the name saved with the click.
+            $key = $s->brand_id ?? 'deleted-'.$s->brand_name;
+            $rows[$key] = ($rows[$key] ?? ['name' => $s->brand_name.' (deleted)', 'website' => false, 'shop' => false]);
+            $rows[$key][$s->target.'_clicks'] = ($rows[$key][$s->target.'_clicks'] ?? 0) + (int) $s->clicks;
+            $rows[$key][$s->target.'_visitors'] = ($rows[$key][$s->target.'_visitors'] ?? 0) + (int) $s->visitors;
+        }
+
+        return collect($rows)->map(fn ($r) => $r + ['website_clicks' => 0, 'website_visitors' => 0, 'shop_clicks' => 0, 'shop_visitors' => 0])
+            ->sortByDesc(fn ($r) => $r['website_clicks'] + $r['shop_clicks'])->values();
     }
 }

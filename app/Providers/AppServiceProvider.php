@@ -38,6 +38,8 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinutes(10, 5)->by('careers|'.$r->ip()),
             Limit::perDay(200)->by('careers|all'), // caps CV storage growth even from many IPs
         ]);
+        // Brand link redirects (/go/…): the redirect always works; this only slows down scripted floods.
+        RateLimiter::for('brand-links', fn (Request $r) => Limit::perMinute(20)->by('brand-links|'.$r->ip()));
         $this->app->register(ViewServiceProvider::class);
 
         // Public content changed: sitemap.xml and llms.txt are rebuilt on the next request.

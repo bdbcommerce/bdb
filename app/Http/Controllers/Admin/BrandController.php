@@ -64,7 +64,7 @@ class BrandController extends Controller
             'name_ru' => 'required|string|max:200',
             'name_en' => 'required|string|max:200',
             'logo' => 'nullable|image|max:2048',
-            'website' => 'nullable|url|max:255',
+            'website' => 'nullable|url:http,https|max:255',
             // The shop catalog filtered by this brand, e.g. https://mylabel.uz/…?brand=zebra
             'shop_url' => ['nullable', 'url:http,https', 'max:500', function ($attribute, $value, $fail) {
                 if (! CompanyInfo::isValidShopUrl($value)) {

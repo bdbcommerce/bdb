@@ -46,7 +46,7 @@ class SeoSetting extends Model
     ];
 
     /** Parts of the site no crawler needs. */
-    public const PRIVATE_PATHS = ['/admin', '/chat/', '/telegram/'];
+    public const PRIVATE_PATHS = ['/admin', '/chat/', '/telegram/', '/go/'];
 
     /** Knowledge base types shown on the public FAQ by default (pricing and company notes stay internal). */
     public const DEFAULT_FAQ_TYPES = ['faq', 'asl_belgi', 'delivery', 'support'];

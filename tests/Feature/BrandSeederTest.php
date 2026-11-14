@@ -86,7 +86,10 @@ class BrandSeederTest extends TestCase
         foreach (['zebra', 'gainscha', 'henex'] as $slug) {
             $this->assertStringContainsString("brands/{$slug}.png", $html);
         }
-        $this->assertStringContainsString('https://www.henex.cn', $html);
+        // The website link goes through the click counter, which redirects to the brand's site.
+        $henex = Brand::where('name->en', 'HENEX')->sole();
+        $this->assertStringContainsString(route('go.brand', [$henex, 'website', 'l' => 'ru']), $html);
+        $this->get(route('go.brand', [$henex, 'website']))->assertRedirect('https://www.henex.cn');
 
         // Dark grey logo on white; the real colours on hover (home and brands page).
         foreach (['/ru', '/ru/brands'] as $url) {

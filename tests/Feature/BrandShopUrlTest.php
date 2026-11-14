@@ -61,10 +61,14 @@ class BrandShopUrlTest extends TestCase
         $labels = ['en' => 'Buy online', 'ru' => 'Купить онлайн', 'uz' => 'Onlayn xarid qilish'];
         foreach ($labels as $locale => $label) {
             $html = $this->get(route('site.brands', $locale))->assertOk()->getContent();
-            $this->assertStringContainsString('href="https://mylabel.uz/catalog?brand=zebra&amp;utm_source=bdb_site&amp;utm_medium=referral&amp;utm_campaign=brand_card"', $html, $locale);
+            $zebra = Brand::where('name->en', 'Zebra')->sole();
+            $this->assertStringContainsString('href="'.route('go.brand', [$zebra, 'shop', 'l' => $locale]).'"', $html, $locale);
             $this->assertStringContainsString($label, $html, $locale);
-            $this->assertSame(1, substr_count($html, 'utm_campaign=brand_card'), $locale.': one button, only for the brand with a link');
+            $this->assertSame(1, substr_count($html, '/shop?l='), $locale.': one button, only for the brand with a link');
         }
+        // The counter redirects to the shop link with the UTM tags.
+        $this->get(route('go.brand', [Brand::where('name->en', 'Zebra')->sole(), 'shop']))
+            ->assertRedirect('https://mylabel.uz/catalog?brand=zebra&utm_source=bdb_site&utm_medium=referral&utm_campaign=brand_card');
     }
 
     public function test_ai_knowledge_has_the_shop_link(): void
