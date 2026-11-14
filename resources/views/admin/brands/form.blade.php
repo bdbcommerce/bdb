@@ -51,7 +51,7 @@
                 @endif
                 <input type="file" name="logo" accept="image/*"
                        class="w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200">
-                <p class="text-xs text-slate-400 mt-1">PNG or WebP with a transparent background. On the public site it is shown white on a dark tile and in its real colours on mouse-over. A JPG or any logo with a filled background shows as a white box.</p>
+                <p class="text-xs text-slate-400 mt-1">PNG or WebP with a transparent background. On the public site it is shown dark grey on a white tile and in its real colours on mouse-over. A JPG or any logo with a filled background shows as a grey box.</p>
             </div>
         </div>
 
