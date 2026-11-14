@@ -20,6 +20,22 @@ class BrandSeederTest extends TestCase
         Storage::fake('public');
     }
 
+    public function test_every_brand_gets_the_shop_link_and_an_admin_link_is_kept(): void
+    {
+        Brand::create(['name' => ['en' => 'Epson'], 'shop_url' => 'https://mylabel.uz/catalog?brand=epson', 'is_active' => true]);
+        Brand::create(['name' => ['en' => 'Canon'], 'shop_url' => null, 'is_active' => true]);
+
+        $this->seed(BrandSeeder::class);
+
+        $this->assertSame(0, Brand::whereNull('shop_url')->orWhere('shop_url', '')->count());
+        $this->assertSame('https://mylabel.uz/catalog?brand=epson', Brand::where('name->en', 'Epson')->value('shop_url'), 'admin link kept');
+        $this->assertSame('https://mylabel.uz', Brand::where('name->en', 'Canon')->value('shop_url'));
+        $this->assertSame('https://mylabel.uz', Brand::where('name->en', 'SATO')->value('shop_url'));
+
+        $html = $this->get('/ru/brands')->assertOk()->getContent();
+        $this->assertSame(Brand::count(), substr_count($html, __('site.brands.shop', [], 'ru')), 'a "Buy online" link on every card');
+    }
+
     public function test_fresh_database_gets_all_brands_with_logos(): void
     {
         $this->seed(BrandSeeder::class);

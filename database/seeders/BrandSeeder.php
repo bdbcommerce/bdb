@@ -13,11 +13,14 @@ use Illuminate\Support\Facades\Storage;
  *
  * Safe to re-run. A brand is matched by name (any language, case-insensitive):
  * - new brands are created, active, at the end of the list;
- * - existing brands get the website below, the logo when they have none (or its file is missing),
+ * - existing brands get the website below, the shop link when they have none, the logo when they have none (or its file is missing),
  *   and a description only in languages where it is empty — admin edits are kept.
  */
 class BrandSeeder extends Seeder
 {
+    /** "Buy online" link for every brand (the shop's home page until per-brand filter links are added). */
+    public const SHOP_URL = 'https://mylabel.uz';
+
     public function run(): void
     {
         $brands = Brand::all();
@@ -36,6 +39,7 @@ class BrandSeeder extends Seeder
                     'name' => ['uz' => $data['name'], 'ru' => $data['name'], 'en' => $data['name']],
                     'description' => $data['description'],
                     'website' => $data['website'],
+                    'shop_url' => $data['shop_url'] ?? self::SHOP_URL,
                     'logo' => $logo,
                     'sort_order' => (int) Brand::max('sort_order') + 1,
                     'is_active' => true,
@@ -51,6 +55,9 @@ class BrandSeeder extends Seeder
                 }
             }
             $brand->website = $data['website'] ?? $brand->website; // no known site: keep the admin's
+            if (blank($brand->shop_url)) {
+                $brand->shop_url = $data['shop_url'] ?? self::SHOP_URL; // a link set in the admin is kept
+            }
             $brand->logo = $logo;
             $brand->save();
             $this->command?->info("Brand \"{$data['name']}\" updated.");
