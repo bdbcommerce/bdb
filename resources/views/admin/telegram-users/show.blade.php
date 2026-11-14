@@ -26,7 +26,7 @@
             <div class="min-w-0">
                 <p class="text-base font-semibold text-slate-900 truncate">{{ $user->displayName() ?? 'No name yet' }}</p>
                 <p class="text-[11px] font-medium mt-0.5 inline-block rounded-full px-2 py-0.5 {{ $user->isRegistered() ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">
-                    {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Registration not finished (step: '.$user->step.')' : ($user->ask_registration ? 'Will be asked to register' : 'Not registered')) }}
+                    {{ $user->isRegistered() ? 'Registered' : ($user->step === \App\Models\TelegramUser::STEP_GUEST ? 'Not registered — asks questions, invited to register' : (config('services.telegram.replies') ? 'Registration not finished (step: '.$user->step.')' : ($user->ask_registration ? 'Will be asked to register' : 'Not registered'))) }}
                 </p>
             </div>
         </div>

@@ -248,13 +248,14 @@ class TelegramRecordingTest extends TestCase
     {
         $this->privateMessage(['message_id' => 1, 'text' => '/start']);
         $this->privateMessage(['message_id' => 2, 'text' => '🇬🇧 English']);
-        $this->privateMessage(['message_id' => 3, 'text' => 'Aziz']);
-        $this->privateMessage(['message_id' => 4, 'contact' => ['phone_number' => '998901234567', 'user_id' => 555]]);
+        $this->privateMessage(['message_id' => 3, 'text' => '📝 Register']);
+        $this->privateMessage(['message_id' => 4, 'text' => 'Aziz']);
+        $this->privateMessage(['message_id' => 5, 'contact' => ['phone_number' => '998901234567', 'user_id' => 555]]);
 
         $conversation = ChatConversation::sole();
-        $this->assertSame([1, 2, 3, 4], array_column($conversation->messages, 'message_id'));
-        $this->assertSame(['/start', '🇬🇧 English', 'Aziz'], array_column(array_slice($conversation->messages, 0, 3), 'content'));
-        $this->assertSame(['contact', null], [$conversation->messages[3]['type'], $conversation->messages[3]['file_id']]);
+        $this->assertSame([1, 2, 3, 4, 5], array_column($conversation->messages, 'message_id'));
+        $this->assertSame(['/start', '🇬🇧 English', '📝 Register', 'Aziz'], array_column(array_slice($conversation->messages, 0, 4), 'content'));
+        $this->assertSame(['contact', null], [$conversation->messages[4]['type'], $conversation->messages[4]['file_id']]);
         $this->assertSame([], $conversation->textMessages());
         $this->assertTrue(TelegramUser::sole()->isRegistered());
     }

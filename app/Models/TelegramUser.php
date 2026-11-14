@@ -14,6 +14,9 @@ class TelegramUser extends Model
 {
     public const STEP_LANGUAGE = 'language';
 
+    /** Language picked, not registered: questions get short answers plus an invitation to register. */
+    public const STEP_GUEST = 'guest';
+
     public const STEP_NAME = 'name';
 
     public const STEP_PHONE = 'phone';

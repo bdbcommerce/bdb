@@ -65,7 +65,8 @@ class TelegramRecordOnlyQaTest extends TestCase
             ['text' => '🇺🇿 Oʻzbekcha'], ['text' => 'Русский'],
             ['contact' => ['phone_number' => '+998901234567', 'user_id' => 777, 'first_name' => 'O']],
             ['contact' => ['phone_number' => '+998901234567', 'user_id' => 1]],
-            ['voice' => ['file_id' => 'voice_file_123']], ['sticker' => ['file_id' => 'sticker_123']],
+            // Voice / audio are forwarded to the sales chat in every mode (TelegramVoiceForwardTest), never answered.
+            ['sticker' => ['file_id' => 'sticker_123']],
             ['document' => ['file_id' => 'doc_1234567', 'file_name' => 'a.pdf']],
             ['location' => ['latitude' => 41.3, 'longitude' => 69.2]],
             ['text' => ['malformed']], ['text' => ''], ['text' => str_repeat('я', 5000)],
@@ -146,6 +147,9 @@ class TelegramRecordOnlyQaTest extends TestCase
 
         $this->message(['text' => TelegramBot::LANGUAGES['uz']]);
         $user = TelegramUser::sole();
+        $this->assertSame(TelegramUser::STEP_GUEST, $user->step); // replies on: questions first, registration optional
+        $this->message(['text' => __('chat.tg_register', [], 'uz')]);
+        $user = $user->fresh();
         $this->assertSame(TelegramUser::STEP_NAME, $user->step); // profile_name does not skip the name step
         $this->assertNull($user->name);
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/sendMessage') && $r['text'] === __('chat.tg_ask_name', [], 'uz'));

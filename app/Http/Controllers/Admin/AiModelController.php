@@ -27,7 +27,7 @@ class AiModelController extends Controller
             'tasks' => AiModel::TASKS,
             'providers' => AiModel::PROVIDERS,
             'env' => ['model' => config('services.gemini.model'), 'key' => filled(config('services.gemini.key'))],
-            'voice' => ['on' => $voice->available(), 'env' => filled(config('services.groq.key')), 'model' => $voice->model()],
+            'voice' => ['forward' => config('services.telegram.voice') !== 'transcribe', 'on' => $voice->available(), 'env' => filled(config('services.groq.key')), 'model' => $voice->model()],
             'alertChat' => $alerts->chatId() && filled(config('services.telegram.bot_token')) ? $alerts->chatId() : null,
         ]);
     }

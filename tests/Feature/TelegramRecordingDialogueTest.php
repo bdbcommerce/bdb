@@ -62,6 +62,7 @@ class TelegramRecordingDialogueTest extends TestCase
     {
         $this->send(['text' => '/start']);
         $this->send(['text' => '🇬🇧 English']);
+        $this->send(['text' => '📝 Register']);
         $this->send(['text' => 'Aziz']);
         $this->send(['contact' => ['phone_number' => '998901234567', 'user_id' => 555]]);
     }
@@ -95,8 +96,8 @@ class TelegramRecordingDialogueTest extends TestCase
             ['Do you sell scanners?', 'We sell Zebra scanners.', 'And printers?', 'We sell Zebra scanners.'],
             array_column($conversation->textMessages(), 'content'),
         );
-        // every incoming message is in the record: 4 registration + photo + 2 language + 2 questions, plus 2 replies
-        $this->assertSame(11, $conversation->message_count);
+        // every incoming message is in the record: 5 registration (incl. the Register tap) + photo + 2 language + 2 questions, plus 2 replies
+        $this->assertSame(12, $conversation->message_count);
         $this->assertSame(2, ClientRequest::count());
     }
 

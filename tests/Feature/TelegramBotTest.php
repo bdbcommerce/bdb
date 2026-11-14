@@ -150,7 +150,12 @@ class TelegramBotTest extends TestCase
 
         $this->send(['text' => '/start']);
         $this->send(['text' => 'Oʻzbekcha']);
+        $this->assertSame(__('chat.tg_guest_welcome', [], 'uz'), $this->lastSent()['text']);
+        $this->assertSame(TelegramUser::STEP_GUEST, TelegramUser::sole()->step);
+
+        $this->send(['text' => '📝 Roʻyxatdan oʻtish']);
         $this->assertSame(__('chat.tg_ask_name', [], 'uz'), $this->lastSent()['text']);
+        $this->assertSame(__('chat.tg_not_now', [], 'uz'), $this->lastSent()['reply_markup']['keyboard'][0][0]['text']);
 
         $this->send(['text' => 'Aziz Karimov']);
         $askPhone = $this->lastSent();
@@ -287,7 +292,7 @@ class TelegramBotTest extends TestCase
 
     // Chat -----------------------------------------------------------------------
 
-    public function test_question_is_answered_briefly_and_logged(): void
+    public function test_question_of_a_registered_customer_is_answered_in_full_by_name_and_logged(): void
     {
         $this->fakeApis();
         $this->registered('ru');
@@ -298,7 +303,8 @@ class TelegramBotTest extends TestCase
         $this->assertSame('Asl Belgi is the national marking system.', $sent['text']);
         $this->assertSame('💡 What equipment do you offer?', $sent['reply_markup']['keyboard'][0][0]['text']);
         Http::assertSent(fn (Request $r) => str_contains($r->url(), 'generateContent')
-            && str_contains($r['system_instruction']['parts'][0]['text'], 'At most 2 short sentences'));
+            && str_contains($r['system_instruction']['parts'][0]['text'], '1-4 short sentences')
+            && str_contains($r['system_instruction']['parts'][0]['text'], 'their name is "Aziz"'));
 
         $conversation = ChatConversation::sole();
         $this->assertSame('telegram', $conversation->channel);
@@ -317,7 +323,7 @@ class TelegramBotTest extends TestCase
         $this->send(['text' => 'What do you sell?']);
 
         $text = $this->lastSent()['text'];
-        $this->assertLessThanOrEqual(ChatAssistant::BRIEF_MAX, mb_strlen($text));
+        $this->assertLessThanOrEqual(ChatAssistant::FULL_MAX, mb_strlen($text));
         $this->assertStringEndsWith('printers.', $text);
     }
 

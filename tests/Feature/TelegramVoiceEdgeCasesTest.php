@@ -36,6 +36,7 @@ class TelegramVoiceEdgeCasesTest extends TestCase
             'services.telegram.webhook_secret' => self::SECRET,
             'services.gemini.key' => 'test-key',
             'services.groq.key' => 'gsk_test_key_123',
+            'services.telegram.voice' => 'transcribe', // these tests cover the transcription mode
             'services.groq.voice_daily_limit' => 300,
         ]);
 

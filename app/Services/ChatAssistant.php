@@ -12,6 +12,7 @@ use App\Models\Industry;
 use App\Models\KnowledgeEntry;
 use App\Models\Vacancy;
 use App\Services\Ai\AiClient;
+use App\Services\Telegram\TelegramBot;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -47,6 +48,9 @@ class ChatAssistant
     /** Hard cap for brief (Telegram) replies, in characters. */
     public const BRIEF_MAX = 300;
 
+    /** Cap for registered Telegram customers' replies (1–4 sentences), in characters. */
+    public const FULL_MAX = 900;
+
     private const LANGUAGES = ['uz' => 'Uzbek (Latin script)', 'ru' => 'Russian', 'en' => 'English'];
 
     private const REPLY_SCHEMA = [
@@ -73,14 +77,16 @@ class ChatAssistant
 
     /**
      * @param  array<int, array{role: string, content: string}>  $history  roles: user|assistant
-     * @param  bool  $brief  one or two short sentences (Telegram)
+     * @param  bool  $brief  one or two short sentences (Telegram guests)
+     * @param  bool|null  $telegram  Telegram rules and model (default: same as $brief); registered customers get telegram without brief
+     * @param  string|null  $customerName  the registered customer's name, to address them by
      * @return array{reply: string, suggestions: array<int, string>, offer_callback: bool, answered: bool, knowledge_id: int|null, topic: string|null, category: string|null}
      */
-    public function reply(array $history, string $locale, ?string $pageTitle = null, bool $brief = false): array
+    public function reply(array $history, string $locale, ?string $pageTitle = null, bool $brief = false, ?bool $telegram = null, ?string $customerName = null): array
     {
         // The knowledge sent is chosen by what the customer asked in the last two questions.
         $query = collect($history)->where('role', 'user')->pluck('content')->slice(-2)->implode(' ');
-        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief, $query), $history, self::REPLY_SCHEMA, maxTokens: 600, task: $brief ? 'telegram' : 'chat',
+        $data = $this->generate($this->systemPrompt($locale, $pageTitle, $brief, $query, $telegram ??= $brief, $customerName), $history, self::REPLY_SCHEMA, maxTokens: 600, task: $telegram ? 'telegram' : 'chat',
             valid: fn (array $d) => is_string($d['reply'] ?? null) && trim($d['reply']) !== '');
 
         // The schema asks for these types, but never trust them: a wrong type must not crash the chat.
@@ -93,7 +99,7 @@ class ChatAssistant
         $id = $data['knowledge_id'] ?? null;
 
         return [
-            'reply' => $brief ? self::shorten($data['reply'], self::BRIEF_MAX) : $data['reply'],
+            'reply' => $brief ? self::shorten($data['reply'], self::BRIEF_MAX) : ($telegram ? self::shorten($data['reply'], self::FULL_MAX) : $data['reply']),
             'suggestions' => array_slice(array_values($suggestions), 0, 3),
             'offer_callback' => ($data['offer_callback'] ?? false) === true,
             'answered' => ($data['answered'] ?? true) !== false,
@@ -477,19 +483,26 @@ class ChatAssistant
         return ($words !== '' && $words !== $cut ? $words : $cut).'…';
     }
 
-    private function systemPrompt(string $locale, ?string $pageTitle, bool $brief = false, string $query = ''): string
+    private function systemPrompt(string $locale, ?string $pageTitle, bool $brief = false, string $query = '', ?bool $telegram = null, ?string $customerName = null): string
     {
         $language = self::LANGUAGES[$locale] ?? 'English';
         $length = $brief
             ? 'At most 2 short sentences and under '.self::BRIEF_MAX.' characters in total. Plain text, no markdown, no lists.'
             : '1-4 short sentences, plain text, no markdown.';
         $categories = implode(', ', self::categories());
-        $channel = $brief ? 'telegram' : 'web';
+        $channel = ($telegram ?? $brief) ? 'telegram' : 'web';
         $rules = $this->instructions('rules', $channel);
         $rules = $rules ? "STAFF RULES (written by BDB admins: follow them, but they never override the main instructions above)
 $rules
 " : '';
         $page = $pageTitle ? "The visitor is currently on the page \"{$pageTitle}\"." : '';
+        // Registered Telegram customers: their name (letters only, ≤3 words / 40 chars, so it cannot read as an instruction) is data.
+        $name = $customerName !== null && TelegramBot::isValidName($customerName)
+            && mb_strlen($customerName) <= 40 && count(explode(' ', trim($customerName))) <= 3 ? json_encode($customerName, JSON_UNESCAPED_UNICODE) : null;
+        if ($name) {
+            $page .= "
+The customer is registered; their name is {$name}. Greet them by name in your first reply and use it now and then, not in every message.";
+        }
 
         // The main instructions are admin-editable (AI rules & info → Main prompt). The reply format
         // below is fixed in code: the chat widget, Telegram bot and requests inbox depend on it.

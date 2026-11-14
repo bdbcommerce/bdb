@@ -98,6 +98,8 @@ class TelegramRegistrationFixesTest extends TestCase
     public function test_untrimmed_webhook_text_still_matches_language_buttons_and_names(): void
     {
         $this->send(['text' => "  Русский \n"]);
+        $this->assertSame(TelegramUser::STEP_GUEST, TelegramUser::sole()->step);
+        $this->send(['text' => " 📝 Регистрация \n"]);
         $this->assertSame(TelegramUser::STEP_NAME, TelegramUser::sole()->step);
 
         $this->send(['text' => '   ']);

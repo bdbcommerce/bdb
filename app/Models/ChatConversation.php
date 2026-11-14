@@ -212,7 +212,7 @@ class ChatConversation extends Model
         for ($i = count($messages) - 1; $i >= 0; $i--) {
             if (($messages[$i]['message_id'] ?? null) === $messageId) {
                 // A voice message's transcript stays when only its caption is edited.
-                $keep = array_intersect_key($messages[$i], array_flip(['role', 'sender', 'message_id', 'at', 'aside',
+                $keep = array_intersect_key($messages[$i], array_flip(['role', 'sender', 'sender_id', 'message_id', 'at', 'aside',
                     ...(! empty($messages[$i]['transcribed']) && isset($content['type']) ? ['content', 'transcribed'] : [])]));
                 $messages[$i] = $keep + $content + ['edited' => true];
                 $this->messages = $messages;

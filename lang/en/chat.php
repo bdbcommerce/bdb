@@ -52,6 +52,17 @@ return [
     'tg_request_call' => '📞 Request a call',
     'tg_call_hint' => '👨‍💼 Want to talk to a specialist? Tap “📞 Request a call”.',
     'tg_followup' => "💬 An answer to your question “:question”:\n\n:answer",
+    'tg_guest_welcome' => '👋 Hi! I\'m Belgi, BDB\'s assistant 🤖 Ask your question right away 💬
+
+📝 Register (name and phone) for a personal consultation and a call from our specialist — tap “📝 Register”.',
+    'tg_register' => '📝 Register',
+    'tg_not_now' => '⏭ Not now',
+    'tg_guest_invite' => '📝 For a detailed consultation and a call from our specialist, tap “📝 Register” — it takes 20 seconds.',
+    'tg_guest_call_hint' => '👨‍💼 Want a specialist to call you? Tap “📞 Request a call” — we will ask your name and phone.',
+    'tg_call_needs_registration' => '📞 To call you back we need your name and phone number.',
+    'tg_registration_later' => '👌 OK! Keep asking questions. Tap “📝 Register” any time.',
+    'tg_already_registered' => '✅ You are already registered, :name. Type your question 💬',
+    'tg_guest_limit' => '📝 You\'ve asked a lot of questions today. Please register (name and phone) to keep chatting — tap “📝 Register”, and our specialist will be happy to help.',
     'tg_too_fast' => '⏳ You are sending messages too quickly. Please wait a minute.',
     'tg_voice_too_long' => '🎙 I can listen to voice messages up to :seconds seconds. Please send a shorter one or type your question ✍️',
     'tg_voice_limit' => '🎙 I can\'t listen to more voice messages right now. Please type your question ✍️',

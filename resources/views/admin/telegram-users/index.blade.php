@@ -58,7 +58,7 @@
                             <span class="text-[11px] font-medium rounded-full px-2 py-0.5 border border-slate-400 text-slate-700">Will be asked to register</span>
                         @endif
                         <span class="text-[11px] font-medium rounded-full px-2 py-0.5 {{ $user->isRegistered() ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">
-                            {{ $user->isRegistered() ? 'Registered' : (config('services.telegram.replies') ? 'Step: '.$user->step : 'Not registered') }}
+                            {{ $user->isRegistered() ? 'Registered' : ($user->step === \App\Models\TelegramUser::STEP_GUEST ? 'Not registered (chatting)' : (config('services.telegram.replies') ? 'Step: '.$user->step : 'Not registered')) }}
                         </span>
                         <span class="text-xs text-slate-500">{{ $user->conversations_count }} {{ Str::plural('chat', $user->conversations_count) }}</span>
                         <span class="text-xs text-slate-400 w-24 text-right">

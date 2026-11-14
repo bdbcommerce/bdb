@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ChatLead;
 use App\Models\JobApplication;
+use App\Models\TelegramUser;
 use App\Services\Seo\SeoFiles;
 use App\Services\Telegram\TelegramApi;
 use Illuminate\Support\Facades\Storage;
@@ -44,6 +45,46 @@ class TelegramNotifier
         $lines[] = '<a href="'.$e(SeoFiles::publicUrl(route('admin.chat-leads.index')).'#lead-'.$lead->id).'">Open in admin</a>';
 
         $this->send(implode("\n", $lines));
+    }
+
+    /**
+     * A customer sent a voice message (or audio file) to the bot: it is forwarded to the sales chat with
+     * who sent it, so staff can listen and reply from the admin panel. Returns false when not sent.
+     */
+    public function voiceMessage(TelegramUser $user, int $messageId, ?int $duration = null): bool
+    {
+        if (! $this->enabled()) {
+            return false;
+        }
+        $chatId = (string) config('services.telegram.chat_id');
+        $e = fn (?string $s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        // forwardMessage keeps the original sender; copyMessage is the fallback (e.g. forwarding restricted).
+        $sent = $this->api->call('forwardMessage', ['chat_id' => $chatId, 'from_chat_id' => $user->telegram_id, 'message_id' => $messageId])
+            ?? $this->api->call('copyMessage', ['chat_id' => $chatId, 'from_chat_id' => $user->telegram_id, 'message_id' => $messageId]);
+
+        $lines = [
+            '🎙 <b>Voice message — Telegram bot</b>'.($duration ? ' ('.$duration.' s)' : ''),
+            '',
+            '<b>From:</b> '.$e($user->displayName() ?? $user->telegram_id),
+            '<b>Phone:</b> '.$e($user->phone ?? 'not registered'),
+        ];
+        if ($user->username) {
+            $lines[] = '<b>Telegram:</b> @'.$e($user->username);
+        }
+        $lines[] = '<b>Language:</b> '.strtoupper($e($user->locale ?? '—'));
+        if (! $sent) {
+            $lines[] = '<i>The voice could not be forwarded: listen to it in the admin panel.</i>';
+        }
+        $lines[] = '';
+        $lines[] = 'The bot did not answer it. <a href="'.$e(SeoFiles::publicUrl(route('admin.telegram-users.show', $user))).'">Reply in admin</a>';
+
+        $extra = ['parse_mode' => 'HTML', 'disable_web_page_preview' => true];
+        if (is_numeric($sent['message_id'] ?? null)) {
+            $extra['reply_parameters'] = ['message_id' => (int) $sent['message_id'], 'allow_sending_without_reply' => true];
+        }
+
+        return $this->api->sendMessage($chatId, implode("\n", $lines), $extra) || $sent !== null;
     }
 
     /**

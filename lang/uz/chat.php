@@ -52,6 +52,17 @@ return [
     'tg_request_call' => '📞 Qoʻngʻiroqni soʻrash',
     'tg_call_hint' => '👨‍💼 Mutaxassis bilan gaplashmoqchimisiz? “📞 Qoʻngʻiroqni soʻrash” tugmasini bosing.',
     'tg_followup' => "💬 Savolingizga javob «:question»:\n\n:answer",
+    'tg_guest_welcome' => '👋 Assalomu alaykum! Men Belgi, BDB yordamchisiman 🤖 Savolingizni hoziroq yozing 💬
+
+📝 Shaxsiy maslahat va mutaxassis qoʻngʻirogʻi uchun roʻyxatdan oʻting (ism va telefon) — «📝 Roʻyxatdan oʻtish» tugmasini bosing.',
+    'tg_register' => '📝 Roʻyxatdan oʻtish',
+    'tg_not_now' => '⏭ Hozir emas',
+    'tg_guest_invite' => '📝 Batafsil maslahat va mutaxassis qoʻngʻirogʻi uchun «📝 Roʻyxatdan oʻtish» tugmasini bosing — bu 20 soniya oladi.',
+    'tg_guest_call_hint' => '👨‍💼 Mutaxassis sizga qoʻngʻiroq qilsinmi? «📞 Qoʻngʻiroqni soʻrash» tugmasini bosing — ismingiz va telefoningizni soʻraymiz.',
+    'tg_call_needs_registration' => '📞 Sizga qoʻngʻiroq qilishimiz uchun ismingiz va telefon raqamingiz kerak.',
+    'tg_registration_later' => '👌 Yaxshi! Savollaringizni yozavering. «📝 Roʻyxatdan oʻtish» tugmasini istalgan vaqtda bosing.',
+    'tg_already_registered' => '✅ Siz allaqachon roʻyxatdan oʻtgansiz, :name. Savolingizni yozing 💬',
+    'tg_guest_limit' => '📝 Bugun koʻp savol berdingiz. Davom etish uchun roʻyxatdan oʻting (ism va telefon) — «📝 Roʻyxatdan oʻtish» tugmasini bosing, mutaxassisimiz mamnuniyat bilan yordam beradi.',
     'tg_too_fast' => '⏳ Siz juda tez xabar yuboryapsiz. Iltimos, bir daqiqa kuting.',
     'tg_voice_too_long' => '🎙 Men :seconds soniyagacha boʻlgan ovozli xabarlarni tinglay olaman. Qisqaroq yuboring yoki savolingizni yozing ✍️',
     'tg_voice_limit' => '🎙 Hozir boshqa ovozli xabarlarni tinglay olmayman. Iltimos, savolingizni yozing ✍️',

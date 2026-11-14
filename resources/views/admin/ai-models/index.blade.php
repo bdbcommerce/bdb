@@ -19,9 +19,12 @@
         Add a few free models as backups. API keys are stored encrypted and never shown again.
     </p>
 
-    <div id="voice-status" class="rounded-lg border px-4 py-3 text-sm {{ $voice['on'] ? 'border-slate-200 bg-white text-slate-700' : 'border-amber-200 bg-amber-50 text-amber-900' }}">
+    <div id="voice-status" class="rounded-lg border px-4 py-3 text-sm {{ $voice['forward'] || $voice['on'] ? 'border-slate-200 bg-white text-slate-700' : 'border-amber-200 bg-amber-50 text-amber-900' }}">
         <span class="font-medium">Telegram voice messages:</span>
-        @if($voice['on'])
+        @if($voice['forward'])
+            forwarded to the sales chat with the customer's name and phone; the bot does not answer them. Staff reply from Telegram → Chats.
+            (Set TELEGRAM_VOICE_MODE=transcribe in .env to have them transcribed by Groq Whisper and answered by the AI instead.)
+        @elseif($voice['on'])
             on — voice messages up to 1 minute are transcribed by Groq Whisper ({{ $voice['model'] }}), the text is sent back to the customer and answered.
             Key: {{ $voice['env'] ? 'GROQ_API_KEY in .env' : 'the key of a Groq model below' }}.
         @else

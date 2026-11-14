@@ -263,10 +263,11 @@ class BusinessRegistrationAskEdgeCasesTest extends TestCase
         $this->customer(['text' => 'Aziz']);
         $this->assertSame(TelegramUser::STEP_PHONE, TelegramUser::sole()->step);
 
-        // In the bot chat, the phone is asked with the contact button.
-        $this->botChat(['text' => 'hi']);
-        $this->assertArrayHasKey('reply_markup', last($this->sent())->data());
-        $this->botChat(['contact' => ['phone_number' => '998903333333', 'user_id' => 555, 'first_name' => 'Aziz']]);
+        // The bot chat does not take answers to the Premium chat's questions (it would swallow a
+        // bot question as the name): the phone is typed in the Premium chat, where it was asked.
+        $this->botChat(['contact' => ['phone_number' => '998901111111', 'user_id' => 555, 'first_name' => 'Aziz']]);
+        $this->assertSame(TelegramUser::STEP_PHONE, TelegramUser::sole()->step);
+        $this->customer(['text' => '+998 90 333 33 33']);
         $user = TelegramUser::sole();
         $this->assertSame(['+998903333333', TelegramUser::STEP_DONE, false], [$user->phone, $user->step, $user->ask_registration]);
 

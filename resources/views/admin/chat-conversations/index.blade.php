@@ -82,6 +82,15 @@
                                 · {{ $conversation->page }}
                             @endif
                         </p>
+                        @if($conversation->channel !== 'web' && $conversation->external_id)
+                            @php
+                                // Bot and Premium-account chats: the chat ID is the customer's own Telegram ID.
+                                $fromId = $first['sender_id'] ?? (in_array($conversation->channel, ['telegram', 'business'], true) && in_array($first['role'] ?? null, ['user', null], true) ? $conversation->external_id : null);
+                            @endphp
+                            <p class="text-[11px] text-slate-400 mt-0.5 truncate font-mono" data-ids>
+                                Chat ID {{ $conversation->external_id }}@if($fromId) · From ID {{ $fromId }}@endif
+                            </p>
+                        @endif
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
                         <span title="Source" class="text-xs font-medium px-2 py-0.5 rounded-full border {{ $conversation->channel === 'web' ? 'border-slate-200 text-slate-500' : 'border-slate-400 text-slate-700' }}">{{ $channels[$conversation->channel] ?? ucfirst($conversation->channel) }}</span>

@@ -58,6 +58,10 @@ return [
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         // false = record only: the bot saves every message but never replies, registers or calls the AI.
         'replies' => filter_var(env('TELEGRAM_BOT_REPLIES', false), FILTER_VALIDATE_BOOLEAN), // true/false, 1/0, on/off, yes/no
+        // Voice / audio from customers: 'forward' (default) = sent to the sales chat, bot silent; 'transcribe' = Groq Whisper + AI answer.
+        'voice' => env('TELEGRAM_VOICE_MODE', 'forward'),
+        // AI answers a day for all unregistered (guest) customers together; admins are alerted when reached.
+        'guest_daily_limit' => (int) env('TELEGRAM_GUEST_DAILY_LIMIT', 1000),
         // Technical alerts (AI assistant errors). Empty = the sales chat_id.
         'alert_chat_id' => env('TELEGRAM_ALERT_CHAT_ID'),
     ],

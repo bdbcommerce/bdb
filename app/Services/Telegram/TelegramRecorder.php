@@ -34,6 +34,12 @@ class TelegramRecorder
     /** A chat idle longer than this, or this long, starts a new conversation. */
     private const SESSION_HOURS = 24;
 
+    /**
+     * Cache key prefix: the name/phone step was set by the Premium-account (Business) flow. The bot chat and the
+     * Business chat share TelegramUser.step, so each flow only takes answers for the questions it asked.
+     */
+    public const BUSINESS_REGISTERING = 'telegram-business-registering:';
+
     private const MAX_MESSAGES = 500;
 
     public function __construct(private TelegramApi $api) {}
@@ -66,7 +72,8 @@ class TelegramRecorder
         $asking = $customer && $customer->ask_registration && ! $customer->isRegistered()
             && $connection->is_enabled && $connection->can_reply;
         // Answers to the bot's questions are bot steps, not new questions for the team.
-        $answering = $asking && in_array($customer->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true);
+        $answering = $asking && in_array($customer->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
+            && Cache::has(self::BUSINESS_REGISTERING.$customer->telegram_id);
 
         $this->store($conversation, $message, $role, $edited, $answering);
 
@@ -86,9 +93,12 @@ class TelegramRecorder
         $locale = $user->locale ?? (in_array($code, ['uz', 'ru', 'en'], true) ? $code : 'ru');
         $text = trim((string) ($message['text'] ?? ''));
 
-        if ($user->step === TelegramUser::STEP_NAME) {
+        // A name/phone step the bot chat started is answered there: here the questions start over.
+        $ours = Cache::has(self::BUSINESS_REGISTERING.$user->telegram_id);
+
+        if ($ours && $user->step === TelegramUser::STEP_NAME) {
             $name = preg_replace('/\s+/u', ' ', $text);
-            if (! TelegramBot::isValidName($name)) {
+            if (! TelegramBot::isValidName($name) || count(explode(' ', $name)) > 4) {
                 $this->sendAsAccount($conversation, $connection, __('chat.tg_name_invalid', [], $locale));
 
                 return;
@@ -99,7 +109,7 @@ class TelegramRecorder
             return;
         }
 
-        if ($user->step === TelegramUser::STEP_PHONE) {
+        if ($ours && $user->step === TelegramUser::STEP_PHONE) {
             $raw = isset($message['contact']['phone_number']) && (string) ($message['contact']['user_id'] ?? '') === (string) $user->telegram_id
                 ? (string) $message['contact']['phone_number']
                 : $text;
@@ -110,6 +120,7 @@ class TelegramRecorder
                 return;
             }
             $user->update(['phone' => $phone, 'step' => TelegramUser::STEP_DONE, 'registered_at' => now(), 'ask_registration' => false]);
+            Cache::forget(self::BUSINESS_REGISTERING.$user->telegram_id);
             $this->sendAsAccount($conversation, $connection, __('chat.tg_biz_registered', [], $locale));
 
             return;
@@ -122,6 +133,7 @@ class TelegramRecorder
             : __('chat.tg_biz_ask_name', [], $locale));
         if ($sent) {
             $user->update(['locale' => $locale, 'step' => $user->name ? TelegramUser::STEP_PHONE : TelegramUser::STEP_NAME]);
+            Cache::put(self::BUSINESS_REGISTERING.$user->telegram_id, true, now()->addDays(30));
         }
     }
 
@@ -232,6 +244,8 @@ class TelegramRecorder
         $entry = [
             'role' => $role,
             'sender' => $this->senderName($message),
+            // Telegram ID of who wrote it (a linked channel / anonymous admin: the sender chat), for the admin list.
+            'sender_id' => is_scalar($message['sender_chat']['id'] ?? $message['from']['id'] ?? null) ? (string) ($message['sender_chat']['id'] ?? $message['from']['id']) : null,
             'message_id' => is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null,
             'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
         ];

@@ -7,6 +7,7 @@ use App\Models\ChatLead;
 use App\Models\ClientRequest;
 use App\Models\TelegramUser;
 use App\Services\Ai\VoiceTranscriber;
+use App\Services\AiErrorAlerts;
 use App\Services\ChatAssistant;
 use App\Services\Invoices\InvoiceParser;
 use App\Services\TelegramNotifier;
@@ -49,6 +50,21 @@ class TelegramBot
         private TelegramRecorder $recorder,
         private VoiceTranscriber $transcriber,
     ) {}
+
+    /** Cache key prefix: a guest tapped "Request a call", so the lead is created once registration is done. */
+    private const CALLBACK_AFTER_REGISTRATION = 'telegram-callback-after-registration:';
+
+    /** Cache key prefix: /language was used during registration, which resumes after the language pick. */
+    private const REGISTERING = 'telegram-registering:';
+
+    /** Guests are invited to register on their first answer and then every this many answers. */
+    private const INVITE_EVERY = 4;
+
+    /** Voice messages forwarded to the sales chat per customer per hour (more are only recorded). */
+    private const VOICE_FORWARDS_PER_HOUR = 20;
+
+    /** AI answers a day for one unregistered customer; then they are asked to register. */
+    public const GUEST_DAILY_ANSWERS = 30;
 
     /** Voice messages up to this long (seconds) are transcribed and answered. */
     public const VOICE_MAX_SECONDS = 60;
@@ -120,13 +136,21 @@ class TelegramBot
             ],
             // Bot steps: everything before registration when the bot answers; when only asked by an
             // admin, just the answers to its questions (the first message stays a real question).
-            aside: $replies ? $user->step !== TelegramUser::STEP_DONE
+            aside: $replies ? ! in_array($user->step, [TelegramUser::STEP_DONE, TelegramUser::STEP_GUEST], true)
                 : $asking && (in_array($user->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
                     || self::languageFromText(self::withoutEmoji((string) ($message['text'] ?? ''))) !== null
                     || str_starts_with((string) ($message['text'] ?? ''), '/')),
             awaitsReply: $replies,
         );
         $this->messageId = $messageId;
+
+        // Voice messages and audio files go to staff: forwarded to the sales chat, the bot stays silent
+        // (any mode, any step). TELEGRAM_VOICE_MODE=transcribe brings back Groq transcription + AI answer.
+        if ((is_array($message['voice'] ?? null) || is_array($message['audio'] ?? null)) && config('services.telegram.voice') !== 'transcribe') {
+            $this->forwardVoice($user, $message);
+
+            return;
+        }
 
         // Record-only mode (TELEGRAM_BOT_REPLIES=false): no reply, registration or AI call —
         // unless an admin asked for this customer's registration info.
@@ -143,6 +167,10 @@ class TelegramBot
         $text = self::withoutEmoji((string) ($message['text'] ?? ''));
 
         if (str_starts_with($text, '/language')) {
+            // Switching language in the middle of registration: it goes on in the new language.
+            if (in_array($user->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)) {
+                Cache::put(self::REGISTERING.$user->telegram_id, true, now()->addHour());
+            }
             $user->update(['step' => TelegramUser::STEP_LANGUAGE]);
             $this->askLanguage($chatId);
 
@@ -155,11 +183,34 @@ class TelegramBot
             return;
         }
 
-        match ($user->step) {
+        // Registration is optional when the bot answers: "Not now" goes back to asking questions.
+        if ($replies && ! $user->isRegistered() && in_array($user->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
+            && $text === self::withoutEmoji(__('chat.tg_not_now', [], $locale))) {
+            Cache::forget(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id);
+            // The customer declined: an admin's "ask for registration" request is not repeated on every message.
+            $user->update(['step' => TelegramUser::STEP_GUEST, 'ask_registration' => false]);
+            $this->api->sendMessage($chatId, __('chat.tg_registration_later', [], $locale), [
+                'reply_markup' => $this->keyboard((array) __('chat.starters', [], $locale), false, $locale, register: true),
+            ]);
+
+            return;
+        }
+
+        // Name/phone asked in the Premium-account chat are answered there, not here: in the bot chat this
+        // customer is a guest meanwhile (or, in record-only mode, only recorded).
+        $step = $user->step;
+        if (in_array($step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true) && Cache::has(TelegramRecorder::BUSINESS_REGISTERING.$user->telegram_id)) {
+            $step = $replies ? TelegramUser::STEP_GUEST : null;
+        }
+
+        match ($step) {
+            null => null,
             // Names are validated as typed, emoji included.
-            TelegramUser::STEP_NAME => $this->receiveName($user, trim((string) ($message['text'] ?? ''))),
+            TelegramUser::STEP_NAME => $this->receiveName($user, trim((string) ($message['text'] ?? '')), $message, $text),
             TelegramUser::STEP_PHONE => $this->receivePhone($user, $message),
             TelegramUser::STEP_DONE => $replies ? $this->chat($user, $message, $text) : null,
+            // Not registered but chatting (replies on): answered briefly, invited to register.
+            TelegramUser::STEP_GUEST => $replies ? $this->chat($user, $message, $text, guest: true) : $this->receiveLanguage($user, $text),
             default => $this->receiveLanguage($user, $text),
         };
     }
@@ -219,10 +270,11 @@ class TelegramBot
     private function askCurrentStep(TelegramUser $user): void
     {
         match ($user->step) {
-            TelegramUser::STEP_NAME => $this->api->sendMessage($user->telegram_id, __('chat.tg_ask_name', [], $user->locale), [
-                'reply_markup' => ['remove_keyboard' => true],
-            ]),
+            TelegramUser::STEP_NAME => $this->askName($user, __('chat.tg_ask_name', [], $user->locale)),
             TelegramUser::STEP_PHONE => $this->askPhone($user, __('chat.tg_ask_phone', ['name' => $user->name], $user->locale)),
+            TelegramUser::STEP_GUEST => $this->api->sendMessage($user->telegram_id, __('chat.tg_guest_welcome', [], $user->locale), [
+                'reply_markup' => $this->keyboard((array) __('chat.starters', [], $user->locale), false, $user->locale, register: true),
+            ]),
             default => $this->askLanguage($user->telegram_id),
         };
     }
@@ -264,17 +316,66 @@ class TelegramBot
             return;
         }
 
-        // A name typed before switching language is kept.
-        $user->update(['step' => $user->name ? TelegramUser::STEP_PHONE : TelegramUser::STEP_NAME]);
+        // When the bot answers, registration is optional: questions first, an invitation to register with
+        // the answers; /language used during registration resumes it (REGISTERING), at the phone step if the name is known.
+        // In record-only mode an admin asked for the details, so the questions start right away.
+        $registering = Cache::pull(self::REGISTERING.$user->telegram_id);
+        // A stored name alone (typed before "Not now", or by an admin) does not restart registration.
+        $step = match (true) {
+            ! $registering && (bool) config('services.telegram.replies') => TelegramUser::STEP_GUEST,
+            (bool) $user->name => TelegramUser::STEP_PHONE,
+            default => TelegramUser::STEP_NAME,
+        };
+        $user->update(['step' => $step]);
         $this->askCurrentStep($user);
     }
 
-    private function receiveName(TelegramUser $user, string $text): void
+    /** Start registration (the guest tapped "Register" or "Request a call"); a known name is not asked again. */
+    private function startRegistration(TelegramUser $user, string $intro = ''): void
+    {
+        Cache::forget(TelegramRecorder::BUSINESS_REGISTERING.$user->telegram_id);
+        $intro = $intro !== '' ? $intro."\n\n" : '';
+
+        if ($user->name) {
+            $user->update(['step' => TelegramUser::STEP_PHONE]);
+            $this->askPhone($user, $intro.__('chat.tg_ask_phone', ['name' => $user->name], $user->locale));
+
+            return;
+        }
+
+        $user->update(['step' => TelegramUser::STEP_NAME]);
+        $this->askName($user, $intro.__('chat.tg_ask_name', [], $user->locale));
+    }
+
+    /** With bot replies on, registration can be left for later ("Not now"). */
+    private function laterButton(TelegramUser $user): array
+    {
+        return config('services.telegram.replies') ? [[['text' => __('chat.tg_not_now', [], $user->locale)]]] : [];
+    }
+
+    private function askName(TelegramUser $user, string $text): void
+    {
+        $rows = $this->laterButton($user);
+        $this->api->sendMessage($user->telegram_id, $text, [
+            'reply_markup' => $rows ? ['keyboard' => $rows, 'resize_keyboard' => true, 'one_time_keyboard' => true] : ['remove_keyboard' => true],
+        ]);
+    }
+
+    private function receiveName(TelegramUser $user, string $text, array $message = [], string $plain = ''): void
     {
         $name = preg_replace('/\s+/u', ' ', $text);
 
-        if (! self::isValidName($name)) {
-            $this->api->sendMessage($user->telegram_id, __('chat.tg_name_invalid', [], $user->locale));
+        // A name has at most four words: a longer text (or one with "?") is a question typed at the wrong
+        // moment. When the bot answers, registration is left for later and the question is answered.
+        if (config('services.telegram.replies') && (str_contains($name, '?') || count(explode(' ', $name)) > 4)) {
+            Cache::forget(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id);
+            $user->update(['step' => TelegramUser::STEP_GUEST]);
+            $this->chat($user, $message, $plain);
+
+            return;
+        }
+        if (! self::isValidName($name) || count(explode(' ', $name)) > 4) {
+            $this->askName($user, __('chat.tg_name_invalid', [], $user->locale));
 
             return;
         }
@@ -287,7 +388,7 @@ class TelegramBot
     {
         $this->api->sendMessage($user->telegram_id, $text, [
             'reply_markup' => [
-                'keyboard' => [[['text' => __('chat.tg_share_phone', [], $user->locale), 'request_contact' => true]]],
+                'keyboard' => [[['text' => __('chat.tg_share_phone', [], $user->locale), 'request_contact' => true]], ...$this->laterButton($user)],
                 'resize_keyboard' => true,
                 'one_time_keyboard' => true,
             ],
@@ -298,8 +399,9 @@ class TelegramBot
     private function receivePhone(TelegramUser $user, array $message): void
     {
         $contact = $message['contact'] ?? null;
-        $ownContact = $contact
+        $ownContact = is_array($contact)
             && isset($contact['user_id'], $message['from']['id'])
+            && is_scalar($contact['phone_number'] ?? null)
             && (string) $contact['user_id'] === (string) $message['from']['id'];
 
         if (! $ownContact) {
@@ -315,6 +417,14 @@ class TelegramBot
             'ask_registration' => false,
         ]);
 
+        // A guest who tapped "Request a call" registered for it: the lead is created now.
+        if (config('services.telegram.replies') && Cache::pull(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id)) {
+            $this->api->sendMessage($user->telegram_id, __('chat.tg_registered', [], $user->locale));
+            $this->requestCall($user);
+
+            return;
+        }
+
         // Without AI replies, no suggested-question buttons (nobody would answer them).
         $this->api->sendMessage($user->telegram_id, __('chat.tg_registered', [], $user->locale), [
             'reply_markup' => config('services.telegram.replies')
@@ -325,7 +435,7 @@ class TelegramBot
 
     // Chat ---------------------------------------------------------------------
 
-    private function chat(TelegramUser $user, array $message, string $text): void
+    private function chat(TelegramUser $user, array $message, string $text, bool $guest = false): void
     {
         $locale = $user->locale;
 
@@ -349,13 +459,63 @@ class TelegramBot
             return;
         }
 
+        $registered = $user->isRegistered();
+
+        if ($text === self::withoutEmoji(__('chat.tg_register', [], $locale)) || str_starts_with($text, '/register')) {
+            $registered
+                ? $this->api->sendMessage($user->telegram_id, __('chat.tg_already_registered', ['name' => $user->name], $locale))
+                : $this->startRegistration($user);
+
+            return;
+        }
+
         if ($text === self::withoutEmoji(__('chat.tg_request_call', [], $locale))) {
-            $this->requestCall($user);
+            if ($registered) {
+                $this->requestCall($user);
+            } else {
+                // A call needs a name and phone: register first, then the lead is created (receivePhone).
+                Cache::put(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id, true, now()->addDay());
+                $this->startRegistration($user, __('chat.tg_call_needs_registration', [], $locale));
+            }
 
             return;
         }
 
         $this->answer($user, mb_substr($text, 0, 1000));
+
+        // An admin ticked "ask for registration info" (Telegram → Users): after the answer, the bot asks.
+        if ($guest && $user->ask_registration && ! $user->isRegistered()) {
+            $this->startRegistration($user);
+        }
+    }
+
+    private function guestMayAsk(TelegramUser $user): bool
+    {
+        if (! RateLimiter::attempt("telegram-guest-ai:{$user->telegram_id}", self::GUEST_DAILY_ANSWERS, fn () => true, 86400)) {
+            return false;
+        }
+
+        $key = 'telegram-guest-ai:'.now()->toDateString();
+        Cache::add($key, 0, now()->endOfDay());
+        $limit = max(0, (int) config('services.telegram.guest_daily_limit'));
+        $used = Cache::increment($key);
+        if ($used === $limit + 1) {
+            app(AiErrorAlerts::class)->report('Telegram guests: daily AI limit reached',
+                "Unregistered customers used {$limit} AI answers today (TELEGRAM_GUEST_DAILY_LIMIT). Until midnight they are asked to register; registered customers are not affected.", 'Telegram bot');
+        }
+
+        return $used <= $limit;
+    }
+
+    /** Forward a customer's voice / audio to the sales chat (at most VOICE_FORWARDS_PER_HOUR per customer). */
+    private function forwardVoice(TelegramUser $user, array $message): void
+    {
+        $audio = is_array($message['voice'] ?? null) ? $message['voice'] : $message['audio'];
+        if ($this->messageId === null || ! RateLimiter::attempt("telegram-voice-forward:{$user->telegram_id}", self::VOICE_FORWARDS_PER_HOUR, fn () => true, 3600)) {
+            return; // still recorded in the chat; staff see it in the admin panel
+        }
+
+        $this->notifier->voiceMessage($user, $this->messageId, is_numeric($audio['duration'] ?? null) ? max(0, (int) $audio['duration']) : null);
     }
 
     /**
@@ -472,9 +632,22 @@ class TelegramBot
         // 1–3 words ("salom", "ok", "?"): a light creative reply (joke, fun fact or our latest article).
         // Longer messages: an answer from the website data. Both fall back (and alert admins) when the AI fails.
         $short = ChatAssistant::isShort($text);
+        $registered = $user->isRegistered();
+
+        // Unverified accounts can reach the paid AI: a daily cap per guest and for all guests together.
+        if (! $registered && ! $this->guestMayAsk($user)) {
+            $this->api->sendMessage($user->telegram_id, __('chat.tg_guest_limit', [], $locale), [
+                'reply_markup' => $this->keyboard([], false, $locale, register: true),
+            ]);
+
+            return;
+        }
         $result = $short
             ? $this->assistant->creativeReply($text, $locale)
-            : $this->assistant->reply($history, $locale, 'Telegram bot', brief: true);
+            // Registered customers get a fuller answer by name; guests a brief one and an invitation to register.
+            : ($registered
+                ? $this->assistant->reply($history, $locale, 'Telegram bot', telegram: true, customerName: $user->name)
+                : $this->assistant->reply($history, $locale, 'Telegram bot', brief: true));
 
         $conversation->appendReply($this->messageId, $text, $result['reply'], $result['answered']);
         if (! $short) {
@@ -483,11 +656,17 @@ class TelegramBot
 
         $reply = $result['reply'];
         if ($result['offer_callback']) {
-            $reply .= "\n\n".__('chat.tg_call_hint', [], $locale);
+            $reply .= "\n\n".__($registered ? 'chat.tg_call_hint' : 'chat.tg_guest_call_hint', [], $locale);
+        } elseif (! $registered) {
+            // The first answer in a session, then every INVITE_EVERY answers: not on every message.
+            $answers = collect($conversation->messages)->where('role', 'assistant')->count();
+            if ($answers === 1 || $answers % self::INVITE_EVERY === 0) {
+                $reply .= "\n\n".__('chat.tg_guest_invite', [], $locale);
+            }
         }
 
-        $this->api->sendMessage($user->telegram_id, $reply, [
-            'reply_markup' => $this->keyboard($result['suggestions'], $result['offer_callback'], $locale),
+        $this->api->sendMessage($user->telegram_id, mb_substr($reply, 0, 4000), [
+            'reply_markup' => $this->keyboard($result['suggestions'], $result['offer_callback'], $locale, register: ! $registered),
         ]);
     }
 
@@ -569,11 +748,14 @@ class TelegramBot
     }
 
     /** Suggested questions as tap buttons, plus a "request a call" button when a callback is offered. */
-    private function keyboard(array $suggestions, bool $offerCallback, string $locale): array
+    private function keyboard(array $suggestions, bool $offerCallback, string $locale, bool $register = false): array
     {
         $rows = [];
         if ($offerCallback) {
             $rows[] = [['text' => __('chat.tg_request_call', [], $locale)]];
+        }
+        if ($register) {
+            $rows[] = [['text' => __('chat.tg_register', [], $locale)]];
         }
         foreach (array_slice($suggestions, 0, 3) as $suggestion) {
             $rows[] = [['text' => '💡 '.mb_substr((string) $suggestion, 0, 60)]];
