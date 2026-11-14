@@ -2,6 +2,9 @@
 
 namespace App\Services\Ai;
 
+use Anthropic\Client as AnthropicClient;
+use Anthropic\Core\Exceptions\APIConnectionException;
+use Anthropic\Core\Exceptions\APIStatusException;
 use App\Models\AiModel;
 use App\Services\AiErrorAlerts;
 use Illuminate\Http\Client\ConnectionException;
@@ -10,7 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * One structured (JSON) request to one AI model, for Gemini or any OpenAI-compatible API.
+ * One structured (JSON) request to one AI model: Gemini, Anthropic Claude or any OpenAI-compatible API.
  * Never throws: returns the decoded JSON, or the reason it failed.
  */
 class AiClient
@@ -29,6 +32,9 @@ class AiClient
 
         if (blank($model->key())) {
             return $this->failure($isEnv ? 'GEMINI_API_KEY is not set in .env' : "No API key for {$model->name}");
+        }
+        if ($model->provider === 'anthropic') {
+            return $this->anthropic($model, $system, $contents, $schema, $maxTokens);
         }
         if ($model->provider === 'openai' && blank($model->base_url)) {
             return $this->failure("No API address (base URL) for {$model->name}");
@@ -113,6 +119,63 @@ class AiClient
                 'max_tokens' => $maxTokens,
                 'response_format' => ['type' => 'json_object'],
             ]);
+    }
+
+    /**
+     * Anthropic Claude through the official SDK. Thinking stays on (it cannot be switched off on the
+     * current models), so effort is low for quick chat answers and max_tokens leaves room for it.
+     * Temperature is not sent: the current Claude models reject sampling parameters.
+     */
+    private function anthropic(AiModel $model, string $system, array $contents, array $schema, int $maxTokens): array
+    {
+        $system .= "\n\nRespond with ONLY one JSON object (no markdown, no text around it) that matches this JSON schema:\n"
+            .json_encode(self::jsonSchema($schema), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $messages = array_map(fn (array $m) => ['role' => $m['role'] === 'assistant' ? 'assistant' : 'user', 'content' => $m['content']], $contents);
+        while ($messages && $messages[0]['role'] !== 'user') {
+            array_shift($messages); // the conversation must start with the customer
+        }
+        if (! $messages) {
+            $messages = [['role' => 'user', 'content' => '(start)']];
+        }
+
+        $params = [
+            'model' => $model->model,
+            'maxTokens' => max(4000, $maxTokens * 4),
+            'system' => [['type' => 'text', 'text' => $system]],
+            'messages' => $messages,
+            'outputConfig' => ['effort' => 'low'],
+        ];
+        if (in_array($model->model, ['claude-opus-5-5', 'claude-sonnet-5-5'], true)) {
+            // Declined for policy reasons: the API retries on the model's default fallback.
+            $params += ['betas' => ['server-side-fallback-2026-07-01'], 'fallbacks' => 'default'];
+        }
+
+        try {
+            $message = (new AnthropicClient(apiKey: $model->key(), requestOptions: ['timeout' => 40, 'maxRetries' => 1]))
+                ->beta->messages->create(...$params);
+        } catch (APIStatusException $e) {
+            Log::warning("{$model->name} request failed", ['model' => $model->model, 'status' => $e->status, 'error' => AiErrorAlerts::withoutSecrets($e->getMessage(), $model->key())]);
+
+            return $this->failure("{$model->name} returned HTTP {$e->status}".($e->type ? ' '.$e->type->value : ''), AiErrorAlerts::withoutSecrets(mb_substr($e->getMessage(), 0, 600), $model->key()), $e->status);
+        } catch (APIConnectionException $e) {
+            Log::warning("{$model->name} request failed", ['model' => $model->model, 'error' => AiErrorAlerts::withoutSecrets($e->getMessage(), $model->key())]);
+
+            return $this->failure("{$model->name} did not respond (timeout or network problem)", AiErrorAlerts::withoutSecrets($e->getMessage(), $model->key()));
+        }
+
+        $text = '';
+        foreach ($message->content as $block) {
+            if ($block->type === 'text') {
+                $text .= $block->text;
+            }
+        }
+        $data = self::decodeJson($text);
+        if (! is_array($data)) {
+            return $this->failure("{$model->name} gave no usable answer", 'Reason: '.($message->stopReason ?? 'no text'));
+        }
+
+        return ['data' => $data, 'reason' => null, 'details' => null, 'status' => 200];
     }
 
     /** Gemini-style schema (OBJECT, STRING…) → standard JSON Schema (object, string…). */

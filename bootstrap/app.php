@@ -34,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->convertEmptyStringsToNull(except: [$isTelegramWebhook]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // API keys typed into admin forms must never be flashed into the session (stored in the DB).
+        $exceptions->dontFlash(['api_key']);
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*', 'chat/*', 'telegram/*'),
         );

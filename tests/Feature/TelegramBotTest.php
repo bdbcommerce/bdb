@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\ClientRequest;
 use App\Models\TelegramUser;
 use App\Services\ChatAssistant;
 use App\Services\Telegram\TelegramBot;
@@ -325,17 +326,38 @@ class TelegramBotTest extends TestCase
         $this->fakeApis();
         $this->registered();
 
-        $this->send(['text' => 'First question']);
+        $this->send(['text' => 'What is the first question?']);
         $this->send(['photo' => [['file_id' => 'p1_small'], ['file_id' => 'p1_large']]]);
-        $this->send(['text' => 'Second question']);
+        $this->send(['text' => 'What is the second question?']);
 
         $this->assertSame(1, ChatConversation::count());
 
         // Media is not sent to the AI.
         Http::assertSent(fn (Request $r) => str_contains($r->url(), 'generateContent')
             && count($r['contents']) === 3
-            && $r['contents'][0]['parts'][0]['text'] === 'First question'
-            && $r['contents'][2]['parts'][0]['text'] === 'Second question');
+            && $r['contents'][0]['parts'][0]['text'] === 'What is the first question?'
+            && $r['contents'][2]['parts'][0]['text'] === 'What is the second question?');
+    }
+
+    public function test_short_messages_get_a_creative_reply_short_questions_a_real_answer(): void
+    {
+        $this->assertTrue(ChatAssistant::isShort('Salom'));
+        $this->assertTrue(ChatAssistant::isShort('rahmat, katta rahmat'));
+        $this->assertTrue(ChatAssistant::isShort('👍'));
+        $this->assertFalse(ChatAssistant::isShort('Zebra narxi?'), 'a short question is answered from the site');
+        $this->assertFalse(ChatAssistant::isShort('Do you sell label printers'));
+
+        $this->fakeApis(reply: 'Salom! Shtrix-kod 1974-yilda saqich paketida birinchi marta skanerlangan.');
+        $this->registered('uz');
+
+        $this->send(['text' => 'Salom']);
+
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'generateContent')
+            && str_contains($r['system_instruction']['parts'][0]['text'], 'short clean joke')
+            && str_contains($r['system_instruction']['parts'][0]['text'], 'Uzbek'));
+        $this->assertStringContainsString('1974', $this->lastSent()['text']);
+        $this->assertSame(0, ClientRequest::count(), 'small talk is not a client request');
+        $this->assertSame(2, ChatConversation::sole()->message_count);
     }
 
     public function test_staff_replies_are_sent_to_the_ai_as_the_assistant_side(): void

@@ -42,8 +42,8 @@
                             </p>
                             <p class="text-xs text-slate-500 mt-0.5">
                                 {{ collect($model->tasks)->map(fn ($t) => $tasks[$t] ?? $t)->map(fn ($t) => Str::before($t, ' ('))->implode(', ') }}
-                                · {{ $model->provider === 'gemini' ? 'Gemini' : parse_url((string) $model->base_url, PHP_URL_HOST) }}
-                                · key {{ filled($model->api_key) ? 'saved' : ($model->provider === 'gemini' && $env['key'] ? 'from .env' : 'missing') }}
+                                · {{ match ($model->provider) { 'gemini' => 'Gemini', 'anthropic' => 'Anthropic', default => parse_url((string) $model->base_url, PHP_URL_HOST) } }}
+                                · key {{ filled($model->api_key) ? 'saved' : ($model->provider === 'gemini' && $env['key'] ? 'from .env' : ($model->provider === 'anthropic' && filled($model->key()) ? 'from Invoice parser' : 'missing')) }}
                             </p>
                             <p class="text-xs mt-1">
                                 @if(! $model->is_active && blank($model->api_key))

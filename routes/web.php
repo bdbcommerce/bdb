@@ -17,6 +17,8 @@ use App\Http\Controllers\Admin\CompanyInfoController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\IndustryController;
+use App\Http\Controllers\Admin\InvoiceMessageController;
+use App\Http\Controllers\Admin\InvoiceParserSettingController;
 use App\Http\Controllers\Admin\JobApplicationController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\McpSettingController;
@@ -119,6 +121,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('vacancies', VacancyController::class)->except(['show']);
         Route::get('job-applications/{jobApplication}/cv', [JobApplicationController::class, 'download'])->name('job-applications.cv');
         Route::resource('job-applications', JobApplicationController::class)->only(['index', 'show', 'update', 'destroy']);
+
+        // Invoice parser: the bot reads invoice photos with Claude and posts a summary
+        Route::get('invoice-parser/settings', [InvoiceParserSettingController::class, 'edit'])->name('invoice-parser.edit');
+        Route::put('invoice-parser/settings', [InvoiceParserSettingController::class, 'update'])->name('invoice-parser.update');
+        Route::post('invoice-parser/test', [InvoiceParserSettingController::class, 'test'])->middleware('throttle:5,1')->name('invoice-parser.test');
+        Route::get('invoice-messages/{invoiceMessage}/image', [InvoiceMessageController::class, 'image'])->name('invoice-messages.image');
+        Route::post('invoice-messages/{invoiceMessage}/retry', [InvoiceMessageController::class, 'retry'])->middleware('throttle:20,1')->name('invoice-messages.retry');
+        Route::resource('invoice-messages', InvoiceMessageController::class)->only(['index', 'show', 'destroy']);
 
         Route::resource('knowledge', KnowledgeEntryController::class)->except(['show']);
         // AI settings: models per task, tried by priority

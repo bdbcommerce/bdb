@@ -7,6 +7,7 @@ use App\Models\ChatLead;
 use App\Models\ClientRequest;
 use App\Models\TelegramUser;
 use App\Services\ChatAssistant;
+use App\Services\Invoices\InvoiceParser;
 use App\Services\TelegramNotifier;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -50,6 +51,20 @@ class TelegramBot
 
     public function handle(array $update): void
     {
+        // The invoice source chat belongs to the invoice parser (Admin → Invoice parser): photos are read
+        // by Claude, everything else there (text, edits) is ignored and never recorded or answered.
+        foreach (['message', 'edited_message'] as $key) {
+            if (is_array($part = $update[$key] ?? null) && ($parser = app(InvoiceParser::class))->handles($part)) {
+                if ($key === 'message') {
+                    // Only stored here: `invoices:process` (every minute, one at a time) reads it, so a flood of
+                    // photos never ties up the web workers that serve the site.
+                    $parser->capture($part);
+                }
+
+                return;
+            }
+        }
+
         if ($this->record($update)) {
             return;
         }
@@ -344,11 +359,17 @@ class TelegramBot
             array_shift($history);
         }
 
-        // Falls back (and alerts admins) when the AI is not configured or fails.
-        $result = $this->assistant->reply($history, $locale, 'Telegram bot', brief: true);
+        // 1–3 words ("salom", "ok", "?"): a light creative reply (joke, fun fact or our latest article).
+        // Longer messages: an answer from the website data. Both fall back (and alert admins) when the AI fails.
+        $short = ChatAssistant::isShort($text);
+        $result = $short
+            ? $this->assistant->creativeReply($text, $locale)
+            : $this->assistant->reply($history, $locale, 'Telegram bot', brief: true);
 
         $conversation->appendReply($this->messageId, $text, $result['reply'], $result['answered']);
-        ClientRequest::record($conversation, $text, $result);
+        if (! $short) {
+            ClientRequest::record($conversation, $text, $result); // small talk is not a client request
+        }
 
         $reply = $result['reply'];
         if ($result['offer_callback']) {

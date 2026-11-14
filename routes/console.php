@@ -15,3 +15,6 @@ Schedule::command('model:prune', ['--model' => [ChatConversation::class, JobAppl
 
 // Retry CVs whose Telegram upload failed (they wait on the private disk until sent).
 Schedule::command('careers:send-cvs')->hourly()->withoutOverlapping();
+
+// Invoice parser: read photos still waiting, stuck or failed (each is normally read right after it arrives).
+Schedule::command('invoices:process')->everyMinute()->withoutOverlapping(10);

@@ -15,6 +15,13 @@ class AiModel extends Model
     public const PROVIDERS = [
         'gemini' => 'Google Gemini',
         'openai' => 'OpenAI-compatible API (Groq, OpenRouter, Mistral, …)',
+        'anthropic' => 'Anthropic Claude',
+    ];
+
+    private const CLAUDE_STEPS = [
+        'Open https://console.anthropic.com and sign in (or sign up and add billing: Claude is a paid API).',
+        'Go to API keys and click "Create Key"; copy it (it starts with sk-ant-).',
+        'Paste it here — or leave the key empty to use the key saved in Invoice parser → Settings (or ANTHROPIC_API_KEY in .env). Tick Active, choose the jobs and save.',
     ];
 
     public const TASKS = [
@@ -37,10 +44,20 @@ class AiModel extends Model
     ];
 
     /**
-     * Ready-made models with a free tier (as of 2026; free limits and model names change, check the provider).
+     * Ready-made models (as of 2026): paid Claude, and models with a free tier (free limits and model names change, check the provider).
      * Each needs its own free API key: "steps" says how to get it. Seeded switched off (AiModelSeeder).
      */
     public const PRESETS = [
+        'claude-opus' => [
+            'name' => 'Claude Opus 5.5', 'provider' => 'anthropic', 'model' => 'claude-opus-5-5', 'base_url' => null, 'priority' => 5,
+            'key_url' => 'https://console.anthropic.com/settings/keys', 'steps' => self::CLAUDE_STEPS,
+            'note' => 'Paid (about $4 / $20 per million tokens in / out). The best answers in Uzbek, Russian and English.',
+        ],
+        'claude-haiku' => [
+            'name' => 'Claude Haiku 5.5', 'provider' => 'anthropic', 'model' => 'claude-haiku-5-5', 'base_url' => null, 'priority' => 8,
+            'key_url' => 'https://console.anthropic.com/settings/keys', 'steps' => self::CLAUDE_STEPS,
+            'note' => 'Paid but very cheap (about $0.10 / $0.50 per million tokens) and fast. The same Claude key works.',
+        ],
         'gemini-flash' => [
             'name' => 'Google Gemini Flash', 'provider' => 'gemini', 'model' => 'gemini-flash-latest', 'base_url' => null, 'priority' => 10,
             'key_url' => 'https://aistudio.google.com/apikey', 'steps' => self::GOOGLE_STEPS,
@@ -165,7 +182,16 @@ class AiModel extends Model
     /** The key to send: the model's own, or GEMINI_API_KEY for Gemini models without one. */
     public function key(): ?string
     {
-        return filled($this->api_key) ? $this->api_key : ($this->provider === 'gemini' ? config('services.gemini.key') : null);
+        if (filled($this->api_key)) {
+            return $this->api_key;
+        }
+
+        // Gemini may use GEMINI_API_KEY; Claude the invoice parser's key (its settings, else ANTHROPIC_API_KEY).
+        return match ($this->provider) {
+            'gemini' => config('services.gemini.key'),
+            'anthropic' => InvoiceParserSetting::current()->apiKey(),
+            default => null,
+        };
     }
 
     public function isPaused(): bool

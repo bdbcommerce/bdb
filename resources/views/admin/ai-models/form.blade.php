@@ -61,6 +61,7 @@
             <p class="text-xs text-slate-400 mt-1">
                 Stored encrypted, never shown again.
                 <span x-show="provider === 'gemini'">@if($envKey) Leave empty to use GEMINI_API_KEY from .env. @endif</span>
+                <span x-show="provider === 'anthropic'">Leave empty to use the Claude key from Invoice parser → Settings (or ANTHROPIC_API_KEY in .env).</span>
             </p>
             @if(filled($model->api_key))
                 <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">

@@ -70,13 +70,15 @@ class QaSidebarAndRetickTest extends TestCase
             'admin.telegram.edit' => ['telegram'],
             'admin.vacancies.index' => ['careers'],
             'admin.job-applications.index' => ['careers'],
+            'admin.invoice-messages.index' => ['invoices'],
+            'admin.invoice-parser.edit' => ['invoices'],
         ];
         foreach ($pages as $route => $open) {
             $html = $this->actingAs($admin)->get(route($route))->assertOk()->getContent();
             $this->assertSame($open, $this->openGroups($html), $route);
             // Server-rendered aria-expanded matches.
             preg_match_all('/aria-expanded="(true|false)"\s+aria-controls="nav-group-([a-z]+)"/', $html, $a, PREG_SET_ORDER);
-            $this->assertCount(6, $a, $route);
+            $this->assertCount(7, $a, $route);
             foreach ($a as [$all, $state, $key]) {
                 $this->assertSame(in_array($key, $open, true) ? 'true' : 'false', $state, "$route $key");
             }

@@ -33,6 +33,11 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    // Invoice parser (Admin → Invoice parser): fallback when no key is saved in its settings.
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+    ],
+
     // One bot does both jobs: customers chat with the AI assistant in private
     // messages (webhook), and new leads are posted to the sales chat_id.
     'telegram' => [

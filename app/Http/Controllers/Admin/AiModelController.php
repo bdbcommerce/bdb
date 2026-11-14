@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Console\Commands\AiCheckCommand;
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
+use App\Models\InvoiceParserSetting;
 use App\Services\AiErrorAlerts;
 use App\Services\ChatAssistant;
 use Illuminate\Http\Request;
@@ -122,7 +123,8 @@ class AiModelController extends Controller
         // A blank key keeps the saved one; Gemini models may use GEMINI_API_KEY from .env (optional).
         $hasKey = filled($data['api_key'] ?? null)
             || ($existing && filled($existing->api_key) && ! $request->boolean('remove_key'))
-            || ($data['provider'] === 'gemini' && filled(config('services.gemini.key')));
+            || ($data['provider'] === 'gemini' && filled(config('services.gemini.key')))
+            || ($data['provider'] === 'anthropic' && filled(InvoiceParserSetting::current()->apiKey()));
         if ($request->boolean('is_active') && ! $hasKey) {
             throw ValidationException::withMessages([
                 'api_key' => 'Paste the API key to switch this model on (see "How to get the key"), or untick Active.',
@@ -131,7 +133,7 @@ class AiModelController extends Controller
         if (blank($data['api_key'] ?? null)) {
             unset($data['api_key']);
         }
-        if ($data['provider'] === 'gemini') {
+        if (in_array($data['provider'], ['gemini', 'anthropic'], true)) {
             $data['base_url'] = null;
         }
 
