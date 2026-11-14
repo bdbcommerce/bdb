@@ -29,3 +29,6 @@ DEPLOYMENT.md
 /public/sitemap.xml
 /public/robots.txt
 /public/llms.txt
+
+# Symlink created by "php artisan storage:link" (points to storage/app/public); never commit it
+/public/storage
