@@ -36,6 +36,7 @@
                 <dd class="text-slate-800">
                     @if($user->phone)
                         <a href="tel:{{ $user->phone }}" class="underline">{{ $user->phone }}</a>
+                        <span class="text-xs {{ $user->hasVerifiedPhone() ? 'text-slate-500' : 'text-amber-700' }}">{{ $user->hasVerifiedPhone() ? '· verified' : '· typed, not verified (asked to share it before a call request)' }}</span>
                     @else
                         —
                     @endif

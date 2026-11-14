@@ -119,7 +119,9 @@ class TelegramRecorder
 
                 return;
             }
-            $user->update(['phone' => $phone, 'step' => TelegramUser::STEP_DONE, 'registered_at' => now(), 'ask_registration' => false]);
+            // Typed, not shared with the contact button: not verified (unless it is the number already verified).
+            $user->update(['phone' => $phone, 'phone_verified_at' => $phone === $user->phone ? $user->phone_verified_at : null,
+                'step' => TelegramUser::STEP_DONE, 'registered_at' => now(), 'ask_registration' => false]);
             Cache::forget(self::BUSINESS_REGISTERING.$user->telegram_id);
             $this->sendAsAccount($conversation, $connection, __('chat.tg_biz_registered', [], $locale));
 

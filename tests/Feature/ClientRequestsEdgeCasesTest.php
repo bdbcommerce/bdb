@@ -105,7 +105,7 @@ class ClientRequestsEdgeCasesTest extends TestCase
     private function registeredTelegramUser(string $id = '555', string $locale = 'en'): TelegramUser
     {
         return TelegramUser::create(['telegram_id' => $id, 'locale' => $locale, 'step' => 'done', 'name' => 'Aziz',
-            'phone' => '+998901234567', 'registered_at' => now()]);
+            'phone' => '+998901234567', 'registered_at' => now(), 'phone_verified_at' => now()]);
     }
 
     private function webhook(string $text, int $updateId = 1, int $chatId = 555)
@@ -372,7 +372,7 @@ class ClientRequestsEdgeCasesTest extends TestCase
     public function test_notify_failures_are_counted_and_retried_only_for_unreached_customers(): void
     {
         $entry = $this->entry();
-        TelegramUser::create(['telegram_id' => '555', 'locale' => 'ru', 'step' => 'done', 'registered_at' => now()]);
+        TelegramUser::create(['telegram_id' => '555', 'locale' => 'ru', 'step' => 'done', 'registered_at' => now(), 'phone_verified_at' => now()]);
         // 777 has no TelegramUser row: falls back to the request locale.
         $ok = $this->request(['channel' => 'telegram', 'external_id' => '555', 'locale' => 'uz', 'status' => 'resolved', 'knowledge_entry_id' => $entry->id]);
         $blocked = $this->request(['channel' => 'telegram', 'external_id' => '777', 'locale' => 'uz', 'status' => 'resolved', 'knowledge_entry_id' => $entry->id]);
@@ -588,7 +588,7 @@ class ClientRequestsEdgeCasesTest extends TestCase
         $this->webhook('English', 4)->assertOk();
         $this->assertSame('en', TelegramUser::where('telegram_id', '555')->value('locale'));
 
-        TelegramUser::where('telegram_id', '555')->update(['step' => 'done', 'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now()]);
+        TelegramUser::where('telegram_id', '555')->update(['step' => 'done', 'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(), 'phone_verified_at' => now()]);
 
         // A 💡 suggestion button reaches the AI without the emoji, and is recorded without it.
         $this->webhook('💡 What is Asl Belgi?', 5)->assertOk();

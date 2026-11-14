@@ -25,7 +25,7 @@ class TelegramUser extends Model
 
     protected $fillable = [
         'telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'company', 'notes',
-        'ask_registration', 'source', 'registered_at',
+        'ask_registration', 'source', 'registered_at', 'phone_verified_at',
     ];
 
     /** Where the customer was first seen. */
@@ -35,7 +35,7 @@ class TelegramUser extends Model
 
     protected function casts(): array
     {
-        return ['registered_at' => 'datetime', 'ask_registration' => 'boolean'];
+        return ['registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean'];
     }
 
     public function scopeRegistered(Builder $query): void
@@ -96,6 +96,12 @@ class TelegramUser extends Model
     public function displayName(): ?string
     {
         return $this->name ?? $this->profile_name ?? ($this->username ? '@'.$this->username : null);
+    }
+
+    /** The phone came from Telegram's contact button (or an admin): safe to give to sales for a call. */
+    public function hasVerifiedPhone(): bool
+    {
+        return filled($this->phone) && $this->phone_verified_at !== null;
     }
 
     public function isRegistered(): bool

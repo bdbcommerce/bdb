@@ -38,7 +38,7 @@ return [
     // (emoji are fine here: Telegram has no other icons; the website stays monochrome)
     'tg_ask_name' => '👤 Roʻyxatdan oʻtish: ismingizni yozing.',
     'tg_name_invalid' => '✍️ Iltimos, ismingizni matn bilan yozing (2–60 belgi).',
-    'tg_ask_phone' => '🙌 Rahmat, :name! Endi Telegramga bogʻlangan telefon raqamingizni yuboring — quyidagi tugmani bosing 👇',
+    'tg_ask_phone' => '🙌 Rahmat, :name! Endi Telegramga bogʻlangan telefon raqamingizni yuboring — quyidagi «📱 Raqamimni yuborish» tugmasini bosing 👇',
     'tg_share_phone' => '📱 Raqamimni yuborish',
     'tg_phone_not_own' => '📱 “Raqamimni yuborish” tugmasini bosing — faqat oʻz raqamingizni yuborish mumkin.',
     'tg_registered' => '✅ Roʻyxatdan oʻtdingiz! Endi savolingizni yozing 💬',
@@ -63,6 +63,8 @@ return [
     'tg_registration_later' => '👌 Yaxshi! Savollaringizni yozavering. «📝 Roʻyxatdan oʻtish» tugmasini istalgan vaqtda bosing.',
     'tg_already_registered' => '✅ Siz allaqachon roʻyxatdan oʻtgansiz, :name. Savolingizni yozing 💬',
     'tg_guest_limit' => '📝 Bugun koʻp savol berdingiz. Davom etish uchun roʻyxatdan oʻting (ism va telefon) — «📝 Roʻyxatdan oʻtish» tugmasini bosing, mutaxassisimiz mamnuniyat bilan yordam beradi.',
+    'tg_call_confirm_phone' => '📞 Sizga qoʻngʻiroq qilishimiz uchun telefon raqamingizni tasdiqlang — quyidagi «📱 Raqamimni yuborish» tugmasini bosing 👇',
+    'tg_call_later' => '👌 Yaxshi! Qulay vaqtda «📞 Qoʻngʻiroqni soʻrash» tugmasini bosing.',
     'tg_too_fast' => '⏳ Siz juda tez xabar yuboryapsiz. Iltimos, bir daqiqa kuting.',
     'tg_voice_too_long' => '🎙 Men :seconds soniyagacha boʻlgan ovozli xabarlarni tinglay olaman. Qisqaroq yuboring yoki savolingizni yozing ✍️',
     'tg_voice_limit' => '🎙 Hozir boshqa ovozli xabarlarni tinglay olmayman. Iltimos, savolingizni yozing ✍️',

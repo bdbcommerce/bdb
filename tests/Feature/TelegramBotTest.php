@@ -90,7 +90,7 @@ class TelegramBotTest extends TestCase
     {
         return TelegramUser::create([
             'telegram_id' => '555', 'username' => 'aziz_uz', 'locale' => $locale, 'step' => TelegramUser::STEP_DONE,
-            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(),
+            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(), 'phone_verified_at' => now(),
         ]);
     }
 
@@ -260,17 +260,23 @@ class TelegramBotTest extends TestCase
         $this->assertFalse($user->isRegistered());
     }
 
-    public function test_unregistered_customers_cannot_reach_the_assistant(): void
+    public function test_a_question_at_the_phone_step_is_answered_and_registration_left_for_later(): void
     {
         $this->fakeApis();
         TelegramUser::create(['telegram_id' => '555', 'locale' => 'ru', 'step' => TelegramUser::STEP_PHONE, 'name' => 'Aziz']);
 
         $this->send(['text' => 'Сколько стоит принтер?']);
 
-        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'generateContent'));
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'generateContent'));
+        $this->assertSame(TelegramUser::STEP_GUEST, TelegramUser::sole()->step);
         $messages = ChatConversation::sole()->messages;
         $this->assertSame('Сколько стоит принтер?', $messages[0]['content']);
-        $this->assertTrue($messages[0]['aside']);
+        $this->assertArrayNotHasKey('aside', $messages[0], 'answered: part of the dialogue');
+
+        // A short reply that is not a phone still re-asks for the contact.
+        TelegramUser::sole()->update(['step' => TelegramUser::STEP_PHONE]);
+        $this->send(['text' => 'ok']);
+        $this->assertSame(__('chat.tg_phone_not_own', [], 'ru'), $this->lastSent()['text']);
     }
 
     public function test_language_command_changes_language_and_keeps_registration(): void

@@ -63,6 +63,8 @@ return [
     'tg_registration_later' => '👌 OK! Keep asking questions. Tap “📝 Register” any time.',
     'tg_already_registered' => '✅ You are already registered, :name. Type your question 💬',
     'tg_guest_limit' => '📝 You\'ve asked a lot of questions today. Please register (name and phone) to keep chatting — tap “📝 Register”, and our specialist will be happy to help.',
+    'tg_call_confirm_phone' => '📞 To call you back, please confirm your phone number — tap “📱 Share my phone number” below 👇',
+    'tg_call_later' => '👌 OK! Tap “📞 Request a call” whenever you like.',
     'tg_too_fast' => '⏳ You are sending messages too quickly. Please wait a minute.',
     'tg_voice_too_long' => '🎙 I can listen to voice messages up to :seconds seconds. Please send a shorter one or type your question ✍️',
     'tg_voice_limit' => '🎙 I can\'t listen to more voice messages right now. Please type your question ✍️',

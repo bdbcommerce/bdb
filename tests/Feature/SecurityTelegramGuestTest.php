@@ -155,7 +155,6 @@ class SecurityTelegramGuestTest extends TestCase
      */
     public function test_a_lead_is_never_created_with_an_unverified_phone(): void
     {
-        $this->markTestSkipped('Pre-existing (Business registration takes a typed phone): left for the owner to decide.');
         TelegramUser::create([
             'telegram_id' => '555', 'locale' => 'ru', 'step' => TelegramUser::STEP_DONE, 'source' => 'business',
             'name' => 'Aziz', 'phone' => '+998900000000', 'registered_at' => now(), // typed in the Business chat

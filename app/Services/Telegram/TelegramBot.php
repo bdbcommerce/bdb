@@ -177,20 +177,23 @@ class TelegramBot
             return;
         }
 
-        if (str_starts_with($text, '/start') && ! $user->isRegistered()) {
-            $this->askCurrentStep($user);
+        if (str_starts_with($text, '/start') && (! $user->isRegistered() || $user->step === TelegramUser::STEP_PHONE)) {
+            $user->isRegistered()
+                ? $this->askPhone($user, __('chat.tg_call_confirm_phone', [], $locale))
+                : $this->askCurrentStep($user);
 
             return;
         }
 
         // Registration is optional when the bot answers: "Not now" goes back to asking questions.
-        if ($replies && ! $user->isRegistered() && in_array($user->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
+        if ($replies && in_array($user->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
             && $text === self::withoutEmoji(__('chat.tg_not_now', [], $locale))) {
             Cache::forget(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id);
             // The customer declined: an admin's "ask for registration" request is not repeated on every message.
-            $user->update(['step' => TelegramUser::STEP_GUEST, 'ask_registration' => false]);
-            $this->api->sendMessage($chatId, __('chat.tg_registration_later', [], $locale), [
-                'reply_markup' => $this->keyboard((array) __('chat.starters', [], $locale), false, $locale, register: true),
+            $registered = $user->isRegistered(); // a registered customer was confirming the phone for a call
+            $user->update(['step' => $registered ? TelegramUser::STEP_DONE : TelegramUser::STEP_GUEST, 'ask_registration' => false]);
+            $this->api->sendMessage($chatId, __($registered ? 'chat.tg_call_later' : 'chat.tg_registration_later', [], $locale), [
+                'reply_markup' => $this->keyboard((array) __('chat.starters', [], $locale), $registered, $locale, register: ! $registered),
             ]);
 
             return;
@@ -308,6 +311,8 @@ class TelegramBot
         $user->locale = $locale;
 
         if ($user->isRegistered()) {
+            Cache::forget(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id);
+            Cache::forget(self::REGISTERING.$user->telegram_id);
             $user->update(['step' => TelegramUser::STEP_DONE]);
             $this->api->sendMessage($user->telegram_id, __('chat.tg_language_changed', [], $locale), [
                 'reply_markup' => $this->keyboard((array) __('chat.starters', [], $locale), false, $locale),
@@ -404,22 +409,36 @@ class TelegramBot
             && is_scalar($contact['phone_number'] ?? null)
             && (string) $contact['user_id'] === (string) $message['from']['id'];
 
+        $typed = trim(self::withoutEmoji((string) ($message['text'] ?? '')));
+        if (! $ownContact && config('services.telegram.replies') && (str_contains($typed, '?') || count(preg_split('/\s+/u', $typed)) > 4)) {
+            // A question, not a phone: answered; the call request waits until the customer taps it again.
+            Cache::forget(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id);
+            $user->update(['step' => $user->isRegistered() ? TelegramUser::STEP_DONE : TelegramUser::STEP_GUEST]);
+            $this->chat($user, $message, $typed, guest: ! $user->isRegistered());
+
+            return;
+        }
+
         if (! $ownContact) {
             $this->askPhone($user, __('chat.tg_phone_not_own', [], $user->locale));
 
             return;
         }
 
+        $wasRegistered = $user->isRegistered();
         $user->update([
             'phone' => '+'.ltrim((string) $contact['phone_number'], '+'),
+            'phone_verified_at' => now(),
             'step' => TelegramUser::STEP_DONE,
-            'registered_at' => now(),
+            'registered_at' => $user->registered_at ?? now(),
             'ask_registration' => false,
         ]);
 
         // A guest who tapped "Request a call" registered for it: the lead is created now.
         if (config('services.telegram.replies') && Cache::pull(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id)) {
-            $this->api->sendMessage($user->telegram_id, __('chat.tg_registered', [], $user->locale));
+            if (! $wasRegistered) {
+                $this->api->sendMessage($user->telegram_id, __('chat.tg_registered', [], $user->locale));
+            }
             $this->requestCall($user);
 
             return;
@@ -695,6 +714,17 @@ class TelegramBot
     /** The registered customer asked for a call: a lead with their registration details. */
     private function requestCall(TelegramUser $user): void
     {
+        // Sales only call numbers shared with Telegram's contact button (a phone typed in a Premium-account
+        // chat could be anyone's): confirm it first, then the lead is created in receivePhone.
+        if (! $user->hasVerifiedPhone()) {
+            Cache::put(self::CALLBACK_AFTER_REGISTRATION.$user->telegram_id, true, now()->addDay());
+            Cache::forget(TelegramRecorder::BUSINESS_REGISTERING.$user->telegram_id);
+            $user->update(['step' => TelegramUser::STEP_PHONE]);
+            $this->askPhone($user, __('chat.tg_call_confirm_phone', [], $user->locale));
+
+            return;
+        }
+
         $conversation = $this->conversation($user);
         $messages = collect($conversation->textMessages());
 

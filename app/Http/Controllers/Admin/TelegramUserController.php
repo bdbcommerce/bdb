@@ -122,6 +122,11 @@ class TelegramUserController extends Controller
             $data['step'] = TelegramUser::STEP_LANGUAGE;
         }
 
+        // A phone entered or changed by an admin is trusted; clearing it removes the verification.
+        if (array_key_exists('phone', $data) && $data['phone'] !== $telegramUser->phone) {
+            $data['phone_verified_at'] = $data['phone'] ? now() : null;
+        }
+
         $telegramUser->update($data);
 
         return redirect()->route('admin.telegram-users.show', $telegramUser)->with('success', $data['ask_registration']

@@ -75,7 +75,7 @@ class TelegramRegistrationFixesTest extends TestCase
     {
         TelegramUser::create([
             'telegram_id' => '555', 'locale' => 'ru', 'step' => TelegramUser::STEP_DONE,
-            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(),
+            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(), 'phone_verified_at' => now(),
         ]);
 
         $this->send(['text' => '/language']);
@@ -124,7 +124,7 @@ class TelegramRegistrationFixesTest extends TestCase
     {
         TelegramUser::create([
             'telegram_id' => '555', 'locale' => 'uz', 'step' => TelegramUser::STEP_DONE,
-            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(),
+            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(), 'phone_verified_at' => now(),
         ]);
 
         $this->send(['text' => 'Narxi?']);
@@ -140,7 +140,7 @@ class TelegramRegistrationFixesTest extends TestCase
     {
         TelegramUser::create([
             'telegram_id' => '555', 'locale' => 'uz', 'step' => TelegramUser::STEP_DONE,
-            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(),
+            'name' => 'Aziz', 'phone' => '+998901234567', 'registered_at' => now(), 'phone_verified_at' => now(),
         ]);
 
         $this->send(['text' => 'Narxi?']);
