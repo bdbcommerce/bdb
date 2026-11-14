@@ -48,5 +48,7 @@ class ArticleSeeder extends Seeder
                 'sort_order' => $i,
             ]);
         }
+
+        $this->call(ArticleImageSeeder::class);
     }
 }
