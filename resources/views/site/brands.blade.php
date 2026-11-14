@@ -44,6 +44,15 @@
                             <p class="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-4">{{ $desc }}</p>
                         @endif
                         <div class="mt-auto pt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+                            @if($shop = $brand->shopUrl('brand_card'))
+                                <a href="{{ $shop }}" target="_blank" rel="noopener"
+                                   title="{{ __('site.brands.shop_title', ['brand' => $name]) }}"
+                                   class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 transition-colors rounded">
+                                    @include('site.partials.icon', ['name' => 'shopping-cart', 'class' => 'size-4'])
+                                    {{ __('site.brands.shop') }}
+                                    <span class="sr-only">{{ $name }} {{ __('site.shop.new_tab') }}</span>
+                                </a>
+                            @endif
                             <button type="button"
                                     @click="$dispatch('belgi-open', { message: @js(__('site.brands.ask_about', ['brand' => $name])) })"
                                     class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-brand-600 transition-colors rounded">

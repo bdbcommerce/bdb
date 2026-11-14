@@ -188,6 +188,7 @@ class McpServer
             'name' => $this->tr($b, 'name', $locale),
             'description' => $this->plain($this->tr($b, 'description', $locale), 500),
             'website' => $b->website,
+            'shop_url' => $b->shopUrl('mcp'),
         ]))->values()->all(), 'page' => SeoFiles::publicUrl(route('site.brands', $locale))];
     }
 

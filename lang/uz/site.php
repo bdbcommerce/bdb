@@ -93,6 +93,8 @@ return [
         'empty_text' => 'Vazifangiz uchun qanday uskunani yetkazib bera olishimizni bilish uchun yordamchimizdan soʻrang yoki biz bilan bogʻlaning.',
         'ask_about' => 'Siz taklif qiladigan :brand uskunalari haqida aytib bering',
         'website' => 'Sayt',
+        'shop' => 'Onlayn xarid qilish',
+        'shop_title' => ':brand mahsulotlarini onlayn doʻkondan xarid qilish',
     ],
 
     'industries' => [

@@ -110,7 +110,8 @@ class CompanyInfo extends Model
     /** A public http(s) shop link with a dotted host (also used by the admin validation). */
     public static function isValidShopUrl(?string $url): bool
     {
-        return (bool) preg_match('#^https?://[^\s/?\#:@]+\.[^\s/?\#:@]+([:/?\#]\S*)?$#i', trim((string) $url));
+        // /u with \p{Z}\p{C}: no Unicode spaces, line separators (U+2028, U+0085) or control characters.
+        return (bool) preg_match('#^https?://[^\s\p{Z}\p{C}/?\#:@]+\.[^\s\p{Z}\p{C}/?\#:@]+([:/?\#][^\s\p{Z}\p{C}]*)?$#iu', trim((string) $url));
     }
 
     /**
@@ -119,7 +120,13 @@ class CompanyInfo extends Model
      */
     public function shopUrl(string $placement = 'site'): ?string
     {
-        $url = trim((string) $this->shop_url);
+        return self::withUtm($this->shop_url, $placement);
+    }
+
+    /** A shop link with the site's UTM tags; null when it is not a valid http(s) link. */
+    public static function withUtm(?string $url, string $placement): ?string
+    {
+        $url = trim((string) $url);
         if (! self::isValidShopUrl($url)) {
             return null;
         }

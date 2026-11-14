@@ -65,6 +65,14 @@
                        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
                 <p class="text-xs text-slate-400 mt-1">Optional external link for the brand's logo on the public site.</p>
             </div>
+            <div>
+                <label for="brand-shop-url" class="block text-sm font-medium text-slate-700 mb-1">Online shop link (filtered by this brand)</label>
+                <input type="url" id="brand-shop-url" name="shop_url" value="{{ old('shop_url', $brand->shop_url) }}"
+                       placeholder="https://mylabel.uz/…" maxlength="500"
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+                @error('shop_url')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                <p class="text-xs text-slate-400 mt-1">In the shop (e.g. mylabel.uz), open the catalog, choose this brand in the filter and paste the address from the browser here. The Brands page then shows a “Buy online” button, and the AI assistant can send customers there. Leave empty to hide.</p>
+            </div>
             <div class="flex gap-4 items-end">
                 <div class="w-24">
                     <label class="block text-sm font-medium text-slate-700 mb-1">Sort order</label>

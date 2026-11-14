@@ -93,6 +93,8 @@ return [
         'empty_text' => 'Ask our assistant or contact us to find out which equipment we can supply for your task.',
         'ask_about' => 'Tell me about :brand equipment you offer',
         'website' => 'Website',
+        'shop' => 'Buy online',
+        'shop_title' => 'Buy :brand in the online shop',
     ],
 
     'industries' => [

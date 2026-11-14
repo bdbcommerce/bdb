@@ -595,7 +595,8 @@ $rules
 
             $lines[] = "\n## Brands BDB distributes ({$base}/brands)";
             foreach (Brand::active()->get() as $brand) {
-                $lines[] = '- '.$t($brand, 'name').': '.mb_strimwidth($t($brand, 'description'), 0, 200, '…');
+                $lines[] = '- '.$t($brand, 'name').': '.mb_strimwidth($t($brand, 'description'), 0, 200, '…')
+                    .(($shop = $brand->shopUrl('ai_assistant')) ? ' Buy online: '.$shop : '');
             }
 
             // Customer names are confidential: only how many customers BDB serves per industry.
