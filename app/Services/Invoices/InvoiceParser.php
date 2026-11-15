@@ -4,6 +4,7 @@ namespace App\Services\Invoices;
 
 use App\Models\InvoiceMessage;
 use App\Models\InvoiceParserSetting;
+use App\Models\InvoiceRead;
 use App\Services\Ai\AiClient;
 use App\Services\Telegram\TelegramApi;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -107,7 +108,7 @@ class InvoiceParser
 
             // Spend cap: anyone who can post in the source chat triggers paid reads.
             $adminRetry = app()->bound('invoice-parser.skip-limit') && app('invoice-parser.skip-limit') === $invoice->id;
-            if (! $adminRetry && $this->readsToday() >= $settings->dailyLimit()) {
+            if (! $adminRetry && $settings->dailyLimit() && $this->readsToday() >= $settings->dailyLimit()) {
                 $this->fail($invoice, "Daily limit of {$settings->dailyLimit()} reads reached (Settings). Use “Read again” to read it anyway.", false);
 
                 return;
@@ -137,7 +138,17 @@ class InvoiceParser
                 return;
             }
 
-            $usage = ['model' => $reply['model'], 'input_tokens' => $reply['input_tokens'], 'output_tokens' => $reply['output_tokens'], 'read_at' => now()];
+            // Every paid read is added to the photo's cost (retries and "Read again" included).
+            $cacheWrite = (int) ($reply['cache_write_tokens'] ?? 0);
+            $cacheRead = (int) ($reply['cache_read_tokens'] ?? 0);
+            $cost = ClaudePricing::cost($reply['model'], (int) $reply['input_tokens'], (int) $reply['output_tokens'], $cacheWrite, $cacheRead) ?? 0;
+            $usage = ['model' => $reply['model'], 'input_tokens' => $reply['input_tokens'], 'output_tokens' => $reply['output_tokens'],
+                'cache_write_tokens' => $cacheWrite, 'cache_read_tokens' => $cacheRead, 'read_at' => now(),
+                'cost_usd' => (float) $invoice->cost_usd + $cost, 'read_count' => (int) $invoice->read_count + 1];
+            // Saved at once: the read is paid even if a later step fails.
+            $invoice->update($usage);
+            InvoiceRead::create(['invoice_message_id' => $invoice->id, 'model' => $reply['model'], 'input_tokens' => (int) $reply['input_tokens'],
+                'output_tokens' => (int) $reply['output_tokens'], 'cache_write_tokens' => $cacheWrite, 'cache_read_tokens' => $cacheRead, 'cost_usd' => $cost]);
             $data = AiClient::decodeJson($reply['text']);
             if (! is_array($data) || ! in_array($data['status'] ?? null, ['accepted', 'skipped'], true)) {
                 $this->fail($invoice, 'Claude did not return the expected JSON: '.mb_strimwidth($reply['text'], 0, 300, '…'), true, $usage);
@@ -241,7 +252,7 @@ class InvoiceParser
     /** Paid Claude reads made today (for the daily limit). */
     private function readsToday(): int
     {
-        return InvoiceMessage::where('read_at', '>=', today())->count();
+        return InvoiceRead::where('created_at', '>=', today())->count(); // every paid read, retries included
     }
 
     /**

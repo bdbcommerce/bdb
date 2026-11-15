@@ -21,7 +21,15 @@
             @if($invoice->error)<p class="text-red-600 break-words">{{ $invoice->error }}</p>@endif
             @if(($r['status'] ?? null) === 'skipped')<p class="text-slate-600">Not an invoice: {{ $r['reason'] ?? '—' }}</p>@endif
             @if($invoice->model)
-                <p class="text-xs text-slate-400">{{ $invoice->model }} · {{ number_format((int) $invoice->input_tokens) }} in / {{ number_format((int) $invoice->output_tokens) }} out tokens</p>
+                @php
+                    $pricing = \App\Services\Invoices\ClaudePricing::class;
+                    $cache = $invoice->cache_read_tokens || $invoice->cache_write_tokens
+                        ? ' · cache '.number_format((int) $invoice->cache_write_tokens).' written / '.number_format((int) $invoice->cache_read_tokens).' read' : '';
+                    $reads = $invoice->read_count.' paid '.($invoice->read_count === 1 ? 'read' : 'reads');
+                @endphp
+                <p class="text-xs text-slate-400">{{ $invoice->model }} · {{ number_format((int) $invoice->input_tokens) }} in / {{ number_format((int) $invoice->output_tokens) }} out tokens{{ $cache }} (last read)</p>
+                <p class="text-sm text-slate-700">Cost: <b class="tabular-nums">{{ $pricing::format($invoice->cost_usd) }}</b>
+                    <span class="text-xs text-slate-400">for {{ $reads }}{{ $pricing::for($invoice->model) ? '' : ' · price of this model unknown' }}</span></p>
             @endif
         </div>
 

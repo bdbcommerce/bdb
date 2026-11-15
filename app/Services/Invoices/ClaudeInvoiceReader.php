@@ -20,7 +20,7 @@ class ClaudeInvoiceReader
     private const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5'];
 
     /**
-     * @return array{text: string, model: string, input_tokens: int, output_tokens: int}
+     * @return array{text: string, model: string, input_tokens: int, output_tokens: int, cache_write_tokens: int, cache_read_tokens: int}
      *
      * @throws InvoiceReadException with `retryable` set for rate limits, overload, timeouts and network errors
      */
@@ -75,6 +75,8 @@ class ClaudeInvoiceReader
             'model' => $message->model,
             'input_tokens' => $message->usage->inputTokens,
             'output_tokens' => $message->usage->outputTokens,
+            'cache_write_tokens' => (int) $message->usage->cacheCreationInputTokens,
+            'cache_read_tokens' => (int) $message->usage->cacheReadInputTokens,
         ];
     }
 

@@ -24,12 +24,10 @@ class InvoiceParserSetting extends Model
 
     protected $fillable = ['enabled', 'api_key', 'model', 'source_chat_id', 'source_from_ids', 'target_chat_id', 'json_chat_id', 'prompt', 'notify_skipped', 'daily_limit'];
 
-    public const DEFAULT_DAILY_LIMIT = 100;
-
-    /** Paid Claude reads per day; more photos wait as failed until an admin uses "Read again". */
-    public function dailyLimit(): int
+    /** Optional cap on paid Claude reads per day (null = no limit); over it, photos wait as failed until "Read again". */
+    public function dailyLimit(): ?int
     {
-        return (int) ($this->daily_limit ?: self::DEFAULT_DAILY_LIMIT);
+        return (int) $this->daily_limit > 0 ? (int) $this->daily_limit : null;
     }
 
     /** A key is saved in the settings — checked without decrypting it (works even after APP_KEY changed). */

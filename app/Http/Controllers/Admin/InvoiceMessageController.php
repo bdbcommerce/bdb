@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\InvoiceMessage;
+use App\Models\InvoiceRead;
 use App\Services\Invoices\ClaudeInvoiceReader;
 use App\Services\Invoices\InvoiceParser;
 use App\Services\Telegram\TelegramApi;
@@ -22,7 +23,28 @@ class InvoiceMessageController extends Controller
             'messages' => InvoiceMessage::query()->when($status, fn ($q) => $q->where('status', $status))->latest('id')->paginate(30)->withQueryString(),
             'counts' => InvoiceMessage::query()->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
             'status' => $status,
+            'costs' => $this->costs(),
         ]);
+    }
+
+    /** Claude spend by period, from every paid read on the day it happened. */
+    private function costs(): array
+    {
+        $sum = function ($from = null, $to = null) {
+            $row = InvoiceRead::query()
+                ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('created_at', '<', $to))
+                ->selectRaw('coalesce(sum(cost_usd), 0) as usd, count(*) as reads')->first();
+
+            return ['usd' => round((float) $row->usd, 6), 'reads' => (int) $row->reads];
+        };
+
+        return [
+            'today' => $sum(today()),
+            'month' => $sum(now()->startOfMonth()),
+            'last_month' => $sum(now()->subMonthNoOverflow()->startOfMonth(), now()->startOfMonth()),
+            'all' => $sum(),
+        ];
     }
 
     public function show(InvoiceMessage $invoiceMessage)

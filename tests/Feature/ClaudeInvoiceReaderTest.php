@@ -48,7 +48,7 @@ class ClaudeInvoiceReaderTest extends TestCase
             'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-opus-5-5',
             'content' => [['type' => 'text', 'text' => '{"status":"skipped","reason":"x"}']],
             'stop_reason' => 'end_turn', 'stop_sequence' => null,
-            'usage' => ['input_tokens' => 11, 'output_tokens' => 7],
+            'usage' => ['input_tokens' => 11, 'output_tokens' => 7, 'cache_creation_input_tokens' => 900, 'cache_read_input_tokens' => 0],
         ]));
     }
 
@@ -57,7 +57,7 @@ class ClaudeInvoiceReaderTest extends TestCase
         self::$responses = [self::ok()];
         $r = (new ClaudeInvoiceReader)->read('sk-ant-secret', 'claude-opus-5-5', 'SYSTEM', 'BYTES', 'image/png');
 
-        $this->assertSame(['text' => '{"status":"skipped","reason":"x"}', 'model' => 'claude-opus-5-5', 'input_tokens' => 11, 'output_tokens' => 7], $r);
+        $this->assertSame(['text' => '{"status":"skipped","reason":"x"}', 'model' => 'claude-opus-5-5', 'input_tokens' => 11, 'output_tokens' => 7, 'cache_write_tokens' => 900, 'cache_read_tokens' => 0], $r);
         $this->assertCount(1, self::$requests);
         $req = self::$requests[0];
         $this->assertSame('/v1/messages', $req->getUri()->getPath());

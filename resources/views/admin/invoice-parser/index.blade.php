@@ -17,6 +17,17 @@
     </div>
 @endunless
 
+<div class="mb-4 grid gap-3 grid-cols-2 lg:grid-cols-4">
+    @foreach(['Today' => $costs['today'], 'This month' => $costs['month'], 'Last month' => $costs['last_month'], 'All time' => $costs['all']] as $label => $c)
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+            <p class="text-xs font-medium text-slate-500">{{ $label }}</p>
+            <p class="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{{ \App\Services\Invoices\ClaudePricing::format($c['usd']) }}</p>
+            <p class="text-xs text-slate-400 tabular-nums">{{ $c['reads'] }} {{ $c['reads'] === 1 ? 'read' : 'reads' }}@if($c['reads']) · avg {{ \App\Services\Invoices\ClaudePricing::format($c['usd'] / $c['reads']) }}@endif</p>
+        </div>
+    @endforeach
+</div>
+<p class="-mt-2 mb-4 text-xs text-slate-400">Cost of every paid Claude read on the day it happened (deleted photos included), worked out from the tokens Anthropic reports for each read and Anthropic's list prices (US dollars). The billed amount is on console.anthropic.com → Cost.</p>
+
 <div class="flex flex-wrap gap-1 mb-4">
     <a href="{{ route('admin.invoice-messages.index') }}"
        class="text-xs font-medium px-3 py-1.5 rounded-full border {{ ! $status ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400' }}">
@@ -59,6 +70,7 @@
                         @endif
                         <span class="ml-auto flex items-center gap-3">
                             @if($m->sender || $m->sender_id)<span class="text-xs text-slate-400">{{ $m->sender }}@if($m->sender_id) <span class="font-mono">· From ID {{ $m->sender_id }}</span>@endif</span>@endif
+                            @if($m->read_count)<span class="text-xs text-slate-500 tabular-nums" title="{{ $m->read_count }} paid {{ $m->read_count === 1 ? 'read' : 'reads' }}">{{ \App\Services\Invoices\ClaudePricing::format($m->cost_usd) }}</span>@endif
                             <span class="text-xs text-slate-400">{{ $m->created_at->format('d.m.Y H:i') }}</span>
                             <span class="text-xs font-medium px-2 py-0.5 rounded-full {{ $statusClass($m->status) }}">{{ \App\Models\InvoiceMessage::STATUSES[$m->status] ?? $m->status }}</span>
                         </span>

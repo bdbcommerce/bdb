@@ -36,7 +36,7 @@ class InvoiceParserSettingController extends Controller
             'json_chat_id' => [...$chatId, 'different:source_chat_id'],
             'prompt' => ['nullable', 'string', 'max:20000'],
             'notify_skipped' => ['boolean'],
-            'daily_limit' => ['required', 'integer', 'min:1', 'max:5000'],
+            'daily_limit' => ['nullable', 'integer', 'min:1', 'max:5000'], // empty = no limit
         ], [
             'source_chat_id.regex' => 'A chat ID is a number, e.g. -1001234567890 for a group.',
             'target_chat_id.regex' => 'A chat ID is a number, e.g. -1001234567890 for a group.',
@@ -58,7 +58,7 @@ class InvoiceParserSettingController extends Controller
             // Same text as the built-in prompt: store nothing, so later improvements to it apply.
             'prompt' => $prompt === '' || $prompt === trim(InvoiceParserSetting::defaultPrompt()) ? null : $prompt,
             'notify_skipped' => $request->boolean('notify_skipped'),
-            'daily_limit' => (int) $data['daily_limit'],
+            'daily_limit' => filled($data['daily_limit'] ?? null) ? (int) $data['daily_limit'] : null,
         ]);
         // The key lives in .env (ANTHROPIC_API_KEY); an older key saved here can only be removed.
         if ($request->boolean('remove_key')) {

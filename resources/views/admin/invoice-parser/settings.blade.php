@@ -41,9 +41,9 @@
                 @error('api_key')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
             <div>
-                <label for="daily_limit" class="block text-sm font-medium text-slate-700 mb-1">Daily limit — paid Claude reads per day</label>
-                <input type="number" id="daily_limit" name="daily_limit" min="1" max="5000" value="{{ old('daily_limit', $settings->dailyLimit()) }}" class="{{ $input }} max-w-40">
-                <p class="text-xs text-slate-400 mt-1">Protects the bill if the source chat is flooded with photos. Photos over the limit are listed as failed; “Read again” reads one anyway. Also set a monthly spend limit in the Anthropic console.</p>
+                <label for="daily_limit" class="block text-sm font-medium text-slate-700 mb-1">Daily limit — paid Claude reads per day (optional)</label>
+                <input type="number" id="daily_limit" name="daily_limit" min="1" max="5000" value="{{ old('daily_limit', $settings->dailyLimit()) }}" placeholder="No limit" class="{{ $input }} max-w-40">
+                <p class="text-xs text-slate-400 mt-1">Empty = no limit. Each read is paid to Anthropic by tokens — see the cost on <a href="{{ route('admin.invoice-messages.index') }}" class="underline">Messages</a>. A limit protects the bill if the source chat is flooded with photos: photos over it are listed as failed, and “Read again” reads one anyway.</p>
             </div>
             <div>
                 <label for="model" class="block text-sm font-medium text-slate-700 mb-1">Model</label>
