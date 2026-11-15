@@ -7,7 +7,7 @@ use App\Models\InvoiceParserSetting;
 use App\Services\Invoices\InvoiceParser;
 use Illuminate\Console\Command;
 
-/** Safety net for the invoice parser: reads photos still waiting, stuck or failed (scheduled every minute). */
+/** Invoice parser: reads the stored photos one by one — new, stuck or failed (scheduled every minute, in the background). */
 class ProcessInvoices extends Command
 {
     protected $signature = 'invoices:process {--limit=20 : At most this many photos per run}';
