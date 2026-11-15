@@ -58,7 +58,7 @@
                             <span class="text-xs text-red-600 min-w-0 truncate max-w-md">{{ $m->error }}</span>
                         @endif
                         <span class="ml-auto flex items-center gap-3">
-                            @if($m->sender)<span class="text-xs text-slate-400">{{ $m->sender }}</span>@endif
+                            @if($m->sender || $m->sender_id)<span class="text-xs text-slate-400">{{ $m->sender }}@if($m->sender_id) <span class="font-mono">· From ID {{ $m->sender_id }}</span>@endif</span>@endif
                             <span class="text-xs text-slate-400">{{ $m->created_at->format('d.m.Y H:i') }}</span>
                             <span class="text-xs font-medium px-2 py-0.5 rounded-full {{ $statusClass($m->status) }}">{{ \App\Models\InvoiceMessage::STATUSES[$m->status] ?? $m->status }}</span>
                         </span>

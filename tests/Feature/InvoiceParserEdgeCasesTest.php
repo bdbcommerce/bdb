@@ -273,7 +273,9 @@ class InvoiceParserEdgeCasesTest extends TestCase
         $this->assertStringStartsWith('Custom Ўзбек', InvoiceParserSetting::current()->systemPrompt());
         $r = $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['source_chat_id' => '-100 123'] + $form);
         $r->assertSessionHasErrors('source_chat_id');
-        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['api_key' => 'has space'] + $form)->assertSessionHasErrors('api_key');
+        // The key comes from .env only: a posted api_key is ignored, never stored.
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['api_key' => 'sk-ant-posted'] + $form)->assertSessionHasNoErrors();
+        $this->assertNotSame('sk-ant-posted', InvoiceParserSetting::current()->apiKey());
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['source_chat_id' => '-100'.str_repeat('1', 70)] + $form)->assertSessionHasErrors('source_chat_id');
     }
 

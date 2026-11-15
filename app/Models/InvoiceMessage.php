@@ -20,7 +20,7 @@ class InvoiceMessage extends Model
 
     protected $fillable = [
         'chat_id', 'message_id', 'file_id', 'mime', 'sender', 'caption', 'status', 'attempts', 'result',
-        'error', 'model', 'input_tokens', 'output_tokens', 'sent_message_id', 'read_at', 'processed_at',
+        'error', 'model', 'input_tokens', 'output_tokens', 'sent_message_id', 'sender_id', 'json_message_id', 'read_at', 'processed_at',
     ];
 
     protected function casts(): array

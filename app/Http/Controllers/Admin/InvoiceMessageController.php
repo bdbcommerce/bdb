@@ -52,12 +52,13 @@ class InvoiceMessageController extends Controller
         abort_if($invoiceMessage->status === 'processing' && $invoiceMessage->updated_at->gt(now()->subMinutes(10)), 409, 'Already being read.');
 
         // A fresh read (the old result is dropped), even over the daily limit: an admin asked for it.
-        $invoiceMessage->update(['status' => 'pending', 'attempts' => 0, 'error' => null, 'result' => null]);
+        // Both message IDs cleared too, so the new result is posted to the invoice chat and the JSON chat again.
+        $invoiceMessage->update(['status' => 'pending', 'attempts' => 0, 'error' => null, 'result' => null, 'sent_message_id' => null, 'json_message_id' => null]);
         app()->instance('invoice-parser.skip-limit', $invoiceMessage->id);
         defer(fn () => $parser->process($invoiceMessage));
 
         return redirect()->route('admin.invoice-messages.show', $invoiceMessage)
-            ->with('success', 'Sent to Claude again — refresh in half a minute. A new summary is posted to the destination chat if it is an invoice.');
+            ->with('success', 'Sent to Claude again — refresh in half a minute. If it is an invoice, a new summary and JSON are posted to the invoice / JSON chat.');
     }
 
     public function destroy(InvoiceMessage $invoiceMessage)

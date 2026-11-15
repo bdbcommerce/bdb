@@ -10,9 +10,9 @@
 @section('content')
 <div class="w-full space-y-6">
     <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-600 space-y-2">
-        <p><b class="text-slate-900">How it works.</b> The bot watches the <b>source chat</b>. Every photo (or image / PDF file) posted there is sent to Claude, which checks whether it is a printed invoice and reads it. For an invoice, a summary in Uzbek is posted to the <b>destination chat</b>. Handwritten notes, receipts and other photos are skipped. Every photo is listed under <a href="{{ route('admin.invoice-messages.index') }}" class="underline">Messages</a>.</p>
+        <p><b class="text-slate-900">How it works.</b> The bot watches the <b>source chat</b>. Every photo (or image / PDF file) posted there is sent to Claude, which checks whether it is a printed invoice and reads it. For an invoice, a summary in Uzbek is posted to the <b>invoice chat</b> and the read data as JSON to the <b>JSON chat</b>. With <b>From IDs</b> set, only those senders' photos are read. Handwritten notes, receipts and other photos are skipped. Every photo is listed under <a href="{{ route('admin.invoice-messages.index') }}" class="underline">Messages</a>.</p>
         <p>Each photo is read right after it arrives (usually 10–40 seconds). If Claude is busy or a step fails, it is retried every minute by the scheduler (up to {{ \App\Models\InvoiceMessage::MAX_ATTEMPTS }} attempts) — the server needs the <code class="text-xs">schedule:run</code> cron.</p>
-        <p><b class="text-slate-900">The bot must see the photos:</b> add it to the source chat; in a group, either make it an admin or turn off its privacy mode (BotFather → /setprivacy → Disable, then remove and re-add the bot). Add it to the destination chat too, with permission to post.</p>
+        <p><b class="text-slate-900">The bot must see the photos:</b> add it to the source chat; in a group, either make it an admin or turn off its privacy mode (BotFather → /setprivacy → Disable, then remove and re-add the bot). Add it to the invoice chat and the JSON chat too, with permission to post.</p>
         @unless($telegramReady)
             <p class="text-red-600">The Telegram bot is not configured (TELEGRAM_BOT_TOKEN in .env).</p>
         @endunless
@@ -24,18 +24,21 @@
         <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
             <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Claude API</h2>
             <div>
-                <label for="api_key" class="block text-sm font-medium text-slate-700 mb-1">API key</label>
-                <input type="password" id="api_key" name="api_key" autocomplete="new-password" placeholder="{{ $settings->hasStoredKey() ? 'Saved'.($settings->keyHint() ? ' ('.$settings->keyHint().')' : ' (cannot be decrypted — enter it again)').' — leave empty to keep it' : 'sk-ant-…' }}" class="{{ $input }}">
-                <p class="text-xs text-slate-400 mt-1">
-                    From console.anthropic.com → API keys. Stored encrypted.
-                    @if(! $settings->hasStoredKey() && $envKey) Not set here, so <b>ANTHROPIC_API_KEY from .env</b> is used ({{ $settings->keyHint() }}).@endif
-                    @if(! $settings->hasStoredKey() && ! $envKey) You can also put it in .env as ANTHROPIC_API_KEY instead.@endif
-                </p>
+                <p class="block text-sm font-medium text-slate-700 mb-1">API key</p>
+                @if($envKey)
+                    <p class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">✓ Set in .env (ANTHROPIC_API_KEY {{ '…'.substr((string) config('services.anthropic.key'), -4) }})</p>
+                @elseif($settings->hasStoredKey())
+                    <p class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">Not in .env — using a key saved here earlier{{ $settings->keyHint() ? ' ('.$settings->keyHint().')' : ' (cannot be decrypted)' }}</p>
+                @else
+                    <p class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Not set — add ANTHROPIC_API_KEY to .env</p>
+                @endif
+                <p class="text-xs text-slate-400 mt-1">From console.anthropic.com → API keys. Put it in the server's .env as <code>ANTHROPIC_API_KEY=…</code>, then run <code>php artisan config:cache</code>.</p>
                 @if($settings->hasStoredKey())
                     <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
-                        <input type="checkbox" name="remove_key" value="1" class="rounded border-slate-300"> Remove the saved key{{ $envKey ? ' (then the .env key is used)' : '' }}
+                        <input type="checkbox" name="remove_key" value="1" class="rounded border-slate-300"> Remove the key saved here earlier{{ $envKey ? ' (the .env key is used anyway)' : '' }}
                     </label>
                 @endif
+                @error('api_key')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
             <div>
                 <label for="daily_limit" class="block text-sm font-medium text-slate-700 mb-1">Daily limit — paid Claude reads per day</label>
@@ -58,16 +61,31 @@
                 <div>
                     <label for="source_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Source chat ID — the bot reads photos here</label>
                     <input type="text" id="source_chat_id" name="source_chat_id" inputmode="numeric" value="{{ old('source_chat_id', $settings->source_chat_id) }}" placeholder="-1001234567890" class="{{ $input }} font-mono">
+                    @error('source_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label for="target_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Destination chat ID — summaries are posted here</label>
+                    <label for="source_from_ids" class="block text-sm font-medium text-slate-700 mb-1">From IDs — read photos only from these senders</label>
+                    <input type="text" id="source_from_ids" name="source_from_ids" value="{{ old('source_from_ids', $settings->source_from_ids) }}" placeholder="Empty = anyone in the source chat" class="{{ $input }} font-mono">
+                    <p class="text-xs text-slate-400 mt-1">Telegram user IDs, separated by commas. Shown as “From ID” under Messages and AI Assistant → Conversations.</p>
+                    @error('source_from_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="target_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Invoice chat ID — the summary is posted here</label>
                     <input type="text" id="target_chat_id" name="target_chat_id" inputmode="numeric" value="{{ old('target_chat_id', $settings->target_chat_id) }}" placeholder="-1009876543210" class="{{ $input }} font-mono">
+                    @error('target_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="json_chat_id" class="block text-sm font-medium text-slate-700 mb-1">JSON chat ID — the read data is posted here as JSON</label>
+                    <input type="text" id="json_chat_id" name="json_chat_id" inputmode="numeric" value="{{ old('json_chat_id', $settings->json_chat_id) }}" placeholder="Empty = no JSON" class="{{ $input }} font-mono">
+                    <p class="text-xs text-slate-400 mt-1">Code block; a long invoice comes as a .json file. Can be the same chat as the invoice chat.</p>
+                    @error('json_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
+            <p class="text-xs text-slate-400">Set the invoice chat, the JSON chat, or both.</p>
             <p class="text-xs text-slate-400">Group IDs start with -100. To find one, add the bot to the group, post a message, and see the chat under AI Assistant → Conversations, or use a bot such as @getidsbot. Messages in the source chat are only read for invoices — they are not recorded as conversations or answered, so use a dedicated group (not a channel, and not your own private chat with the bot).</p>
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="notify_skipped" value="1" @checked(old('notify_skipped', $settings->notify_skipped)) class="rounded border-slate-300">
-                Also tell the destination chat when a photo is not an invoice
+                Also tell the invoice / JSON chat when a photo is not an invoice
             </label>
         </div>
 

@@ -186,7 +186,7 @@ class AiModel extends Model
             return $this->api_key;
         }
 
-        // Gemini may use GEMINI_API_KEY; Claude the invoice parser's key (its settings, else ANTHROPIC_API_KEY).
+        // Gemini may use GEMINI_API_KEY; Claude the invoice parser's key (ANTHROPIC_API_KEY, else a key saved in its settings earlier).
         return match ($this->provider) {
             'gemini' => config('services.gemini.key'),
             'anthropic' => InvoiceParserSetting::current()->apiKey(),

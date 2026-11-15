@@ -43,6 +43,11 @@ class InvoiceParser
         if (! $fileId || ! is_numeric($message['message_id'] ?? null)) {
             return null;
         }
+        // From IDs set in the settings: photos from anyone else in the source chat are ignored.
+        if (! InvoiceParserSetting::current()->allowsSender($message)) {
+            return null;
+        }
+        $senderId = $message['sender_chat']['id'] ?? $message['from']['id'] ?? null;
 
         $from = is_array($message['from'] ?? null) ? $message['from'] : [];
         $str = fn ($v) => is_string($v) ? $v : '';
@@ -55,6 +60,7 @@ class InvoiceParser
                 'file_id' => $fileId,
                 'mime' => $mime,
                 'sender' => is_string($sender) ? mb_substr($sender, 0, 255) : null,
+                'sender_id' => is_int($senderId) || (is_string($senderId) && preg_match('/^-?\d{1,20}$/', $senderId)) ? (string) $senderId : null,
                 'caption' => is_string($message['caption'] ?? null) ? mb_substr($message['caption'], 0, 1024) : null,
             ]);
         } catch (UniqueConstraintViolationException) {
@@ -85,8 +91,8 @@ class InvoiceParser
             @set_time_limit(300);
 
             $settings = InvoiceParserSetting::current();
-            if (! $settings->apiKey() || blank($settings->target_chat_id)) {
-                $invoice->update(['status' => 'failed', 'error' => 'Invoice parser is not set up: Claude API key or destination chat missing.']);
+            if (! $settings->apiKey() || ! $settings->hasResultChat()) {
+                $invoice->update(['status' => 'failed', 'error' => 'Invoice parser is not set up: ANTHROPIC_API_KEY or the invoice / JSON chat missing.']);
 
                 return;
             }
@@ -143,9 +149,14 @@ class InvoiceParser
             if ($data['status'] === 'skipped') {
                 $invoice->update(['status' => 'skipped', 'result' => $data, 'processed_at' => now()] + $usage);
                 if ($settings->notify_skipped) {
-                    // <code>: Telegram makes no links or @mentions out of text read from the image.
-                    $this->telegram->sendMessage($settings->target_chat_id, '⏭ Hisob-faktura emas: <code>'.e((string) ($data['reason'] ?? '')).'</code>',
-                        ['parse_mode' => 'HTML', 'link_preview_options' => ['is_disabled' => true]]);
+                    if (filled($settings->target_chat_id)) {
+                        // <code>: Telegram makes no links or @mentions out of text read from the image.
+                        $this->telegram->sendMessage($settings->target_chat_id, '⏭ Hisob-faktura emas: <code>'.e((string) ($data['reason'] ?? '')).'</code>',
+                            ['parse_mode' => 'HTML', 'link_preview_options' => ['is_disabled' => true]]);
+                    }
+                    if (filled($settings->json_chat_id)) {
+                        $this->sendJson($invoice, $settings->json_chat_id, $data);
+                    }
                 }
 
                 return;
@@ -160,22 +171,71 @@ class InvoiceParser
         }
     }
 
-    /** Post an accepted invoice to the destination chat; on failure the read result is kept, so a retry only posts. */
+    /**
+     * Post an accepted invoice: the summary to the invoice chat and the JSON to the JSON chat (each when set).
+     * What was posted is remembered (sent_message_id / json_message_id), so a retry only posts what is missing
+     * and never pays for another read.
+     */
     private function post(InvoiceMessage $invoice, InvoiceParserSetting $settings, array $data, array $usage): void
     {
-        $sent = $this->telegram->call('sendMessage', [
-            'chat_id' => $settings->target_chat_id,
-            'text' => self::summary($data),
-            'parse_mode' => 'HTML',
-            'link_preview_options' => ['is_disabled' => true],
-        ]);
-        if (! $sent) {
-            $this->fail($invoice, 'Read OK, but posting to the destination chat failed (is the bot a member there?).', true, $usage + ['result' => $data]);
+        $ids = ['sent_message_id' => $invoice->sent_message_id, 'json_message_id' => $invoice->json_message_id];
+        $failed = [];
+
+        if (filled($settings->target_chat_id) && ! $ids['sent_message_id']) {
+            $sent = $this->telegram->call('sendMessage', [
+                'chat_id' => $settings->target_chat_id,
+                'text' => self::summary($data),
+                'parse_mode' => 'HTML',
+                'link_preview_options' => ['is_disabled' => true],
+            ]);
+            if ($sent) {
+                $ids['sent_message_id'] = (int) ($sent['message_id'] ?? 0) ?: null;
+            } else {
+                $failed[] = 'invoice chat';
+            }
+        }
+
+        if (filled($settings->json_chat_id) && ! $ids['json_message_id']) {
+            $id = $this->sendJson($invoice, $settings->json_chat_id, $data);
+            if ($id !== null) {
+                $ids['json_message_id'] = $id ?: null;
+            } else {
+                $failed[] = 'JSON chat';
+            }
+        }
+
+        if ($failed) {
+            $this->fail($invoice, 'Read OK, but posting to the '.implode(' and the ', $failed).' failed (is the bot a member there?).', true, $usage + ['result' => $data] + $ids);
 
             return;
         }
 
-        $invoice->update(['status' => 'sent', 'result' => $data, 'error' => null, 'sent_message_id' => $sent['message_id'] ?? null, 'processed_at' => now()] + $usage);
+        $invoice->update(['status' => 'sent', 'result' => $data, 'error' => null, 'processed_at' => now()] + $ids + $usage);
+    }
+
+    /** The JSON sent to the JSON chat: the cleaned result plus where the photo came from. */
+    public static function json(InvoiceMessage $invoice, array $data): string
+    {
+        return (string) json_encode(['source' => [
+            'chat_id' => $invoice->chat_id,
+            'message_id' => (int) $invoice->message_id,
+            'from_id' => $invoice->sender_id,
+            'from' => $invoice->sender,
+        ]] + self::clean($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** Post the JSON as a code block, or as a .json file when it is longer than one message. Returns the message ID (0 = posted, no ID), null on failure. */
+    private function sendJson(InvoiceMessage $invoice, string $chatId, array $data): ?int
+    {
+        $json = self::json($invoice, $data);
+        $html = '<pre><code class="language-json">'.e($json).'</code></pre>';
+        if (mb_strlen($html) <= self::TELEGRAM_MAX) {
+            $sent = $this->telegram->call('sendMessage', ['chat_id' => $chatId, 'text' => $html, 'parse_mode' => 'HTML', 'link_preview_options' => ['is_disabled' => true]]);
+        } else {
+            $sent = $this->telegram->sendDocument($chatId, $json, 'invoice-'.$invoice->id.'.json');
+        }
+
+        return $sent === null ? null : (int) ($sent['message_id'] ?? 0);
     }
 
     /** Paid Claude reads made today (for the daily limit). */

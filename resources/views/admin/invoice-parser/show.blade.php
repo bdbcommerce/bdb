@@ -14,7 +14,7 @@
         <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-2 text-sm">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{{ \App\Models\InvoiceMessage::STATUSES[$invoice->status] ?? $invoice->status }}</span>
-                <span class="text-slate-500">{{ $invoice->created_at->format('d.m.Y H:i') }}@if($invoice->sender) · {{ $invoice->sender }}@endif</span>
+                <span class="text-slate-500">{{ $invoice->created_at->format('d.m.Y H:i') }}@if($invoice->sender) · {{ $invoice->sender }}@endif@if($invoice->sender_id) · From ID <span class="font-mono">{{ $invoice->sender_id }}</span>@endif</span>
                 <span class="text-slate-400">· attempts {{ $invoice->attempts }}/{{ \App\Models\InvoiceMessage::MAX_ATTEMPTS }}</span>
             </div>
             @if($invoice->caption)<p class="text-slate-600">Caption: {{ $invoice->caption }}</p>@endif
@@ -65,7 +65,7 @@
             </div>
 
             <div class="bg-white border border-slate-200 rounded-xl p-6">
-                <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Message posted to the destination chat</h2>
+                <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Summary posted to the invoice chat</h2>
                 <pre class="whitespace-pre-wrap text-xs text-slate-700 font-sans">{{ strip_tags(\App\Services\Invoices\InvoiceParser::summary($r)) }}</pre>
             </div>
         @endif
@@ -91,7 +91,7 @@
         <form method="POST" action="{{ route('admin.invoice-messages.retry', $invoice) }}">
             @csrf
             <button type="submit" class="w-full text-sm font-medium rounded-lg px-4 py-2 border border-slate-300 hover:border-slate-500"
-                    @if($invoice->status === 'sent') onclick="return confirm('Read it again? A new summary will be posted to the destination chat.')" @endif>
+                    @if($invoice->status === 'sent') onclick="return confirm('Read it again? A new summary and JSON will be posted to the invoice / JSON chat.')" @endif>
                 Read again with Claude
             </button>
         </form>
