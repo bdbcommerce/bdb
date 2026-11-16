@@ -34,9 +34,9 @@ class InvoiceMessageController extends Controller
             $row = InvoiceRead::query()
                 ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('created_at', '<', $to))
-                ->selectRaw('coalesce(sum(cost_usd), 0) as usd, count(*) as reads')->first();
+                ->selectRaw('coalesce(sum(cost_usd), 0) as usd, count(*) as read_total')->first();
 
-            return ['usd' => round((float) $row->usd, 6), 'reads' => (int) $row->reads];
+            return ['usd' => round((float) $row->usd, 6), 'reads' => (int) $row->read_total];
         };
 
         return [
