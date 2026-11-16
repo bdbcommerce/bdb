@@ -65,10 +65,22 @@ class InvoiceParserSettingController extends Controller
             $settings->api_key = null;
         }
 
-        if ($settings->enabled && ! ($settings->apiKey() && $settings->source_chat_id && $settings->hasResultChat())) {
-            return back()->withInput($request->except('api_key'))->withErrors(['enabled' => 'To switch it on, set ANTHROPIC_API_KEY in .env, the source chat ID and the invoice chat or the JSON chat.']);
+        // Can't run yet: save everything else and leave it off, so the admin's changes are never lost.
+        $missing = array_keys(array_filter([
+            'ANTHROPIC_API_KEY in .env' => ! $settings->apiKey(),
+            'the source chat ID' => blank($settings->source_chat_id),
+            'the invoice chat or the JSON chat' => ! $settings->hasResultChat(),
+        ]));
+        $wantedOn = $settings->enabled;
+        if ($wantedOn && $missing) {
+            $settings->enabled = false;
         }
         $settings->save();
+
+        if ($wantedOn && $missing) {
+            return back()->with('success', 'Invoice parser settings saved.')
+                ->withErrors(['enabled' => 'The parser stays off — missing: '.implode(', ', $missing).'.']);
+        }
 
         return back()->with('success', 'Invoice parser settings saved.');
     }

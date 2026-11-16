@@ -99,10 +99,13 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-4">
-            <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input type="checkbox" name="enabled" value="1" @checked(old('enabled', $settings->enabled)) class="rounded border-slate-300">
-                Invoice parser is on
-            </label>
+            <div>
+                <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input type="checkbox" name="enabled" value="1" @checked(old('enabled', $settings->enabled)) class="rounded border-slate-300">
+                    Invoice parser is on
+                </label>
+                @error('enabled')<p class="text-xs text-amber-700 mt-1">{{ $message }}</p>@enderror
+            </div>
             <button type="submit" class="bg-slate-900 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-slate-700 transition-colors">Save settings</button>
         </div>
     </form>
