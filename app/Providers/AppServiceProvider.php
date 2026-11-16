@@ -2,10 +2,14 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\CacheHomePage;
 use App\Models\Article;
 use App\Models\ArticleCategory;
+use App\Models\Banner;
 use App\Models\Brand;
+use App\Models\ColorTheme;
 use App\Models\CompanyInfo;
+use App\Models\Customer;
 use App\Models\Industry;
 use App\Models\KnowledgeEntry;
 use App\Models\SeoSetting;
@@ -47,6 +51,13 @@ class AppServiceProvider extends ServiceProvider
             Industry::class, CompanyInfo::class, KnowledgeEntry::class, Vacancy::class] as $model) {
             $model::saved(fn () => SeoSetting::flush());
             $model::deleted(fn () => SeoSetting::flush());
+        }
+
+        // Anything shown on the home page (or its layout) changed: the cached home page is rebuilt on the next visit.
+        foreach ([Article::class, ArticleCategory::class, Banner::class, Brand::class, ColorTheme::class,
+            CompanyInfo::class, Customer::class, Industry::class, SeoSetting::class, Vacancy::class] as $model) {
+            $model::saved(fn () => CacheHomePage::flush());
+            $model::deleted(fn () => CacheHomePage::flush());
         }
 
         // A published article was saved: tell Bing / Yandex right away (after the response).

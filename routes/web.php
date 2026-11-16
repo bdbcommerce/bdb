@@ -41,6 +41,7 @@ use App\Http\Controllers\Site\NewsController;
 use App\Http\Controllers\Site\SeoController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\CacheHomePage;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\TrackPageView;
 use Illuminate\Support\Facades\Route;
@@ -76,7 +77,7 @@ Route::prefix('{locale}')
     ->middleware([SetLocale::class, TrackPageView::class])
     ->name('site.')
     ->group(function () {
-        Route::get('/', HomeController::class)->name('home');
+        Route::get('/', HomeController::class)->middleware(CacheHomePage::class)->name('home');
         Route::get('/about', AboutController::class)->name('about');
         Route::get('/brands', BrandsController::class)->name('brands');
         Route::get('/industries', IndustriesController::class)->name('industries');

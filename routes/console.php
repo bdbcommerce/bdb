@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CacheHomePage;
 use App\Models\ChatConversation;
 use App\Models\JobApplication;
 use App\Models\LinkClick;
@@ -7,6 +8,11 @@ use App\Models\PageView;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+
+Artisan::command('site:clear-home-cache', function () {
+    CacheHomePage::flush();
+    $this->info('Home page cache cleared — it is rebuilt on the next visit.');
+})->purpose('Clear the cached home page (run on deploy)');
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
