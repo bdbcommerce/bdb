@@ -160,7 +160,8 @@
     <div class="lg:col-span-2 lg:order-1 space-y-4">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Conversation history</h2>
         @forelse($conversations as $conversation)
-            <details class="group bg-white border border-slate-200 rounded-xl" @if($loop->first) open @endif>
+            <details class="group bg-white border border-slate-200 rounded-xl" @if($loop->first) open @endif
+                     x-data @toggle="if ($el.open) $nextTick(() => { const b = $el.querySelector('[data-chat-scroll]'); if (b) b.scrollTop = b.scrollHeight; })">
                 <summary class="flex flex-wrap items-center justify-between gap-2 px-5 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                     <span class="flex items-center gap-2 text-sm font-medium text-slate-900">
                         <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -179,9 +180,13 @@
                         @endif
                     </span>
                 </summary>
-                <div class="border-t border-slate-100 px-5 py-4 space-y-3">
-                    @include('admin.chat-conversations._messages', ['messages' => $conversation->messages])
-                    <a href="{{ route('admin.chat-conversations.show', $conversation) }}" class="inline-block text-xs font-medium text-slate-600 underline hover:text-slate-900">Open this conversation</a>
+                <div class="border-t border-slate-200 rounded-b-xl overflow-hidden">
+                    <div class="bg-[#efeae2] px-3 sm:px-5 py-4 max-h-[32rem] overflow-y-auto" data-chat-scroll x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)">
+                        @include('admin.chat-conversations._messages', ['messages' => $conversation->messages])
+                    </div>
+                    <div class="px-5 py-2.5">
+                        <a href="{{ route('admin.chat-conversations.show', $conversation) }}" class="inline-block text-xs font-medium text-slate-600 underline hover:text-slate-900">Open this conversation</a>
+                    </div>
                 </div>
             </details>
             @if($loop->last && $total > $conversations->count())

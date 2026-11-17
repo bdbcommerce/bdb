@@ -275,6 +275,8 @@
         </header>
 
         <main id="main-content" tabindex="-1" class="flex-1 p-4 sm:p-6 focus:outline-none">
+            @hasSection('inline-flash')
+            @else
             @if (session('success'))
                 <div role="status" class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 flex items-start gap-2.5">
                     <svg class="w-4 h-4 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -294,6 +296,7 @@
                         @endforeach
                     </ul>
                 </div>
+            @endif
             @endif
             @yield('content')
         </main>
