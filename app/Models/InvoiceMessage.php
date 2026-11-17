@@ -15,6 +15,7 @@ class InvoiceMessage extends Model
         'processing' => 'Reading',
         'sent' => 'Sent',
         'skipped' => 'Not an invoice',
+        'other_seller' => 'Other seller',
         'failed' => 'Failed',
     ];
 

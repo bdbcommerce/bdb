@@ -79,12 +79,12 @@ class InvoiceParser
 
         try {
             $invoice->refresh();
-            if (in_array($invoice->status, ['sent', 'skipped'], true)) {
+            if (in_array($invoice->status, ['sent', 'skipped', 'other_seller'], true)) {
                 return;
             }
             if ($invoice->attempts >= InvoiceMessage::MAX_ATTEMPTS) {
                 if ($invoice->status !== 'failed') { // e.g. the last attempt crashed mid-way
-                    $invoice->update(['status' => 'failed', 'error' => $invoice->error ?: 'The last attempt did not finish.']);
+                    $this->fail($invoice, $invoice->error ?: 'The last attempt did not finish.'); // reports the error JSON
                 }
 
                 return;
@@ -185,40 +185,55 @@ class InvoiceParser
     }
 
     /**
-     * Post an accepted invoice: the summary to the invoice chat and the JSON to the JSON chat (each when set).
-     * What was posted is remembered (sent_message_id / json_message_id), so a retry only posts what is missing
-     * and never pays for another read.
+     * Post an accepted invoice: to the invoice chat the photo (turned upright) and the summary as a reply to it;
+     * the JSON to the JSON recipient (each when set). What was posted is remembered (image_message_id /
+     * sent_message_id / json_message_id), so a retry only posts what is missing and never pays for another read.
      */
     private function post(InvoiceMessage $invoice, InvoiceParserSetting $settings, array $data, array $usage, ?string $body = null): void
     {
         $ids = ['sent_message_id' => $invoice->sent_message_id, 'json_message_id' => $invoice->json_message_id, 'image_message_id' => $invoice->image_message_id];
         $failed = [];
 
-        // The photo first (turned upright), so the summary can reply to it when both go to the same chat.
-        if (filled($settings->image_chat_id) && ! $ids['image_message_id']) {
+        // A seller not in the Sellers list: the photo and the summary go to the JSON recipient, not the invoice chat.
+        // Decided on the first post and kept (in the result), so a settings change never splits one invoice across chats.
+        $data['route'] ??= $settings->allowsSeller($data) ? 'group' : 'user';
+        $otherSeller = $data['route'] === 'user';
+        $chat = trim((string) ($otherSeller ? $settings->json_chat_id : $settings->target_chat_id));
+        $where = $otherSeller ? 'JSON recipient' : 'invoice chat';
+        if ($otherSeller && $chat === '') {
+            $inn = (string) ($data['supplier']['inn'] ?? '');
+            $invoice->update(['status' => 'other_seller', 'result' => $data, 'processed_at' => now(),
+                'error' => 'Seller'.($inn !== '' ? " (STIR {$inn})" : ' without a readable STIR').' is not in the Sellers list, and no JSON recipient is set.'] + $usage);
+
+            return;
+        }
+        $invoice->update(['result' => $data]);
+
+        // The photo first (turned upright), then the summary as a reply to it.
+        if ($chat !== '' && ! $ids['image_message_id']) {
             if ($body === null) { // a retry: the file is fetched again (the read is not paid again)
                 $body = $this->telegram->downloadFile($invoice->file_id)['body'] ?? null;
             }
-            $id = $body === null ? null : $this->sendImage($invoice, $settings->image_chat_id, $data, $body);
+            $id = $body === null ? null : $this->sendImage($invoice, $chat, $data, $body);
             if ($id !== null) {
                 $ids['image_message_id'] = $id ?: null;
+                $data['photo_chat'] = $chat;
             } else {
-                $failed[] = $body === null ? 'image chat (the photo could not be downloaded from Telegram again)' : 'image chat';
+                $failed[] = $body === null ? "{$where} (the photo could not be downloaded from Telegram again)" : "{$where} (photo)";
             }
         }
 
-        if (filled($settings->target_chat_id) && ! $ids['sent_message_id']) {
-            $sameChat = $ids['image_message_id'] && trim((string) $settings->image_chat_id) === trim((string) $settings->target_chat_id);
+        if ($chat !== '' && ! $ids['sent_message_id']) {
             $sent = $this->telegram->call('sendMessage', [
-                'chat_id' => $settings->target_chat_id,
-                'text' => self::summary($data),
+                'chat_id' => $chat,
+                'text' => ($otherSeller ? "⚠️ Sotuvchi roʻyxatda yoʻq — guruhga yuborilmadi.\n\n" : '').self::summary($data),
                 'parse_mode' => 'HTML',
                 'link_preview_options' => ['is_disabled' => true],
-            ] + ($sameChat ? ['reply_parameters' => ['message_id' => $ids['image_message_id'], 'allow_sending_without_reply' => true]] : []));
+            ] + ($ids['image_message_id'] && ($data['photo_chat'] ?? null) === $chat ? ['reply_parameters' => ['message_id' => $ids['image_message_id'], 'allow_sending_without_reply' => true]] : []));
             if ($sent) {
                 $ids['sent_message_id'] = (int) ($sent['message_id'] ?? 0) ?: null;
             } else {
-                $failed[] = 'invoice chat';
+                $failed[] = $where;
             }
         }
 
@@ -227,7 +242,7 @@ class InvoiceParser
             if ($id !== null) {
                 $ids['json_message_id'] = $id ?: null;
             } else {
-                $failed[] = 'JSON chat';
+                $failed[] = 'JSON recipient';
             }
         }
 
@@ -250,16 +265,7 @@ class InvoiceParser
         $rotation = self::rotation($data['rotation'] ?? 0);
         $image = ImageRotator::upright($body, $mime, $rotation);
 
-        $date = (string) ($data['invoice_date'] ?? '');
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)) {
-            $date = "{$m[3]}.{$m[2]}.{$m[1]}";
-        }
-        // <code>: text read from the image never becomes a live link or @mention.
-        $number = (string) ($data['invoice_number'] ?? '');
-        $caption = '🧾 Hisob-faktura № <code>'.($number !== '' ? e($number) : '—').'</code>'
-            .($date !== '' ? ' — <code>'.e($date).'</code>' : '')
-            .($image['rotated'] ? "\n<i>Rasm {$rotation}° burildi.</i>" : '');
-        $extra = ['caption' => $caption, 'parse_mode' => 'HTML'];
+        $extra = []; // the photo only; the summary follows as a reply
         $ext = ['image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif', 'application/pdf' => 'pdf'][$image['mime']] ?? 'jpg';
         $name = 'invoice-'.$invoice->id.'.'.$ext;
 
@@ -272,21 +278,37 @@ class InvoiceParser
         return $sent === null ? null : (int) ($sent['message_id'] ?? 0);
     }
 
-    /** The JSON sent to the JSON chat: the cleaned result plus where the photo came from. */
+    /** The JSON sent to the JSON recipient: the cleaned result plus where the photo came from. */
     public static function json(InvoiceMessage $invoice, array $data): string
     {
-        return (string) json_encode(['source' => [
+        return (string) json_encode(['source' => self::source($invoice)] + self::clean($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    /** The JSON sent to the JSON recipient when a photo finally failed (no attempts left). */
+    public static function errorJson(InvoiceMessage $invoice): string
+    {
+        return (string) json_encode([
+            'source' => self::source($invoice),
+            'status' => 'error',
+            'error' => (string) $invoice->error,
+            'attempts' => (int) $invoice->attempts,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    private static function source(InvoiceMessage $invoice): array
+    {
+        return [
             'chat_id' => $invoice->chat_id,
             'message_id' => (int) $invoice->message_id,
             'from_id' => $invoice->sender_id,
             'from' => $invoice->sender,
-        ]] + self::clean($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ];
     }
 
     /** Post the JSON as a code block, or as a .json file when it is longer than one message. Returns the message ID (0 = posted, no ID), null on failure. */
-    private function sendJson(InvoiceMessage $invoice, string $chatId, array $data): ?int
+    private function sendJson(InvoiceMessage $invoice, string $chatId, array $data, ?string $json = null): ?int
     {
-        $json = self::json($invoice, $data);
+        $json ??= self::json($invoice, $data);
         $html = '<pre><code class="language-json">'.e($json).'</code></pre>';
         if (mb_strlen($html) <= self::TELEGRAM_MAX) {
             $sent = $this->telegram->call('sendMessage', ['chat_id' => $chatId, 'text' => $html, 'parse_mode' => 'HTML', 'link_preview_options' => ['is_disabled' => true]]);
@@ -410,6 +432,16 @@ class InvoiceParser
         $invoice->update(['status' => 'failed', 'error' => $error] + $extra
             // Not worth retrying (bad request, refusal, wrong key): use up the attempts so the scheduler leaves it.
             + ($retryable ? [] : ['attempts' => InvoiceMessage::MAX_ATTEMPTS]));
+
+        // No attempts left: the JSON recipient gets the error as JSON (best effort).
+        $to = InvoiceParserSetting::current()->json_chat_id;
+        if ($invoice->attempts >= InvoiceMessage::MAX_ATTEMPTS && filled($to)) {
+            try {
+                $this->sendJson($invoice, $to, [], self::errorJson($invoice));
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
     }
 
     /** [file_id, mime] of the largest photo size, an image document or a PDF; [null, null] otherwise. */
@@ -445,28 +477,22 @@ class InvoiceParser
         return null;
     }
 
-    /** The Telegram message (HTML) for an accepted invoice, in Uzbek. */
+    /** The Telegram message (HTML) for an accepted invoice, in Uzbek: seller, items, total. */
     public static function summary(array $data): string
     {
         $data = self::clean($data); // every text field is a short string from here on
         $t = fn ($v) => e(trim((string) (is_scalar($v) ? $v : '')));
         $n = fn ($v) => is_numeric($v) ? self::number((float) $v) : $t($v);
 
-        $date = $data['invoice_date'] ?? null;
-        if (is_string($date) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)) {
-            $date = "{$m[3]}.{$m[2]}.{$m[1]}";
+        // Seller, items and the total — nothing more.
+        $seller = is_array($data['supplier'] ?? null) ? $data['supplier'] : [];
+        $head = ['🏢 <b>'.(($name = $t($seller['name'] ?? '')) !== '' ? $name : '—').'</b>'];
+        if (filled($seller['inn'] ?? null)) {
+            $head[] = 'STIR: '.$t($seller['inn']);
         }
-        $party = function ($p) use ($t) {
-            $p = is_array($p) ? $p : [];
-            $name = $t($p['name'] ?? '') ?: '—';
-
-            return $name.(filled($p['inn'] ?? null) ? ' (STIR '.$t($p['inn']).')' : '');
-        };
-
-        $number = $t($data['invoice_number'] ?? '');
-        $head = ['🧾 <b>Hisob-faktura № '.($number !== '' ? $number : '—').'</b>'.($date ? ' — '.$t($date) : '')];
-        $head[] = '<b>Yetkazib beruvchi:</b> '.$party($data['supplier'] ?? null);
-        $head[] = '<b>Xaridor:</b> '.$party($data['buyer'] ?? null);
+        if (filled($seller['vat_code'] ?? null)) {
+            $head[] = 'QQS kodi: '.$t($seller['vat_code']);
+        }
 
         $rows = [];
         foreach (array_values(array_filter((array) ($data['items'] ?? []), 'is_array')) as $i => $item) {
@@ -474,20 +500,8 @@ class InvoiceParser
             $rows[] = ($i + 1).'. '.($t($item['name'] ?? '') ?: '—').' — '.$qty.' × '.$n($item['price'] ?? '').' = '.$n($item['amount'] ?? '');
         }
 
-        $foot = [];
-        if (is_numeric($data['total_amount'] ?? null)) {
-            $foot[] = 'Summa (QQSsiz): '.$n($data['total_amount']);
-        }
-        if (is_numeric($data['total_vat'] ?? null)) {
-            $foot[] = 'QQS: '.$n($data['total_vat']);
-        }
-        $foot[] = '<b>Jami: '.(is_numeric($data['total_with_vat'] ?? null) ? $n($data['total_with_vat']) : '—').' soʻm</b>';
-        if (filled($data['warning'] ?? null)) {
-            // <code>: text read from the image never becomes a live link or @mention here.
-            $foot[] = '⚠️ Ogohlantirish: <code>'.$t($data['warning']).'</code>';
-        }
-        $foot[] = '<i>AI oʻqidi — asl hujjat bilan tekshiring.</i>';
-
+        $total = $data['total_with_vat'] ?? $data['total_amount'] ?? null;
+        $foot = ['<b>Jami: '.(is_numeric($total) ? $n($total) : '—').' soʻm</b>'];
         // Keep within Telegram's limit: drop rows from the end and say how many are left out.
         $build = fn (array $r, int $hidden) => implode("\n", $head)."\n\n"
             .implode("\n", $r).($hidden ? "\n… yana {$hidden} ta qator" : '')

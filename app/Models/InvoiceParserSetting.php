@@ -22,7 +22,7 @@ class InvoiceParserSetting extends Model
         'claude-haiku-5-5' => 'Claude Haiku 5.5 — cheapest',
     ];
 
-    protected $fillable = ['enabled', 'api_key', 'model', 'source_chat_id', 'source_from_ids', 'target_chat_id', 'json_chat_id', 'image_chat_id', 'prompt', 'notify_skipped', 'daily_limit'];
+    protected $fillable = ['enabled', 'api_key', 'model', 'source_chat_id', 'source_from_ids', 'seller_inns', 'target_chat_id', 'json_chat_id', 'prompt', 'notify_skipped', 'daily_limit'];
 
     /** Optional cap on paid Claude reads per day (null = no limit); over it, photos wait as failed until "Read again". */
     public function dailyLimit(): ?int
@@ -98,6 +98,25 @@ class InvoiceParserSetting extends Model
     public function hasResultChat(): bool
     {
         return filled($this->target_chat_id) || filled($this->json_chat_id);
+    }
+
+    /** Seller STIRs whose invoices go to the invoice chat; empty = every seller. */
+    public function sellerInns(): array
+    {
+        return self::parseIds($this->seller_inns);
+    }
+
+    /** Is the invoice from a listed seller (by STIR, digits only)? True when no list is set. */
+    public function allowsSeller(array $data): bool
+    {
+        $allowed = $this->sellerInns();
+        if (! $allowed) {
+            return true;
+        }
+        $raw = is_array($data['supplier'] ?? null) ? ($data['supplier']['inn'] ?? '') : '';
+        $inn = preg_replace('/\D+/', '', is_scalar($raw) ? (string) $raw : '');
+
+        return $inn !== '' && in_array($inn, $allowed, true);
     }
 
     /** The allowed sender IDs; empty = anyone in the source chat. */

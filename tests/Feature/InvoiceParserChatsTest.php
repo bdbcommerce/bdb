@@ -104,7 +104,7 @@ class InvoiceParserChatsTest extends TestCase
         $this->assertCount(2, $this->sent);
         [$summary, $json] = $this->sent;
         $this->assertSame([self::TARGET, self::JSON], [$summary['chat'], $json['chat']]);
-        $this->assertStringContainsString('Hisob-faktura № 15', $summary['text']);
+        $this->assertStringStartsWith('🏢 <b>Ёрлиқ &lt;b&gt;</b>', $summary['text']);
         $this->assertStringStartsWith('<pre><code class="language-json">', $json['text']);
         $decoded = json_decode(html_entity_decode(strip_tags($json['text'])), true);
         $this->assertSame('15', $decoded['invoice_number']);
@@ -150,7 +150,7 @@ class InvoiceParserChatsTest extends TestCase
         $this->photo(1);
         $invoice = InvoiceMessage::sole();
         $this->assertSame('failed', $invoice->status);
-        $this->assertStringContainsString('JSON chat', $invoice->error);
+        $this->assertStringContainsString('JSON recipient', $invoice->error);
         $this->assertNotNull($invoice->sent_message_id);
 
         $this->failChats = [];

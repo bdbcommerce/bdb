@@ -176,7 +176,7 @@ class InvoiceParserChatsQaTest extends TestCase
     {
         $admin = User::factory()->create(['is_admin' => true]);
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => self::SOURCE]))
-            ->assertSessionHasErrors(['json_chat_id' => 'The JSON chat must differ from the source chat.']);
+            ->assertSessionHasErrors(['json_chat_id' => 'The JSON recipient must differ from the source chat.']);
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => 'abc']))
             ->assertSessionHasErrors(['json_chat_id' => 'A chat ID is a number, e.g. -1001234567890 for a group.']);
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => self::TARGET]))->assertSessionHasNoErrors();
@@ -233,7 +233,7 @@ class InvoiceParserChatsQaTest extends TestCase
         $this->photo(2);
         $second = InvoiceMessage::where('message_id', 2)->sole();
         $this->assertSame('failed', $second->status);
-        $this->assertStringContainsString('invoice chat and the JSON chat', $second->error);
+        $this->assertStringContainsString('invoice chat and the JSON recipient', $second->error);
         $this->assertSame('accepted', $second->result['status']);
     }
 

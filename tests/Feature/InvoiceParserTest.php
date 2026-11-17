@@ -123,12 +123,13 @@ class InvoiceParserTest extends TestCase
             $text = $r['text'];
 
             return $r['chat_id'] === self::TARGET && $r['parse_mode'] === 'HTML'
-                && str_contains($text, 'Hisob-faktura № 125</b> — 12.11.2026')
-                && str_contains($text, 'Yetkazib beruvchi:</b> OOO &quot;Alpha&quot; &lt;b&gt; (STIR 301234567)')
+                && str_starts_with($text, '🏢 <b>OOO &quot;Alpha&quot; &lt;b&gt;</b>')
+                && str_contains($text, 'STIR: 301234567')
                 && str_contains($text, '1. Zebra ZD230 — 2 dona × 3 500 000 = 7 000 000')
                 && str_contains($text, '2. Labels 58×40 — 10 rulon × 45 000,50 = 450 005')
-                && str_contains($text, 'QQS: 894 000,60')
-                && str_contains($text, 'Jami: 8 344 005,60 soʻm');
+                && str_contains($text, 'Jami: 8 344 005,60 soʻm')
+                // Seller, items and total only.
+                && ! str_contains($text, 'Hisob-faktura') && ! str_contains($text, 'Xaridor') && ! str_contains($text, 'QQS:');
         });
         // The source chat is not recorded as a conversation.
         $this->assertSame(0, ChatConversation::count());

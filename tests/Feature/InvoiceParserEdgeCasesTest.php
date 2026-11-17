@@ -202,10 +202,11 @@ class InvoiceParserEdgeCasesTest extends TestCase
             ],
             'total_with_vat' => '1502820.00', 'total_vat' => 'x', 'warning' => 'a & b',
         ]);
-        $this->assertStringContainsString('Hisob-faktura № —</b> — garbage &lt;x&gt;', $s);
+        $this->assertStringStartsWith('🏢 <b>—</b>', $s, 'no seller name');
         $this->assertStringContainsString('1. Ўзбек товар — 3 × -1 000,50 = 1 000 000 000 000 000', $s);
         $this->assertStringContainsString('Jami: 1 502 820 soʻm', $s);
-        $this->assertStringContainsString('a &amp; b', $s);
+        $this->assertStringNotContainsString('garbage', $s, 'no date, warning or VAT lines');
+        $this->assertStringNotContainsString('a &amp; b', $s);
         $this->assertStringNotContainsString('QQS:', $s);
     }
 

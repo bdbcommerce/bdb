@@ -153,7 +153,7 @@ class InvoiceImageChatQaTest extends TestCase
         $this->assertArrayNotHasKey('rotation', InvoiceParser::clean(['status' => 'skipped', 'rotation' => 90]));
     }
 
-    public function test_caption_with_zero_invoice_number(): void
+    public function test_photo_has_no_caption_and_summary_is_escaped(): void
     {
         $sent = [];
         Http::fake(function (Request $request) use (&$sent) {
@@ -163,9 +163,9 @@ class InvoiceImageChatQaTest extends TestCase
             if (str_contains($request->url(), '/file/')) {
                 return Http::response($this->png());
             }
-            if ($request->isMultipart()) {
-                $sent[] = collect($request->data())->mapWithKeys(fn ($p) => [$p['name'] => $p['contents']])->all();
-            }
+            $sent[] = $request->isMultipart()
+                ? collect($request->data())->mapWithKeys(fn ($p) => [$p['name'] => $p['contents']])->all()
+                : $request->data();
 
             return Http::response(['ok' => true, 'result' => ['message_id' => 9]]);
         });
@@ -175,28 +175,31 @@ class InvoiceImageChatQaTest extends TestCase
 
             public function read(string $apiKey, string $model, string $system, string $bytes, string $mime): array
             {
-                return ['text' => json_encode(['status' => 'accepted', 'invoice_number' => '0', 'invoice_date' => '<a href="x">', 'items' => []]), 'model' => $model, 'input_tokens' => 1, 'output_tokens' => 1];
+                return ['text' => json_encode(['status' => 'accepted', 'invoice_number' => '0', 'supplier' => ['name' => '<a href="x">', 'inn' => '0'],
+                    'items' => [], 'total_with_vat' => 0]), 'model' => $model, 'input_tokens' => 1, 'output_tokens' => 1];
             }
         });
-        InvoiceParserSetting::current()->update(['enabled' => true, 'source_chat_id' => '-1001', 'target_chat_id' => '-1002', 'image_chat_id' => '-1003']);
+        InvoiceParserSetting::current()->update(['enabled' => true, 'source_chat_id' => '-1001', 'target_chat_id' => '-1002']);
         $invoice = InvoiceMessage::create(['chat_id' => '-1001', 'message_id' => 1, 'file_id' => 'f', 'mime' => 'image/png']);
         app(InvoiceParser::class)->process($invoice);
 
         $this->assertSame('sent', $invoice->fresh()->status);
-        $this->assertStringContainsString('&lt;a href=&quot;x&quot;&gt;', $sent[0]['caption']);
-        $this->assertStringNotContainsString('<a ', $sent[0]['caption']);
-        // Reported, not asserted as a pass: invoice number "0" is shown as "—" because e('0') is falsy.
-        $this->assertStringContainsString('№ <code>0</code>', $sent[0]['caption']);
+        $this->assertArrayNotHasKey('caption', $sent[0]);
+        $this->assertStringStartsWith('🏢 <b>&lt;a href=&quot;x&quot;&gt;</b>', $sent[1]['text']);
+        $this->assertStringNotContainsString('<a ', $sent[1]['text']);
+        $this->assertStringContainsString('STIR: 0', $sent[1]['text'], '"0" is a value, not empty');
+        $this->assertStringContainsString('Jami: 0 soʻm', $sent[1]['text']);
     }
 
-    public function test_migration_down_and_up(): void
+    public function test_migrations_leave_image_message_id_and_drop_image_chat(): void
     {
-        $path = 'database/migrations/2026_11_17_100000_add_image_chat_to_invoice_parser.php';
-        Artisan::call('migrate:rollback', ['--path' => $path, '--force' => true]);
         $this->assertFalse(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
-        $this->assertFalse(Schema::hasColumn('invoice_messages', 'image_message_id'));
-        Artisan::call('migrate', ['--path' => $path, '--force' => true]);
-        $this->assertTrue(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
         $this->assertTrue(Schema::hasColumn('invoice_messages', 'image_message_id'));
+
+        $drop = 'database/migrations/2026_11_17_200000_drop_image_chat_from_invoice_parser.php';
+        Artisan::call('migrate:rollback', ['--path' => $drop, '--force' => true]);
+        $this->assertTrue(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
+        Artisan::call('migrate', ['--path' => $drop, '--force' => true]);
+        $this->assertFalse(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
     }
 }

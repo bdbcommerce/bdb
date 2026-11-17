@@ -10,9 +10,9 @@
 @section('content')
 <div class="w-full space-y-6">
     <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-600 space-y-2">
-        <p><b class="text-slate-900">How it works.</b> The bot watches the <b>source chat</b>. Every photo (or image / PDF file) posted there is sent to Claude, which checks whether it is a printed invoice and reads it. For an invoice, a summary in Uzbek is posted to the <b>invoice chat</b> and the read data as JSON to the <b>JSON chat</b>. With <b>From IDs</b> set, only those senders' photos are read. Handwritten notes, receipts and other photos are skipped. Every photo is listed under <a href="{{ route('admin.invoice-messages.index') }}" class="underline">Messages</a>.</p>
+        <p><b class="text-slate-900">How it works.</b> The bot watches the <b>source chat</b>. Every photo (or image / PDF file) posted there is sent to Claude, which checks whether it is a printed invoice and reads it. For an invoice, the photo (turned upright if it was sideways or upside down) is posted to the <b>invoice chat</b> with a short summary as a reply — seller, items and total — and the read data as JSON goes to the <b>JSON recipient</b>, who also gets a JSON error when a photo cannot be read. With <b>From IDs</b> set, only those senders' photos are read. Handwritten notes, receipts and other photos are skipped. Every photo is listed under <a href="{{ route('admin.invoice-messages.index') }}" class="underline">Messages</a>.</p>
         <p>Photos are saved as they arrive and read by the scheduler every minute, one at a time — a photo is usually read within 1–2 minutes (Claude itself takes 10–40 seconds), and many photos at once take a few minutes. If Claude is busy or a step fails, it is retried (up to {{ \App\Models\InvoiceMessage::MAX_ATTEMPTS }} attempts). The server needs the <code class="text-xs">schedule:run</code> cron, or photos stay “Waiting”. “Read again” on a message reads it at once.</p>
-        <p><b class="text-slate-900">The bot must see the photos:</b> add it to the source chat; in a group, either make it an admin or turn off its privacy mode (BotFather → /setprivacy → Disable, then remove and re-add the bot). Add it to the invoice chat and the JSON chat too, with permission to post.</p>
+        <p><b class="text-slate-900">The bot must see the photos:</b> add it to the source chat; in a group, either make it an admin or turn off its privacy mode (BotFather → /setprivacy → Disable, then remove and re-add the bot). Add it to the invoice chat too, with permission to post. The JSON recipient must open the bot and press Start once, or Telegram does not let the bot message them.</p>
         @unless(\App\Services\Invoices\InvoiceParser::schedulerRunning())
             <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
                 The scheduler has not run in the last few minutes, so the bot reads each new photo itself as it arrives. Retries of failed photos need the scheduler: add this cron line on the server —
@@ -75,29 +75,29 @@
                     <p class="text-xs text-slate-400 mt-1">Telegram user IDs, separated by commas. Shown as “From ID” under Messages and AI Assistant → Conversations.</p>
                     @error('source_from_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
+                <div class="sm:col-span-2">
+                    <label for="seller_inns" class="block text-sm font-medium text-slate-700 mb-1">Sellers — STIR of the sellers whose invoices go to the invoice chat</label>
+                    <input type="text" id="seller_inns" name="seller_inns" value="{{ old('seller_inns', $settings->seller_inns) }}" placeholder="Empty = every seller" class="{{ $input }} font-mono">
+                    <p class="text-xs text-slate-400 mt-1">Seller (Yetkazib beruvchi) STIR numbers, separated by commas. An invoice from any other seller — or with no readable STIR — is not posted to the invoice chat: the photo, the summary and the JSON go to the JSON recipient instead (with no recipient set, it is only listed under Messages).</p>
+                    @error('seller_inns')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
                 <div>
-                    <label for="target_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Invoice chat ID — the summary is posted here</label>
+                    <label for="target_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Invoice chat ID — the photo and the summary are posted here</label>
                     <input type="text" id="target_chat_id" name="target_chat_id" inputmode="numeric" value="{{ old('target_chat_id', $settings->target_chat_id) }}" placeholder="-1009876543210" class="{{ $input }} font-mono">
                     @error('target_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label for="json_chat_id" class="block text-sm font-medium text-slate-700 mb-1">JSON chat ID — the read data is posted here as JSON</label>
-                    <input type="text" id="json_chat_id" name="json_chat_id" inputmode="numeric" value="{{ old('json_chat_id', $settings->json_chat_id) }}" placeholder="Empty = no JSON" class="{{ $input }} font-mono">
-                    <p class="text-xs text-slate-400 mt-1">Code block; a long invoice comes as a .json file. Can be the same chat as the invoice chat.</p>
+                    <label for="json_chat_id" class="block text-sm font-medium text-slate-700 mb-1">JSON recipient — Telegram user ID (or chat ID)</label>
+                    <input type="text" id="json_chat_id" name="json_chat_id" inputmode="numeric" value="{{ old('json_chat_id', $settings->json_chat_id) }}" placeholder="123456789 — empty = no JSON" class="{{ $input }} font-mono">
+                    <p class="text-xs text-slate-400 mt-1">Gets the read data of each invoice as JSON (code block; a long invoice comes as a .json file), and <code>{"status": "error", …}</code> when a photo failed after all attempts. Find a user's ID under Telegram → Users, or with @getidsbot.</p>
                     @error('json_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
-                <div>
-                    <label for="image_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Image chat ID — the original photo is posted here</label>
-                    <input type="text" id="image_chat_id" name="image_chat_id" inputmode="numeric" value="{{ old('image_chat_id', $settings->image_chat_id) }}" placeholder="Empty = no photo" class="{{ $input }} font-mono">
-                    <p class="text-xs text-slate-400 mt-1">Each accepted invoice's photo (or PDF), with its number in the caption. Claude says when a photo is sideways or upside down, and it is turned upright before posting. Can be the same chat as the invoice chat: the summary is then posted as a reply to the photo.</p>
-                    @error('image_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                </div>
             </div>
-            <p class="text-xs text-slate-400">Set the invoice chat, the JSON chat, or both (the image chat is extra).</p>
+            <p class="text-xs text-slate-400">Set the invoice chat, the JSON recipient, or both.</p>
             <p class="text-xs text-slate-400">Group IDs start with -100. To find one, add the bot to the group, post a message, and see the chat under AI Assistant → Conversations, or use a bot such as @getidsbot. Messages in the source chat are only read for invoices — they are not recorded as conversations or answered, so use a dedicated group (not a channel, and not your own private chat with the bot).</p>
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="notify_skipped" value="1" @checked(old('notify_skipped', $settings->notify_skipped)) class="rounded border-slate-300">
-                Also tell the invoice / JSON chat when a photo is not an invoice
+                Also tell the invoice chat / JSON recipient when a photo is not an invoice
             </label>
         </div>
 

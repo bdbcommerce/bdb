@@ -284,8 +284,8 @@ class SecurityInvoiceParserTest extends TestCase
         $this->artisan('invoices:process');
 
         $text = $this->sentTexts()[0];
-        // Inside <code> Telegram makes no link or mention entities.
-        $this->assertMatchesRegularExpression('#<code>[^<]*https://evil.example[^<]*@attacker[^<]*</code>#', $text);
-        $this->assertSame(1, substr_count($text, 'evil.example'));
+        // The summary is seller, items and total only: the warning (where an injected link would sit) is not posted.
+        $this->assertStringNotContainsString('evil.example', $text);
+        $this->assertStringNotContainsString('@attacker', $text);
     }
 }
