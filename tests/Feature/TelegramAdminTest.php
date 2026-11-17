@@ -145,6 +145,8 @@ class TelegramAdminTest extends TestCase
             && $r['text'] === 'Здравствуйте! Сканер есть в наличии.');
 
         $last = collect($conversation->fresh()->messages)->last();
+        $this->assertNotFalse(strtotime($last['at'] ?? ''), 'staff replies carry their time');
+        unset($last['at']);
         $this->assertSame(['role' => 'admin', 'content' => 'Здравствуйте! Сканер есть в наличии.', 'author' => $admin->name], $last);
 
         $this->actingAs($admin)->get(route('admin.chat-conversations.show', $conversation))

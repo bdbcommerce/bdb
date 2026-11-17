@@ -239,13 +239,18 @@ class TelegramAdminReplyTest extends TestCase
             ->assertSeeInOrder(['Photo', 'Narxi qancha?', 'Maʼlumot yoʻq.', 'BDB team · Sardor', 'Narxi 1 200 000 soʻm.', 'BDB team · Admin', 'Muallifsiz xabar', 'Rahmat!'])
             ->assertSee('Message the customer in Telegram');
 
-        // Staff messages are not counted as customer questions.
+        // Staff messages are not counted as customer questions. Both sessions are one chat: the list shows its newest.
+        $this->actingAs($admin)->get(route('admin.chat-conversations.index', ['channel' => 'telegram']))
+            ->assertOk()
+            ->assertSee('0 questions')
+            ->assertDontSee('2 questions')
+            ->assertSee('Telegram');
+        $adminOnly->delete();
         $this->actingAs($admin)->get(route('admin.chat-conversations.index', ['channel' => 'telegram']))
             ->assertOk()
             ->assertSee('[Photo]')
-            ->assertSee('2 questions')
-            ->assertSee('0 questions')
-            ->assertSee('Telegram');
+            ->assertSee('2 questions');
+        $adminOnly = $this->telegramConversation([['role' => 'admin', 'content' => 'Only staff here', 'author' => 'Sardor']]);
 
         $this->actingAs($admin)->get(route('admin.chat-conversations.show', $adminOnly))
             ->assertOk()->assertSee('Only staff here');

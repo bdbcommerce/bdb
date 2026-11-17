@@ -19,6 +19,12 @@ class ChatConversationController extends Controller
         'leads' => 'With callback request',
     ];
 
+    public const PER_PAGE = 25;
+
+    public const HISTORY_DAYS = 7;
+
+    public const MAX_DAYS = 364;
+
     private const MIME = [
         'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif',
         'mp4' => 'video/mp4', 'webm' => 'video/webm', 'mov' => 'video/quicktime',
@@ -35,13 +41,24 @@ class ChatConversationController extends Controller
         $channel = $telegramOnly ? 'telegram'
             : (is_string($ch = $request->query('channel')) && array_key_exists($ch, $channels) ? $ch : null);
 
+        $matches = fn ($q, string $table) => $q
+            ->when($filter === 'unanswered', fn ($q) => $q->where($table.'.unanswered_count', '>', 0))
+            ->when($filter === 'leads', fn ($q) => $q->whereNotNull($table.'.chat_lead_id'));
+
+        // One row per chat, like a messenger: a Telegram chat's newest (matching) session; website chats one by one.
         $conversations = ChatConversation::query()
             ->with('telegramUser')
             ->when($channel, fn ($q) => $q->where('channel', $channel))
-            ->when($filter === 'unanswered', fn ($q) => $q->where('unanswered_count', '>', 0))
-            ->when($filter === 'leads', fn ($q) => $q->whereNotNull('chat_lead_id'))
+            ->tap(fn ($q) => $matches($q, 'chat_conversations'))
+            ->where(fn ($q) => $q->where('channel', 'web')->orWhereNull('external_id')
+                ->orWhereNotExists(fn ($q) => $matches($q->selectRaw('1')->from('chat_conversations as newer')
+                    ->whereColumn('newer.channel', 'chat_conversations.channel')
+                    ->whereColumn('newer.external_id', 'chat_conversations.external_id')
+                    ->whereRaw("coalesce(newer.business_connection_id, '') = coalesce(chat_conversations.business_connection_id, '')")
+                    ->whereColumn('newer.id', '>', 'chat_conversations.id'), 'newer')))
             ->latest('updated_at')
-            ->paginate(30)
+            ->latest('id')
+            ->paginate(self::PER_PAGE)
             ->withQueryString();
 
         return view('admin.chat-conversations.index', [
@@ -56,10 +73,18 @@ class ChatConversationController extends Controller
         ]);
     }
 
-    public function show(ChatConversation $chatConversation)
+    public function show(Request $request, ChatConversation $chatConversation)
     {
+        // The chat's last 7 days across its sessions; "Show earlier" adds 7 days at a time (up to a year).
+        $days = (int) $request->query('days', self::HISTORY_DAYS);
+        $days = max(self::HISTORY_DAYS, min(self::MAX_DAYS, $days - $days % self::HISTORY_DAYS));
+
         return view('admin.chat-conversations.show', [
             'conversation' => $chatConversation->load('lead', 'telegramUser'),
+            'history' => $chatConversation->history($days),
+            'days' => $days,
+            'latest' => $chatConversation->latestSession(),
+            'maxDays' => self::MAX_DAYS,
         ]);
     }
 
@@ -78,9 +103,11 @@ class ChatConversationController extends Controller
                 'Telegram did not deliver the message. The customer may have blocked the bot — see storage/logs/laravel.log.');
         }
 
-        $chatConversation->appendAdminMessage($text, $request->user()->name);
+        // Opened from an older session: the reply belongs at the end of the chat, in its newest session.
+        $target = $chatConversation->latestSession();
+        $target->appendAdminMessage($text, $request->user()->name);
 
-        return redirect()->route('admin.chat-conversations.show', $chatConversation)->with('success', 'Message sent to the customer.');
+        return redirect()->route('admin.chat-conversations.show', $target)->with('success', 'Message sent to the customer.');
     }
 
     /** An AI-drafted reply for the admin to edit before sending (JSON). */
@@ -88,7 +115,7 @@ class ChatConversationController extends Controller
     {
         abort_unless($chatConversation->channel === 'telegram' && $chatConversation->external_id, 404);
 
-        $history = collect($chatConversation->textMessages())
+        $history = collect($chatConversation->latestSession()->textMessages())
             ->map(fn (array $m) => ['role' => $m['role'] === 'user' ? 'user' : 'assistant', 'content' => $m['content']])
             ->slice(-12)
             ->values()

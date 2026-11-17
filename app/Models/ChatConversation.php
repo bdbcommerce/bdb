@@ -127,6 +127,94 @@ class ChatConversation extends Model
         return $this->belongsTo(TelegramUser::class, 'external_id', 'telegram_id');
     }
 
+    /** Every session of the same Telegram chat (bot, Premium-account chat or group), this one included. */
+    public function scopeSameChatAs(Builder $query, self $conversation): void
+    {
+        $query->where('channel', $conversation->channel)
+            ->where('external_id', $conversation->external_id)
+            ->whereRaw("coalesce(business_connection_id, '') = ?", [(string) $conversation->business_connection_id]);
+    }
+
+    /** The newest session of this chat (staff replies and "Mark as answered" go there). Website chats: this one. */
+    public function latestSession(): self
+    {
+        if ($this->channel === 'web' || ! $this->external_id) {
+            return $this;
+        }
+
+        return self::query()->sameChatAs($this)->latest('id')->first() ?? $this;
+    }
+
+    /**
+     * The chat as one thread: messages of every session of this chat from the last $days days
+     * (counted back from the chat's newest message), plus all of this session. Website chats: only this session.
+     *
+     * @return array{messages: array<int, array>, older: bool}
+     */
+    public function history(int $days): array
+    {
+        if ($this->channel === 'web' || ! $this->external_id) {
+            return ['messages' => $this->messages ?? [], 'older' => false];
+        }
+        $sessions = self::query()->sameChatAs($this)->orderBy('id')->get();
+        $newest = $sessions->map(fn (self $s) => $s->last_message_at ?? $s->updated_at)->filter()->max() ?? now();
+        $cutoff = $newest->copy()->subDays($days);
+
+        $messages = [];
+        $older = false;
+        foreach ($sessions as $session) {
+            $own = $session->is($this);
+            foreach ($session->messages ?? [] as $m) {
+                try {
+                    $at = isset($m['at']) ? Carbon::parse($m['at']) : null;
+                } catch (\Throwable) {
+                    $at = null;
+                }
+                if (! $own && ($at ?? $session->updated_at ?? $newest)->lt($cutoff)) {
+                    $older = true;
+
+                    continue;
+                }
+                $messages[] = $m;
+            }
+        }
+
+        return ['messages' => $messages, 'older' => $older];
+    }
+
+    /** The name shown for the chat in the admin (customer, chat title, else the source). */
+    public function chatName(): string
+    {
+        $user = $this->channel === 'telegram' ? $this->telegramUser : null;
+
+        return collect([$user?->displayName(), $this->title])->first(fn ($v) => filled($v))
+            ?? ($this->channel === 'web' ? 'Website visitor' : (self::CHANNELS[$this->channel] ?? ucfirst((string) $this->channel)));
+    }
+
+    /**
+     * Telegram IDs of the people who wrote on the customer side: [from ID => name or null].
+     * Bot and Premium-account chats: the private chat ID is the customer's own ID. Groups: each member's sender_id.
+     *
+     * @return array<string, string|null>
+     */
+    public function fromIds(): array
+    {
+        if (! $this->external_id || $this->channel === 'web') {
+            return [];
+        }
+        $ids = [];
+        foreach ($this->messages ?? [] as $m) {
+            if (isset($m['sender_id']) && in_array($m['role'] ?? null, ['user', 'member'], true)) {
+                $ids[(string) $m['sender_id']] ??= $m['sender'] ?? null;
+            }
+        }
+        if (in_array($this->channel, ['telegram', 'business'], true)) {
+            $ids = [(string) $this->external_id => null] + $ids;
+        }
+
+        return $ids;
+    }
+
     /**
      * The dialogue with the assistant: text messages, without media and without "aside" entries
      * (Telegram registration steps, commands and button taps — recorded, but not questions).
@@ -261,7 +349,7 @@ class ChatConversation extends Model
     public function appendAdminMessage(string $text, string $author): void
     {
         $messages = $this->messages ?? [];
-        $messages[] = ['role' => 'admin', 'content' => $text, 'author' => $author];
+        $messages[] = ['role' => 'admin', 'content' => $text, 'author' => $author, 'at' => date('c')];
 
         $this->messages = $messages;
         $this->message_count = count($messages);

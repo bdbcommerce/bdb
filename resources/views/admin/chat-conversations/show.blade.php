@@ -8,7 +8,8 @@
     $recordedChat = in_array($conversation->channel, ['business', 'group'], true);
     $tgUser = $conversation->channel === 'telegram' ? $conversation->telegramUser : null;
     $channelLabel = \App\Models\ChatConversation::CHANNELS[$conversation->channel] ?? ucfirst($conversation->channel);
-    $chatName = collect([$tgUser?->displayName(), $conversation->title])->first(fn ($v) => filled($v)) ?? ($conversation->channel === 'web' ? 'Website visitor' : $channelLabel);
+    $chatName = $conversation->chatName();
+    $fromIds = $conversation->fromIds();
     $canReply = $conversation->channel === 'telegram' && $conversation->external_id;
 @endphp
 
@@ -33,8 +34,8 @@
                     @if($conversation->external_id) · <span class="font-mono">{{ $conversation->external_id }}</span> @endif
                 </p>
             </div>
-            @if($conversation->awaiting_reply)
-                <form method="POST" action="{{ route('admin.chat-conversations.handled', $conversation) }}">
+            @if($latest->awaiting_reply)
+                <form method="POST" action="{{ route('admin.chat-conversations.handled', $latest) }}">
                     @csrf
                     <button class="text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-100 whitespace-nowrap">Mark as answered</button>
                 </form>
@@ -58,16 +59,25 @@
         {{-- Messages: the only part that scrolls; opens at the newest message --}}
         <div class="flex-1 min-h-0 overflow-y-auto bg-[#efeae2] px-3 sm:px-[6%] py-4"
              x-data x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)" data-chat-scroll>
-            @if(empty($conversation->messages))
+            @if($history['older'] && $days < $maxDays)
+                <div class="flex justify-center mb-3" data-history-more>
+                    <a href="{{ route('admin.chat-conversations.show', [$conversation, 'days' => $days + 7]) }}"
+                       class="text-xs font-medium text-slate-700 bg-white/90 hover:bg-white rounded-full px-4 py-1.5 shadow-sm">
+                        Show earlier messages
+                    </a>
+                </div>
+                <p class="text-center text-[11px] text-slate-500 mb-3">Showing the last {{ $days }} days of this chat</p>
+            @endif
+            @if(empty($history['messages']))
                 <p class="text-center text-sm text-slate-500 py-10">No messages</p>
             @else
-                @include('admin.chat-conversations._messages', ['messages' => $conversation->messages])
+                @include('admin.chat-conversations._messages', ['messages' => $history['messages']])
             @endif
         </div>
 
         {{-- Composer --}}
         @if($canReply)
-            <form method="POST" action="{{ route('admin.chat-conversations.reply', $conversation) }}"
+            <form method="POST" action="{{ route('admin.chat-conversations.reply', $latest) }}"
                   class="shrink-0 bg-slate-50 border-t border-slate-200 px-3 sm:px-4 py-2.5"
                   x-data="{
                       message: @js(old('message', '')),
@@ -77,7 +87,7 @@
                       async suggest() {
                           this.loading = true; this.error = '';
                           try {
-                              const res = await fetch(@js(route('admin.chat-conversations.suggest', $conversation)), {
+                              const res = await fetch(@js(route('admin.chat-conversations.suggest', $latest)), {
                                   method: 'POST',
                                   headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
                               });
@@ -138,6 +148,20 @@
                 <dt class="text-xs text-slate-400">Channel</dt>
                 <dd class="text-slate-800">{{ $channelLabel }}</dd>
             </div>
+            @if($conversation->external_id && $conversation->channel !== 'web')
+                <div data-chat-id>
+                    <dt class="text-xs text-slate-400">Chat ID</dt>
+                    <dd class="text-slate-800 font-mono select-all break-all">{{ $conversation->external_id }}</dd>
+                </div>
+                <div data-from-ids>
+                    <dt class="text-xs text-slate-400">From ID{{ count($fromIds) > 1 ? 's' : '' }}</dt>
+                    @forelse($fromIds as $id => $name)
+                        <dd class="text-slate-800"><span class="font-mono select-all break-all">{{ $id }}</span>@if($name) <span class="text-slate-500">· {{ $name }}</span>@endif</dd>
+                    @empty
+                        <dd class="text-slate-500">None recorded yet</dd>
+                    @endforelse
+                </div>
+            @endif
             @if($conversation->title)
                 <div>
                     <dt class="text-xs text-slate-400">{{ $conversation->channel === 'group' ? 'Group' : 'Chat with' }}</dt>
