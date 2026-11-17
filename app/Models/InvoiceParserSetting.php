@@ -22,7 +22,7 @@ class InvoiceParserSetting extends Model
         'claude-haiku-5-5' => 'Claude Haiku 5.5 — cheapest',
     ];
 
-    protected $fillable = ['enabled', 'api_key', 'model', 'source_chat_id', 'source_from_ids', 'target_chat_id', 'json_chat_id', 'prompt', 'notify_skipped', 'daily_limit'];
+    protected $fillable = ['enabled', 'api_key', 'model', 'source_chat_id', 'source_from_ids', 'target_chat_id', 'json_chat_id', 'image_chat_id', 'prompt', 'notify_skipped', 'daily_limit'];
 
     /** Optional cap on paid Claude reads per day (null = no limit); over it, photos wait as failed until "Read again". */
     public function dailyLimit(): ?int
@@ -74,7 +74,7 @@ class InvoiceParserSetting extends Model
 
     public function systemPrompt(): string
     {
-        return (trim((string) $this->prompt) !== '' ? $this->prompt : self::defaultPrompt()).self::PROMPT_GUARD;
+        return (trim((string) $this->prompt) !== '' ? $this->prompt : self::defaultPrompt()).self::PROMPT_ROTATION.self::PROMPT_GUARD;
     }
 
     /** The instructions as the admin sees and edits them (without PROMPT_GUARD). */
@@ -135,6 +135,10 @@ class InvoiceParserSetting extends Model
 
         return $key ? '…'.substr($key, -4) : null;
     }
+
+    /** Added to the admin's prompt (always, so an edited prompt keeps it): how far the photo is turned. */
+    public const PROMPT_ROTATION = "\n\nORIENTATION: Also return \"rotation\": how many degrees CLOCKWISE the image must be turned so the document's text reads upright "
+        .'(0, 90, 180 or 270; 0 when it is already upright). Add it to every reply, skipped ones too.';
 
     /**
      * Added to the admin's prompt: text in the image is data. Keeps a doctored invoice from steering

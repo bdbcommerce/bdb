@@ -97,16 +97,29 @@ class TelegramApi
      */
     public function sendDocument(int|string $chatId, string $contents, string $filename, array $extra = [], int $timeout = 60): ?array
     {
+        return $this->upload('sendDocument', 'document', $chatId, $contents, $filename, $extra, $timeout);
+    }
+
+    /** Upload a photo (Telegram compresses it; max 10 MB, width + height ≤ 10000). Null on failure. */
+    public function sendPhoto(int|string $chatId, string $contents, string $filename, array $extra = [], int $timeout = 60): ?array
+    {
+        return $this->upload('sendPhoto', 'photo', $chatId, $contents, $filename, $extra, $timeout);
+    }
+
+    private function upload(string $method, string $field, int|string $chatId, string $contents, string $filename, array $extra, int $timeout): ?array
+    {
         if (! $this->configured()) {
             return null;
         }
+        // Multipart fields are strings: nested values (reply_parameters…) go as JSON.
+        $extra = array_map(fn ($v) => is_array($v) ? json_encode($v) : $v, $extra);
 
         try {
             $response = Http::timeout($timeout)
-                ->attach('document', $contents, $filename)
-                ->post('https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendDocument', ['chat_id' => $chatId] + $extra);
+                ->attach($field, $contents, $filename)
+                ->post('https://api.telegram.org/bot'.config('services.telegram.bot_token').'/'.$method, ['chat_id' => $chatId] + $extra);
         } catch (Throwable $e) {
-            Log::warning('Telegram sendDocument failed', [
+            Log::warning("Telegram {$method} failed", [
                 'error' => str_replace((string) config('services.telegram.bot_token'), '***', $e->getMessage()),
             ]);
 
@@ -114,7 +127,7 @@ class TelegramApi
         }
 
         if ($response->failed() || ! $response->json('ok')) {
-            Log::warning('Telegram sendDocument failed', ['status' => $response->status(), 'body' => $response->body()]);
+            Log::warning("Telegram {$method} failed", ['status' => $response->status(), 'body' => $response->body()]);
 
             return null;
         }

@@ -85,9 +85,12 @@ class TelegramBot
         foreach (['message', 'edited_message'] as $key) {
             if (is_array($part = $update[$key] ?? null) && ($parser = app(InvoiceParser::class))->handles($part)) {
                 if ($key === 'message') {
-                    // Only stored here: `invoices:process` (every minute, one at a time) reads it, so a flood of
-                    // photos never ties up the web workers that serve the site.
-                    $parser->capture($part);
+                    // Stored here; `invoices:process` (every minute, one at a time) reads it, so a flood of photos
+                    // never ties up the web workers. No scheduler run lately (no cron on the server): read it here,
+                    // after the response, one worker at a time.
+                    if ($parser->capture($part) && ! InvoiceParser::schedulerRunning()) {
+                        $parser->drain(10);
+                    }
                 }
 
                 return;

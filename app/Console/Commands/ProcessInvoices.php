@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Models\InvoiceMessage;
 use App\Models\InvoiceParserSetting;
 use App\Services\Invoices\InvoiceParser;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /** Invoice parser: reads the stored photos one by one — new, stuck or failed (scheduled every minute, in the background). */
 class ProcessInvoices extends Command
@@ -16,15 +16,13 @@ class ProcessInvoices extends Command
 
     public function handle(InvoiceParser $parser): int
     {
+        // Heartbeat: while the scheduler runs, the webhook leaves the reading to it.
+        Cache::put(InvoiceParser::HEARTBEAT, now()->toIso8601String(), now()->addMinutes(3));
         if (! InvoiceParserSetting::current()->enabled) {
             return self::SUCCESS;
         }
 
-        $done = 0;
-        foreach (InvoiceMessage::due()->orderBy('id')->limit((int) $this->option('limit'))->get() as $invoice) {
-            $parser->process($invoice);
-            $done++;
-        }
+        $done = $parser->drain(max(1, (int) $this->option('limit')));
         if ($done) {
             $this->info("Processed {$done} invoice photo(s).");
         }

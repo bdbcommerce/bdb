@@ -13,6 +13,12 @@
         <p><b class="text-slate-900">How it works.</b> The bot watches the <b>source chat</b>. Every photo (or image / PDF file) posted there is sent to Claude, which checks whether it is a printed invoice and reads it. For an invoice, a summary in Uzbek is posted to the <b>invoice chat</b> and the read data as JSON to the <b>JSON chat</b>. With <b>From IDs</b> set, only those senders' photos are read. Handwritten notes, receipts and other photos are skipped. Every photo is listed under <a href="{{ route('admin.invoice-messages.index') }}" class="underline">Messages</a>.</p>
         <p>Photos are saved as they arrive and read by the scheduler every minute, one at a time — a photo is usually read within 1–2 minutes (Claude itself takes 10–40 seconds), and many photos at once take a few minutes. If Claude is busy or a step fails, it is retried (up to {{ \App\Models\InvoiceMessage::MAX_ATTEMPTS }} attempts). The server needs the <code class="text-xs">schedule:run</code> cron, or photos stay “Waiting”. “Read again” on a message reads it at once.</p>
         <p><b class="text-slate-900">The bot must see the photos:</b> add it to the source chat; in a group, either make it an admin or turn off its privacy mode (BotFather → /setprivacy → Disable, then remove and re-add the bot). Add it to the invoice chat and the JSON chat too, with permission to post.</p>
+        @unless(\App\Services\Invoices\InvoiceParser::schedulerRunning())
+            <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                The scheduler has not run in the last few minutes, so the bot reads each new photo itself as it arrives. Retries of failed photos need the scheduler: add this cron line on the server —
+                <code class="text-xs break-all">* * * * * cd {{ base_path() }} &amp;&amp; php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code>
+            </p>
+        @endunless
         @unless($telegramReady)
             <p class="text-red-600">The Telegram bot is not configured (TELEGRAM_BOT_TOKEN in .env).</p>
         @endunless
@@ -80,8 +86,14 @@
                     <p class="text-xs text-slate-400 mt-1">Code block; a long invoice comes as a .json file. Can be the same chat as the invoice chat.</p>
                     @error('json_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
+                <div>
+                    <label for="image_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Image chat ID — the original photo is posted here</label>
+                    <input type="text" id="image_chat_id" name="image_chat_id" inputmode="numeric" value="{{ old('image_chat_id', $settings->image_chat_id) }}" placeholder="Empty = no photo" class="{{ $input }} font-mono">
+                    <p class="text-xs text-slate-400 mt-1">Each accepted invoice's photo (or PDF), with its number in the caption. Claude says when a photo is sideways or upside down, and it is turned upright before posting. Can be the same chat as the invoice chat: the summary is then posted as a reply to the photo.</p>
+                    @error('image_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
             </div>
-            <p class="text-xs text-slate-400">Set the invoice chat, the JSON chat, or both.</p>
+            <p class="text-xs text-slate-400">Set the invoice chat, the JSON chat, or both (the image chat is extra).</p>
             <p class="text-xs text-slate-400">Group IDs start with -100. To find one, add the bot to the group, post a message, and see the chat under AI Assistant → Conversations, or use a bot such as @getidsbot. Messages in the source chat are only read for invoices — they are not recorded as conversations or answered, so use a dedicated group (not a channel, and not your own private chat with the bot).</p>
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="notify_skipped" value="1" @checked(old('notify_skipped', $settings->notify_skipped)) class="rounded border-slate-300">

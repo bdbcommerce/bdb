@@ -173,7 +173,9 @@ class InvoiceParser
                 return;
             }
 
-            $this->post($invoice, $settings, $data, $usage);
+            // Saved before posting: if posting crashes (e.g. out of memory), the retry posts without paying for another read.
+            $invoice->update(['result' => $data]);
+            $this->post($invoice, $settings, $data, $usage, $file['body']);
         } catch (Throwable $e) {
             report($e);
             $this->fail($invoice, 'Unexpected error: '.mb_strimwidth(str_replace((string) InvoiceParserSetting::current()->apiKey(), '***', $e->getMessage()), 0, 300, '…'), true);
@@ -187,18 +189,32 @@ class InvoiceParser
      * What was posted is remembered (sent_message_id / json_message_id), so a retry only posts what is missing
      * and never pays for another read.
      */
-    private function post(InvoiceMessage $invoice, InvoiceParserSetting $settings, array $data, array $usage): void
+    private function post(InvoiceMessage $invoice, InvoiceParserSetting $settings, array $data, array $usage, ?string $body = null): void
     {
-        $ids = ['sent_message_id' => $invoice->sent_message_id, 'json_message_id' => $invoice->json_message_id];
+        $ids = ['sent_message_id' => $invoice->sent_message_id, 'json_message_id' => $invoice->json_message_id, 'image_message_id' => $invoice->image_message_id];
         $failed = [];
 
+        // The photo first (turned upright), so the summary can reply to it when both go to the same chat.
+        if (filled($settings->image_chat_id) && ! $ids['image_message_id']) {
+            if ($body === null) { // a retry: the file is fetched again (the read is not paid again)
+                $body = $this->telegram->downloadFile($invoice->file_id)['body'] ?? null;
+            }
+            $id = $body === null ? null : $this->sendImage($invoice, $settings->image_chat_id, $data, $body);
+            if ($id !== null) {
+                $ids['image_message_id'] = $id ?: null;
+            } else {
+                $failed[] = $body === null ? 'image chat (the photo could not be downloaded from Telegram again)' : 'image chat';
+            }
+        }
+
         if (filled($settings->target_chat_id) && ! $ids['sent_message_id']) {
+            $sameChat = $ids['image_message_id'] && trim((string) $settings->image_chat_id) === trim((string) $settings->target_chat_id);
             $sent = $this->telegram->call('sendMessage', [
                 'chat_id' => $settings->target_chat_id,
                 'text' => self::summary($data),
                 'parse_mode' => 'HTML',
                 'link_preview_options' => ['is_disabled' => true],
-            ]);
+            ] + ($sameChat ? ['reply_parameters' => ['message_id' => $ids['image_message_id'], 'allow_sending_without_reply' => true]] : []));
             if ($sent) {
                 $ids['sent_message_id'] = (int) ($sent['message_id'] ?? 0) ?: null;
             } else {
@@ -222,6 +238,38 @@ class InvoiceParser
         }
 
         $invoice->update(['status' => 'sent', 'result' => $data, 'error' => null, 'processed_at' => now()] + $ids + $usage);
+    }
+
+    /**
+     * Post the original photo / PDF, turned upright when Claude said it is rotated.
+     * Returns the message ID (0 = posted, no ID), null on failure.
+     */
+    private function sendImage(InvoiceMessage $invoice, string $chatId, array $data, string $body): ?int
+    {
+        $mime = $this->mime($invoice->mime, null, $body) ?? 'application/octet-stream';
+        $rotation = self::rotation($data['rotation'] ?? 0);
+        $image = ImageRotator::upright($body, $mime, $rotation);
+
+        $date = (string) ($data['invoice_date'] ?? '');
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)) {
+            $date = "{$m[3]}.{$m[2]}.{$m[1]}";
+        }
+        // <code>: text read from the image never becomes a live link or @mention.
+        $number = (string) ($data['invoice_number'] ?? '');
+        $caption = '🧾 Hisob-faktura № <code>'.($number !== '' ? e($number) : '—').'</code>'
+            .($date !== '' ? ' — <code>'.e($date).'</code>' : '')
+            .($image['rotated'] ? "\n<i>Rasm {$rotation}° burildi.</i>" : '');
+        $extra = ['caption' => $caption, 'parse_mode' => 'HTML'];
+        $ext = ['image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif', 'application/pdf' => 'pdf'][$image['mime']] ?? 'jpg';
+        $name = 'invoice-'.$invoice->id.'.'.$ext;
+
+        $sent = in_array($image['mime'], ['image/jpeg', 'image/png', 'image/webp'], true)
+            ? $this->telegram->sendPhoto($chatId, $image['body'], $name, $extra)
+            : null;
+        // PDFs, GIFs and photos Telegram refuses as a photo (too large, odd proportions) go as a file.
+        $sent ??= $this->telegram->sendDocument($chatId, $image['body'], $name, $extra);
+
+        return $sent === null ? null : (int) ($sent['message_id'] ?? 0);
     }
 
     /** The JSON sent to the JSON chat: the cleaned result plus where the photo came from. */
@@ -291,7 +339,70 @@ class InvoiceParser
             'total_with_vat' => $num($data['total_with_vat'] ?? null),
             'amount_in_words' => $text($data['amount_in_words'] ?? null, 300),
             'warning' => $text($data['warning'] ?? null, 300),
+            'rotation' => self::rotation($data['rotation'] ?? null),
         ], fn ($v) => $v !== null);
+    }
+
+    /** Claude's "rotation": 0, 90, 180 or 270 degrees clockwise; anything else is 0. */
+    public static function rotation(mixed $value): int
+    {
+        if (! is_numeric($value)) {
+            return 0;
+        }
+        $deg = (int) $value % 360;
+        $deg = $deg < 0 ? $deg + 360 : $deg;
+
+        return in_array($deg, ImageRotator::ANGLES, true) ? $deg : 0;
+    }
+
+    /** Set by `invoices:process` on every run; without it the bot reads new photos itself (no cron on the server). */
+    public const HEARTBEAT = 'invoice-parser:scheduler-ran';
+
+    public static function schedulerRunning(): bool
+    {
+        try {
+            return Cache::has(self::HEARTBEAT);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Read what is due, oldest first, one at a time: only one worker (scheduler or webhook) at once.
+     * Returns how many were processed.
+     */
+    public function drain(int $limit = 20): int
+    {
+        $lock = Cache::lock('invoice-parser:worker', $limit * 300 + 60); // process() may take up to 300 s each
+        if (! $lock->get()) {
+            return 0; // another worker is reading; it picks up the new photo too
+        }
+
+        try {
+            $done = 0;
+            $tried = 0;
+            // Look again after each batch: photos that arrived meanwhile are read in the same run.
+            while ($tried < $limit && InvoiceParserSetting::current()->enabled) {
+                $batch = InvoiceMessage::due()->orderBy('id')->limit($limit - $tried)->get();
+                if ($batch->isEmpty()) {
+                    break;
+                }
+                foreach ($batch as $invoice) {
+                    $before = [$invoice->status, $invoice->attempts];
+                    $this->process($invoice);
+                    $tried++;
+                    $invoice->refresh();
+                    // Skipped while another worker holds this photo: not counted as done.
+                    if ([$invoice->status, $invoice->attempts] !== $before) {
+                        $done++;
+                    }
+                }
+            }
+
+            return $done;
+        } finally {
+            $lock->release();
+        }
     }
 
     private function fail(InvoiceMessage $invoice, string $error, bool $retryable = true, array $extra = []): void
@@ -352,7 +463,8 @@ class InvoiceParser
             return $name.(filled($p['inn'] ?? null) ? ' (STIR '.$t($p['inn']).')' : '');
         };
 
-        $head = ['🧾 <b>Hisob-faktura № '.($t($data['invoice_number'] ?? '') ?: '—').'</b>'.($date ? ' — '.$t($date) : '')];
+        $number = $t($data['invoice_number'] ?? '');
+        $head = ['🧾 <b>Hisob-faktura № '.($number !== '' ? $number : '—').'</b>'.($date ? ' — '.$t($date) : '')];
         $head[] = '<b>Yetkazib beruvchi:</b> '.$party($data['supplier'] ?? null);
         $head[] = '<b>Xaridor:</b> '.$party($data['buyer'] ?? null);
 

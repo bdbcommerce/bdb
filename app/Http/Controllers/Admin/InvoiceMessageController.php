@@ -75,7 +75,7 @@ class InvoiceMessageController extends Controller
 
         // A fresh read (the old result is dropped), even over the daily limit: an admin asked for it.
         // Both message IDs cleared too, so the new result is posted to the invoice chat and the JSON chat again.
-        $invoiceMessage->update(['status' => 'pending', 'attempts' => 0, 'error' => null, 'result' => null, 'sent_message_id' => null, 'json_message_id' => null]);
+        $invoiceMessage->update(['status' => 'pending', 'attempts' => 0, 'error' => null, 'result' => null, 'sent_message_id' => null, 'json_message_id' => null, 'image_message_id' => null]);
         app()->instance('invoice-parser.skip-limit', $invoiceMessage->id);
         defer(fn () => $parser->process($invoiceMessage));
 

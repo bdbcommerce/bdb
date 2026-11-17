@@ -34,6 +34,7 @@ class InvoiceParserSettingController extends Controller
             'source_from_ids' => ['nullable', 'string', 'max:1000', 'regex:/^[\s,;]*(-?\d{1,20}([\s,;]+-?\d{1,20})*)?[\s,;]*$/'],
             'target_chat_id' => [...$chatId, 'different:source_chat_id'],
             'json_chat_id' => [...$chatId, 'different:source_chat_id'],
+            'image_chat_id' => [...$chatId, 'different:source_chat_id'],
             'prompt' => ['nullable', 'string', 'max:20000'],
             'notify_skipped' => ['boolean'],
             'daily_limit' => ['nullable', 'integer', 'min:1', 'max:5000'], // empty = no limit
@@ -43,6 +44,8 @@ class InvoiceParserSettingController extends Controller
             'target_chat_id.different' => 'The invoice chat must differ from the source chat.',
             'json_chat_id.regex' => 'A chat ID is a number, e.g. -1001234567890 for a group.',
             'json_chat_id.different' => 'The JSON chat must differ from the source chat.',
+            'image_chat_id.regex' => 'A chat ID is a number, e.g. -1001234567890 for a group.',
+            'image_chat_id.different' => 'The image chat must differ from the source chat.',
             'source_from_ids.regex' => 'From IDs are numbers separated by commas, e.g. 123456789, 987654321.',
         ]);
 
@@ -55,6 +58,7 @@ class InvoiceParserSettingController extends Controller
             'source_from_ids' => implode(', ', InvoiceParserSetting::parseIds($data['source_from_ids'] ?? null)) ?: null,
             'target_chat_id' => $data['target_chat_id'] ?? null,
             'json_chat_id' => $data['json_chat_id'] ?? null,
+            'image_chat_id' => $data['image_chat_id'] ?? null,
             // Same text as the built-in prompt: store nothing, so later improvements to it apply.
             'prompt' => $prompt === '' || $prompt === trim(InvoiceParserSetting::defaultPrompt()) ? null : $prompt,
             'notify_skipped' => $request->boolean('notify_skipped'),
