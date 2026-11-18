@@ -20,7 +20,7 @@ class InvoiceScheduleTest extends TestCase
         $this->assertSame('* * * * *', $event->expression);
         $this->assertTrue($event->runInBackground, 'runs in the background');
         $this->assertTrue($event->withoutOverlapping);
-        $this->assertSame(10, $event->expiresAt);
+        $this->assertSame(110, $event->expiresAt, 'as long as one run may last (drain lock), so runs never overlap');
     }
 
     public function test_settings_page_explains_the_scheduler_delay(): void

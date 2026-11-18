@@ -10,14 +10,16 @@ use Illuminate\Support\Facades\Cache;
 /** Invoice parser: reads the stored photos one by one — new, stuck or failed (scheduled every minute, in the background). */
 class ProcessInvoices extends Command
 {
-    protected $signature = 'invoices:process {--limit=20 : At most this many photos per run}';
+    protected $signature = 'invoices:process {--limit=20 : At most this many photos per run} {--manual : Run by hand (Admin → Scheduled tasks): does not mark the scheduler as running}';
 
     protected $description = 'Read invoice photos that are still waiting or failed (Admin → Invoice parser)';
 
     public function handle(InvoiceParser $parser): int
     {
         // Heartbeat: while the scheduler runs, the webhook leaves the reading to it.
-        Cache::put(InvoiceParser::HEARTBEAT, now()->toIso8601String(), now()->addMinutes(3));
+        if (! $this->option('manual')) {
+            Cache::put(InvoiceParser::HEARTBEAT, now()->toIso8601String(), now()->addMinutes(3));
+        }
         if (! InvoiceParserSetting::current()->enabled) {
             return self::SUCCESS;
         }

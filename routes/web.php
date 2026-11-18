@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\InvoiceParserSettingController;
 use App\Http\Controllers\Admin\JobApplicationController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\McpSettingController;
+use App\Http\Controllers\Admin\ScheduledTaskController;
 use App\Http\Controllers\Admin\SeoSettingController;
 use App\Http\Controllers\Admin\TelegramSettingsController;
 use App\Http\Controllers\Admin\TelegramUserController;
@@ -113,6 +114,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('mcp', [McpSettingController::class, 'update'])->name('mcp.update');
         Route::post('mcp/token', [McpSettingController::class, 'token'])->middleware('throttle:10,1')->name('mcp.token');
         Route::get('analytics', AnalyticsController::class)->name('analytics');
+        Route::get('scheduled-tasks', [ScheduledTaskController::class, 'index'])->name('scheduled-tasks.index');
+        Route::post('scheduled-tasks/{task}/run', [ScheduledTaskController::class, 'run'])->middleware('throttle:10,1')->where('task', '[a-z-]+')->name('scheduled-tasks.run');
         Route::get('seo', [SeoSettingController::class, 'edit'])->name('seo.edit');
         Route::put('seo', [SeoSettingController::class, 'update'])->name('seo.update');
         Route::post('seo/indexnow', [SeoSettingController::class, 'submitAll'])->middleware('throttle:5,1')->name('seo.indexnow');

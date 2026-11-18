@@ -59,6 +59,12 @@ class TelegramWebhookCommand extends Command
             ['Last error', $status['last_error'] ?? '—'],
         ]);
 
+        if (! $status['connected']) {
+            $this->error('The webhook is not connected to this site ('.$webhook->url().'). Run: php artisan telegram:webhook set');
+
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 
