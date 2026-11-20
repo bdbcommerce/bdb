@@ -299,9 +299,17 @@ final class ScheduledTasks
     /** How many tasks' latest run failed (the menu badge; one query). */
     public static function failedCount(): int
     {
+        return count(self::failedTasks());
+    }
+
+    /** Labels of the tasks whose latest run failed or never finished (stuck): the dashboard warning. One query. */
+    public static function failedTasks(): array
+    {
         return ScheduledTaskRun::whereIn('id',
             ScheduledTaskRun::selectRaw('max(id)')->whereIn('task', array_keys(self::all()))->groupBy('task')
-        )->where('status', 'failed')->count();
+        )->whereIn('status', ['failed', 'running'])->get(['id', 'task', 'status', 'started_at'])
+            ->filter(fn (ScheduledTaskRun $r) => in_array($r->state(), ['failed', 'stuck'], true))
+            ->map(fn (ScheduledTaskRun $r) => self::get($r->task)['label'])->sort()->values()->all();
     }
 
     public static function lastSchedulerRun(): ?Carbon

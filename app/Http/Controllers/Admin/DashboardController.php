@@ -11,6 +11,7 @@ use App\Models\ChatLead;
 use App\Models\Customer;
 use App\Models\Industry;
 use App\Models\KnowledgeEntry;
+use App\Services\Scheduling\ScheduledTasks;
 
 class DashboardController extends Controller
 {
@@ -32,6 +33,13 @@ class DashboardController extends Controller
 
         $recentLeads = ChatLead::latest()->take(5)->get();
 
-        return view('admin.dashboard', compact('stats', 'recentLeads'));
+        // Cron / scheduler health: a warning card when it stopped or a task's last run failed.
+        $scheduler = rescue(fn () => [
+            'running' => ScheduledTasks::schedulerRunning(),
+            'last' => ScheduledTasks::lastSchedulerRun(),
+            'failed' => ScheduledTasks::failedTasks(),
+        ], null, report: false);
+
+        return view('admin.dashboard', compact('stats', 'recentLeads', 'scheduler'));
     }
 }
