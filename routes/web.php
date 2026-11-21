@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\InvoiceParserSettingController;
 use App\Http\Controllers\Admin\JobApplicationController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\McpSettingController;
+use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\ScheduledTaskController;
 use App\Http\Controllers\Admin\SeoSettingController;
 use App\Http\Controllers\Admin\TelegramSettingsController;
@@ -164,6 +165,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('awaiting-replies', [AwaitingReplyController::class, 'index'])->name('awaiting-replies.index');
         Route::get('telegram-chats', [ChatConversationController::class, 'index'])->name('telegram-chats.index');
         Route::post('chat-conversations/{chatConversation}/handled', [AwaitingReplyController::class, 'handled'])->name('chat-conversations.handled');
+        Route::get('sales-report', [SalesReportController::class, 'index'])->name('sales-report.index');
+        Route::put('sales-report', [SalesReportController::class, 'update'])->name('sales-report.update');
+        Route::post('sales-report/run', [SalesReportController::class, 'run'])->middleware('throttle:5,1')->name('sales-report.run');
+        Route::get('sales-report/{salesReport}', [SalesReportController::class, 'show'])->name('sales-report.show');
         Route::get('telegram', [TelegramSettingsController::class, 'edit'])->name('telegram.edit');
         Route::get('telegram/media/{fileId}', [ChatConversationController::class, 'media'])->where('fileId', '[A-Za-z0-9_-]{10,255}')->name('telegram.media');
         Route::post('telegram/connect', [TelegramSettingsController::class, 'connect'])->name('telegram.connect');

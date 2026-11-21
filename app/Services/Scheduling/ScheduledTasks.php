@@ -6,6 +6,7 @@ use App\Models\ChatConversation;
 use App\Models\JobApplication;
 use App\Models\LinkClick;
 use App\Models\PageView;
+use App\Models\SalesReport;
 use App\Models\ScheduledTaskRun;
 use App\Services\AiErrorAlerts;
 use App\Services\Telegram\TelegramApi;
@@ -71,11 +72,19 @@ final class ScheduledTasks
                 'command' => 'site:clear-home-cache', 'parameters' => [],
                 'cron' => '0 4 * * *', 'every' => 'Daily at 04:00',
             ],
+            'sales-report' => [
+                'label' => 'Weekly sales report',
+                'description' => 'Claude Opus 5.5 analyses the last 7 days of Telegram sales chats (leads, orders, results, team rating) and posts one message per conversation plus a summary to the invoice parser\'s source group.',
+                'command' => 'sales:weekly-report', 'parameters' => [],
+                'cron' => '0 9 * * 6', 'timezone' => 'Asia/Tashkent', 'every' => 'Saturday 09:00 (Tashkent)',
+                'overlap' => 120, 'background' => true, 'exclusive' => true, 'max_minutes' => 120,
+                'manual_parameters' => ['--manual' => true],
+            ],
             'prune' => [
                 'label' => 'Delete old records',
-                'description' => 'Deletes conversations after 90 days, CVs after 365 days, analytics after 400 days and task runs after '.ScheduledTaskRun::KEEP_DAYS.' days.',
+                'description' => 'Deletes conversations after 90 days, CVs and sales reports after 365 days, analytics after 400 days and task runs after '.ScheduledTaskRun::KEEP_DAYS.' days.',
                 'command' => 'model:prune',
-                'parameters' => ['--model' => [ChatConversation::class, JobApplication::class, PageView::class, LinkClick::class, ScheduledTaskRun::class]],
+                'parameters' => ['--model' => [ChatConversation::class, JobApplication::class, PageView::class, LinkClick::class, ScheduledTaskRun::class, SalesReport::class]],
                 'cron' => '0 0 * * *', 'every' => 'Daily at 00:00', 'max_minutes' => 30,
             ],
             'webhook-connect' => [
@@ -113,6 +122,7 @@ final class ScheduledTasks
 
             $event = $schedule->command($task['command'], self::cliParameters($task['parameters']))
                 ->cron($task['cron'])
+                ->timezone($task['timezone'] ?? config('app.timezone'))
                 ->description($task['label'])
                 ->sendOutputTo(self::logPath($key));
             if (isset($task['overlap'])) {
@@ -275,7 +285,9 @@ final class ScheduledTasks
     {
         $cron = self::get($key)['cron'] ?? null;
 
-        return $cron ? Carbon::instance((new CronExpression($cron))->getNextRunDate(now()))->setTimezone(config('app.timezone')) : null;
+        $tz = self::get($key)['timezone'] ?? config('app.timezone');
+
+        return $cron ? Carbon::instance((new CronExpression($cron))->getNextRunDate(now($tz), 0, false, $tz))->setTimezone(config('app.timezone')) : null;
     }
 
     public static function latest(string $key): ?ScheduledTaskRun
