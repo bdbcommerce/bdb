@@ -177,13 +177,18 @@ class InvoiceParserTest extends TestCase
     public function test_pdf_and_image_documents_are_read_other_files_ignored(): void
     {
         $this->replies = [$this->invoiceJson()];
-        $doc = fn (int $id, string $mime) => $this->photo($id, self::SOURCE, ['photo' => null, 'document' => ['file_id' => "doc{$id}", 'mime_type' => $mime]]);
+        $doc = fn (int $id, string $mime, ?string $name = 'Счет №1.pdf') => $this->photo($id, self::SOURCE, ['photo' => null, 'document' => ['file_id' => "doc{$id}", 'mime_type' => $mime, 'file_name' => $name]]);
 
-        $this->receive($doc(20, 'application/zip'));
-        $this->assertSame(0, InvoiceMessage::count());
+        $this->receive($doc(20, 'application/zip', 'Счет.zip'));
+        $this->receive($doc(22, 'application/pdf', 'Договор.pdf'));
+        $this->receive($doc(23, 'application/pdf', null));
+        $this->assertSame(0, InvoiceMessage::count(), 'other files, and PDFs not named "Счет…"');
 
-        $this->receive($doc(21, 'image/png'));
+        $this->receive($doc(21, 'image/png', 'счет 5.png'));
         $this->assertSame('doc21', InvoiceMessage::sole()->file_id);
+
+        $this->receive($doc(24, 'application/pdf', 'СЧЁТ-фактура 12.pdf'));
+        $this->assertSame(['doc21', 'doc24'], InvoiceMessage::orderBy('id')->pluck('file_id')->all());
     }
 
     public function test_retryable_failure_is_retried_by_the_scheduler_permanent_one_is_not(): void

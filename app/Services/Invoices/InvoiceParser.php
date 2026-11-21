@@ -23,6 +23,9 @@ class InvoiceParser
     /** Telegram's limit for one message. */
     private const TELEGRAM_MAX = 4096;
 
+    /** Files (not photos) are read only when their name starts with this (lower case, ё as е). */
+    public const FILE_PREFIX = 'счет';
+
     public function __construct(private TelegramApi $telegram, private ClaudeInvoiceReader $reader) {}
 
     /** Is this message from the invoice source chat? Then it belongs to the parser (true), whatever it contains. */
@@ -454,13 +457,35 @@ class InvoiceParser
             return $sizes ? [$sizes[0]['file_id'], 'image/jpeg'] : [null, null];
         }
 
+        // Files (PDF or an image sent as a file) only when named like an invoice: "Счет…" / "Счёт…".
         $doc = $message['document'] ?? null;
         $mime = is_array($doc) ? strtolower((string) ($doc['mime_type'] ?? '')) : '';
-        if (is_string($doc['file_id'] ?? null) && (in_array($mime, ClaudeInvoiceReader::IMAGE_TYPES, true) || $mime === 'application/pdf')) {
+        if (is_string($doc['file_id'] ?? null) && (in_array($mime, ClaudeInvoiceReader::IMAGE_TYPES, true) || $mime === 'application/pdf')
+            && self::isInvoiceFileName($doc['file_name'] ?? null)) {
             return [$doc['file_id'], $mime];
         }
 
         return [null, null];
+    }
+
+    /** File names that start with "Счет" (any case, "ё" too, a Latin "C" typed by mistake; spaces and quotes before it ignored). */
+    public static function isInvoiceFileName(mixed $name): bool
+    {
+        if (! is_string($name) || ! mb_check_encoding($name, 'UTF-8')) {
+            return false;
+        }
+        // macOS sends "ё" decomposed (е + U+0308): compose it, or drop the mark where intl is missing.
+        if (class_exists(\Normalizer::class)) {
+            $name = \Normalizer::normalize($name, \Normalizer::FORM_C) ?: $name;
+        }
+        $name = str_replace("\u{0308}", '', $name);
+        // Leading spaces (NBSP too), invisible marks (zero-width space, BOM, LRM), quotes, brackets, _ . -
+        $name = (string) preg_replace('/^[\s\p{Z}\p{Cf}\p{Pi}\p{Pf}\p{Ps}"\'_.\-]+/u', '', $name);
+        $name = mb_strtolower($name);
+        $name = (string) preg_replace('/^c/u', 'с', $name); // Latin c → Cyrillic с
+        $name = str_replace('ё', 'е', $name);
+
+        return str_starts_with($name, self::FILE_PREFIX);
     }
 
     /** The real type from the file's first bytes (Telegram's header is often application/octet-stream). */

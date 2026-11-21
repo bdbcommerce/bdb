@@ -176,7 +176,7 @@ class SecurityInvoiceParserTest extends TestCase
 
         // HTML uploaded as a "PNG" document: captured with the declared type, served as an inert image.
         app(InvoiceParser::class)->capture(['message_id' => 40, 'chat' => ['id' => (int) self::SOURCE],
-            'document' => ['file_id' => 'html', 'mime_type' => 'image/png']]);
+            'document' => ['file_id' => 'html', 'mime_type' => 'image/png', 'file_name' => 'Счет.png']]);
         $doc = InvoiceMessage::sole();
         $r = $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc))->assertOk();
         $r->assertHeader('Content-Type', 'image/png');
@@ -195,14 +195,14 @@ class SecurityInvoiceParserTest extends TestCase
         // SVG / HTML documents are not captured at all.
         foreach (['image/svg+xml', 'text/html', 'application/xhtml+xml'] as $i => $mime) {
             $this->assertNull(app(InvoiceParser::class)->capture(['message_id' => 50 + $i, 'chat' => ['id' => (int) self::SOURCE],
-                'document' => ['file_id' => 'svg'.$i, 'mime_type' => $mime]]));
+                'document' => ['file_id' => 'svg'.$i, 'mime_type' => $mime, 'file_name' => 'Счет.svg']]));
         }
     }
 
     public function test_html_disguised_as_image_is_not_sent_to_claude_as_html(): void
     {
         $this->fileBody = '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>';
-        app(TelegramBot::class)->handle($this->photo(60, ['photo' => null, 'document' => ['file_id' => 'svg', 'mime_type' => 'image/png']]));
+        app(TelegramBot::class)->handle($this->photo(60, ['photo' => null, 'document' => ['file_id' => 'svg', 'mime_type' => 'image/png', 'file_name' => 'Счет.png']]));
         $this->artisan('invoices:process');
 
         // finfo sees SVG, which is not allowed, so the declared whitelisted type is kept.
