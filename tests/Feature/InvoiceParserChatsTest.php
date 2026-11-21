@@ -182,8 +182,37 @@ class InvoiceParserChatsTest extends TestCase
 
         InvoiceParserSetting::current()->update(['notify_skipped' => true]);
         $this->photo(2);
-        $this->assertSame([self::TARGET, self::JSON], array_column($this->sent, 'chat'));
-        $this->assertStringContainsString('handwritten', html_entity_decode($this->sent[1]['text']));
+        // The invoice chat (accountants) never gets skips or errors: only the JSON recipient.
+        $this->assertSame([self::JSON], array_column($this->sent, 'chat'));
+        $this->assertStringContainsString('handwritten', html_entity_decode($this->sent[0]['text']));
+    }
+
+    public function test_old_settings_with_the_same_chat_send_no_errors_or_skips_there(): void
+    {
+        InvoiceParserSetting::current()->update(['json_chat_id' => self::TARGET, 'notify_skipped' => true]); // saved before the rule
+        $this->reply = json_encode(['status' => 'skipped', 'reason' => 'handwritten']);
+        $this->photo(1);
+        $this->reply = 'not json';
+        $this->photo(2);
+        InvoiceMessage::where('message_id', 2)->update(['status' => 'failed', 'attempts' => InvoiceMessage::MAX_ATTEMPTS - 1, 'updated_at' => now()->subHour()]);
+        $this->artisan('invoices:process'); // the last attempt: the error JSON would go out now
+        $this->assertSame(InvoiceMessage::MAX_ATTEMPTS, InvoiceMessage::where('message_id', 2)->value('attempts'));
+        $this->assertSame('failed', InvoiceMessage::where('message_id', 2)->value('status'));
+        $this->assertSame([], $this->sent);
+    }
+
+    public function test_invoice_chat_cannot_be_the_json_recipient_or_the_alerts_chat(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $form = ['enabled' => '1', 'model' => 'claude-opus-5-5', 'source_chat_id' => self::SOURCE, 'target_chat_id' => self::TARGET, 'json_chat_id' => self::JSON];
+
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['json_chat_id' => self::TARGET] + $form)->assertSessionHasErrors('json_chat_id');
+
+        config(['services.telegram.alert_chat_id' => '-1004444444444', 'services.telegram.chat_id' => '-1005555555555']);
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['target_chat_id' => '-1004444444444'] + $form)->assertSessionHasErrors('target_chat_id');
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['target_chat_id' => '-1005555555555'] + $form)->assertSessionHasErrors('target_chat_id');
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $form)->assertSessionHasNoErrors();
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), ['target_chat_id' => ''] + $form)->assertSessionHasNoErrors();
     }
 
     public function test_settings_form_saves_the_new_fields_and_shows_the_env_key_label(): void

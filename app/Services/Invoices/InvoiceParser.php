@@ -162,15 +162,9 @@ class InvoiceParser
 
             if ($data['status'] === 'skipped') {
                 $invoice->update(['status' => 'skipped', 'result' => $data, 'processed_at' => now()] + $usage);
-                if ($settings->notify_skipped) {
-                    if (filled($settings->target_chat_id)) {
-                        // <code>: Telegram makes no links or @mentions out of text read from the image.
-                        $this->telegram->sendMessage($settings->target_chat_id, '⏭ Hisob-faktura emas: <code>'.e((string) ($data['reason'] ?? '')).'</code>',
-                            ['parse_mode' => 'HTML', 'link_preview_options' => ['is_disabled' => true]]);
-                    }
-                    if (filled($settings->json_chat_id)) {
-                        $this->sendJson($invoice, $settings->json_chat_id, $data);
-                    }
+                // Only the JSON recipient hears about it: the invoice chat (accountants) gets invoices only, never errors or skips.
+                if ($settings->notify_skipped && filled($settings->json_chat_id) && ! self::isInvoiceChat($settings, $settings->json_chat_id)) {
+                    $this->sendJson($invoice, $settings->json_chat_id, $data);
                 }
 
                 return;
@@ -437,14 +431,21 @@ class InvoiceParser
             + ($retryable ? [] : ['attempts' => InvoiceMessage::MAX_ATTEMPTS]));
 
         // No attempts left: the JSON recipient gets the error as JSON (best effort).
-        $to = InvoiceParserSetting::current()->json_chat_id;
-        if ($invoice->attempts >= InvoiceMessage::MAX_ATTEMPTS && filled($to)) {
+        $settings = InvoiceParserSetting::current();
+        $to = $settings->json_chat_id;
+        if ($invoice->attempts >= InvoiceMessage::MAX_ATTEMPTS && filled($to) && ! self::isInvoiceChat($settings, $to)) {
             try {
                 $this->sendJson($invoice, $to, [], self::errorJson($invoice));
             } catch (Throwable $e) {
                 report($e);
             }
         }
+    }
+
+    /** True when $chat is the invoice chat (accountants): errors and skip notes never go there (settings saved before that rule). */
+    private static function isInvoiceChat(InvoiceParserSetting $settings, ?string $chat): bool
+    {
+        return filled($settings->target_chat_id) && trim((string) $chat) === trim((string) $settings->target_chat_id);
     }
 
     /** [file_id, mime] of the largest photo size, an image document or a PDF; [null, null] otherwise. */

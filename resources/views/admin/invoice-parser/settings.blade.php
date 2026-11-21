@@ -97,7 +97,7 @@
             <p class="text-xs text-slate-400">Group IDs start with -100. To find one, add the bot to the group, post a message, and see the chat under AI Assistant → Conversations, or use a bot such as @getidsbot. Messages in the source chat are only read for invoices — they are not recorded as conversations or answered, so use a dedicated group (not a channel, and not your own private chat with the bot).</p>
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="notify_skipped" value="1" @checked(old('notify_skipped', $settings->notify_skipped)) class="rounded border-slate-300">
-                Also tell the invoice chat / JSON recipient when a photo is not an invoice
+                Also tell the JSON recipient when a photo is not an invoice (the invoice chat only ever gets invoices — no errors or skipped photos)
             </label>
         </div>
 

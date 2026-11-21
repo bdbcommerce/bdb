@@ -33,8 +33,10 @@ class InvoiceParserSettingController extends Controller
             'source_chat_id' => $chatId,
             'source_from_ids' => ['nullable', 'string', 'max:1000', 'regex:/^[\s,;]*(-?\d{1,20}([\s,;]+-?\d{1,20})*)?[\s,;]*$/'],
             'seller_inns' => ['nullable', 'string', 'max:1000', 'regex:/^[\s,;]*(\d{1,20}([\s,;]+\d{1,20})*)?[\s,;]*$/'],
-            'target_chat_id' => [...$chatId, 'different:source_chat_id'],
-            'json_chat_id' => [...$chatId, 'different:source_chat_id'],
+            // The invoice chat (accountants) gets invoices only: never the JSON/error recipient or the admin alerts chat.
+            'target_chat_id' => [...$chatId, 'different:source_chat_id',
+                Rule::notIn(array_values(array_filter([config('services.telegram.alert_chat_id'), config('services.telegram.chat_id')], 'filled')))],
+            'json_chat_id' => [...$chatId, 'different:source_chat_id', 'different:target_chat_id'],
             'prompt' => ['nullable', 'string', 'max:20000'],
             'notify_skipped' => ['boolean'],
             'daily_limit' => ['nullable', 'integer', 'min:1', 'max:5000'], // empty = no limit
@@ -43,7 +45,8 @@ class InvoiceParserSettingController extends Controller
             'target_chat_id.regex' => 'A chat ID is a number, e.g. -1001234567890 for a group.',
             'target_chat_id.different' => 'The invoice chat must differ from the source chat.',
             'json_chat_id.regex' => 'A chat ID is a number, e.g. -1001234567890 for a group.',
-            'json_chat_id.different' => 'The JSON recipient must differ from the source chat.',
+            'json_chat_id.different' => 'The JSON recipient must differ from the source chat and the invoice chat (errors go to the JSON recipient, and the invoice chat gets invoices only).',
+            'target_chat_id.not_in' => 'This is the admin alerts chat (TELEGRAM_ALERT_CHAT_ID / TELEGRAM_CHAT_ID): alerts would reach the invoice chat. Use another group.',
             'seller_inns.regex' => 'Seller STIRs are numbers separated by commas, e.g. 301234567, 302345678.',
             'source_from_ids.regex' => 'From IDs are numbers separated by commas, e.g. 123456789, 987654321.',
         ]);

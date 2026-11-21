@@ -159,7 +159,7 @@ class SecurityInvoiceParserTest extends TestCase
 
     public function test_skipped_reason_is_escaped_in_the_note_to_the_destination_chat(): void
     {
-        InvoiceParserSetting::current()->update(['notify_skipped' => true]);
+        InvoiceParserSetting::current()->update(['notify_skipped' => true, 'json_chat_id' => '777000']);
         $this->replies = [json_encode(['status' => 'skipped', 'reason' => '<a href="https://evil.example">x</a>'])];
         app(TelegramBot::class)->handle($this->photo(30));
         $this->artisan('invoices:process');

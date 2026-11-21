@@ -176,16 +176,12 @@ class InvoiceParserChatsQaTest extends TestCase
     {
         $admin = User::factory()->create(['is_admin' => true]);
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => self::SOURCE]))
-            ->assertSessionHasErrors(['json_chat_id' => 'The JSON recipient must differ from the source chat.']);
+            ->assertSessionHasErrors(['json_chat_id' => 'The JSON recipient must differ from the source chat and the invoice chat (errors go to the JSON recipient, and the invoice chat gets invoices only).']);
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => 'abc']))
             ->assertSessionHasErrors(['json_chat_id' => 'A chat ID is a number, e.g. -1001234567890 for a group.']);
-        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => self::TARGET]))->assertSessionHasNoErrors();
-        $this->assertSame(self::TARGET, InvoiceParserSetting::current()->json_chat_id);
-
-        // Same chat for both: two messages there.
-        $this->photo(1);
-        $this->assertSame([self::TARGET, self::TARGET], array_column($this->sent, 'chat'));
-        $this->assertSame('sent', InvoiceMessage::sole()->status);
+        // Same chat for both is refused: errors go to the JSON recipient, and the invoice chat gets invoices only.
+        $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['json_chat_id' => self::TARGET]))->assertSessionHasErrors('json_chat_id');
+        $this->assertNotSame(self::TARGET, InvoiceParserSetting::current()->json_chat_id);
 
         // Disabled with nothing set is allowed; enabled with neither result chat is not.
         $this->actingAs($admin)->put(route('admin.invoice-parser.update'), $this->form(['enabled' => '0', 'target_chat_id' => '', 'json_chat_id' => '']))->assertSessionHasNoErrors();

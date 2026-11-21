@@ -145,7 +145,13 @@ class InvoiceParserTest extends TestCase
 
         InvoiceParserSetting::current()->update(['notify_skipped' => true]);
         $this->receive($this->photo(11));
-        Http::assertSent(fn ($r) => str_contains($r->url(), '/sendMessage') && str_contains($r['text'], 'Hisob-faktura emas: <code>receipt</code>'));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '/sendMessage') && (string) $r['chat_id'] === self::TARGET, 'the invoice chat never gets skip notes');
+
+        InvoiceParserSetting::current()->update(['json_chat_id' => '777000']);
+        $this->replies = ['{"status": "skipped", "reason": "receipt"}'];
+        $this->receive($this->photo(12));
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/sendMessage') && (string) $r['chat_id'] === '777000' && str_contains($r['text'], 'receipt'));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '/sendMessage') && (string) $r['chat_id'] === self::TARGET);
     }
 
     public function test_text_and_other_chats_are_left_alone_and_redelivery_is_ignored(): void
