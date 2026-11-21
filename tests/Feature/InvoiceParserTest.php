@@ -189,6 +189,13 @@ class InvoiceParserTest extends TestCase
 
         $this->receive($doc(24, 'application/pdf', 'СЧЁТ-фактура 12.pdf'));
         $this->assertSame(['doc21', 'doc24'], InvoiceMessage::orderBy('id')->pluck('file_id')->all());
+
+        // A PDF the sender's app sent without a PDF type still counts by its name.
+        $this->receive($doc(25, 'application/octet-stream', 'Счет 7.PDF'));
+        $this->receive($doc(26, '', 'Счет 8.pdf'));
+        $this->receive($doc(27, 'application/octet-stream', 'Счет 9.docx'));
+        $this->receive($doc(28, 'application/octet-stream', 'Договор.pdf'));
+        $this->assertSame(['doc21', 'doc24', 'doc25', 'doc26'], InvoiceMessage::orderBy('id')->pluck('file_id')->all());
     }
 
     public function test_retryable_failure_is_retried_by_the_scheduler_permanent_one_is_not(): void

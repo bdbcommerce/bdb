@@ -458,10 +458,17 @@ class InvoiceParser
         }
 
         // Files (PDF or an image sent as a file) only when named like an invoice: "Счет…" / "Счёт…".
+        // A ".pdf" name counts as a PDF whatever type the sender's app declared (often application/octet-stream);
+        // the real type is checked from the downloaded bytes.
         $doc = $message['document'] ?? null;
         $mime = is_array($doc) ? strtolower((string) ($doc['mime_type'] ?? '')) : '';
+        $name = is_array($doc) ? ($doc['file_name'] ?? null) : null;
+        if ($mime !== 'application/pdf' && ! in_array($mime, ClaudeInvoiceReader::IMAGE_TYPES, true)
+            && is_string($name) && preg_match('/\.pdf\s*$/iu', $name)) {
+            $mime = 'application/pdf';
+        }
         if (is_string($doc['file_id'] ?? null) && (in_array($mime, ClaudeInvoiceReader::IMAGE_TYPES, true) || $mime === 'application/pdf')
-            && self::isInvoiceFileName($doc['file_name'] ?? null)) {
+            && self::isInvoiceFileName($name)) {
             return [$doc['file_id'], $mime];
         }
 
@@ -491,10 +498,22 @@ class InvoiceParser
     /** The real type from the file's first bytes (Telegram's header is often application/octet-stream). */
     private function mime(?string $declared, ?string $header, string $body): ?string
     {
-        $sniffed = (new \finfo(FILEINFO_MIME_TYPE))->buffer(substr($body, 0, 4096)) ?: '';
-        foreach ([$sniffed, $header, $declared] as $type) {
+        $ok = fn (string $t) => in_array($t, ClaudeInvoiceReader::IMAGE_TYPES, true) || $t === 'application/pdf';
+        $sniffed = strtolower((string) ((new \finfo(FILEINFO_MIME_TYPE))->buffer(substr($body, 0, 4096)) ?: ''));
+        if ($ok($sniffed)) {
+            return $sniffed;
+        }
+        // The bytes are clearly something else (zip, exe, text…): refuse whatever the name or header says.
+        if (! in_array($sniffed, ['', 'application/octet-stream'], true)) {
+            return null;
+        }
+        foreach ([$header, $declared] as $type) {
             $type = strtolower(trim(explode(';', (string) $type)[0]));
-            if (in_array($type, ClaudeInvoiceReader::IMAGE_TYPES, true) || $type === 'application/pdf') {
+            // A PDF only with the PDF signature near the start (a ".pdf" name alone is not enough).
+            if ($type === 'application/pdf' && ! str_contains(substr($body, 0, 1024), '%PDF-')) {
+                continue;
+            }
+            if ($ok($type)) {
                 return $type;
             }
         }
