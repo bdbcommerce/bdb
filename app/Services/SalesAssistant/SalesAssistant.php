@@ -9,6 +9,7 @@ use App\Models\AiShadowDraft;
 use App\Models\AiTrace;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\ClientPerson;
 use App\Models\ClientRequest;
 use App\Models\InvoiceParserSetting;
 use App\Models\SalesAssistantSetting;
@@ -432,6 +433,10 @@ TXT;
             'Customer: '.($earlier || $user?->phone ? 'returning' : 'new').'; Telegram name: '.($user?->profile_name ?: '—').($user?->username ? ' (@'.$user->username.')' : ''),
             'Known contacts: name '.($user?->name ?: '—').', phone '.($user?->phone ?: '—').', company '.($user?->company ?: '—').', city '.($state['customer']['city'] ?? '—'),
         ];
+        // The client portrait (Admin → AI team → Client portraits): who they are, their company, who else decides there.
+        if ($user && ($person = rescue(fn () => ClientPerson::current($user), null, false))) {
+            array_push($profile, ...$person->forPrompt());
+        }
         if (filled($state['handed_over'] ?? null)) {
             $profile[] = 'Already handed to the manager: '.$state['handed_over'];
         }
@@ -766,7 +771,8 @@ TXT;
             return 'close';
         }
 
-        return ! $reminded && $since->lte($now->copy()->subHours($settings->remind_after_hours)) && $settings->isWorkingTime($now) ? 'remind' : null;
+        // "Do not contact" on the client card: no reminder (the unfinished request still reaches the managers).
+        return ! $reminded && $since->lte($now->copy()->subHours($settings->remind_after_hours)) && $settings->isWorkingTime($now) && ! self::doNotContact($conversation) ? 'remind' : null;
     }
 
     /** Messages of a conversation without late edits (those are appended but never count as a new message). */
@@ -844,9 +850,19 @@ TXT;
     }
 
     /** A cancelled request whose customer agreed to hear from us again, and the day has come (sent in working hours only). */
+    /** The customer's client card says "Do not contact": the assistant never writes to them first. */
+    public static function doNotContact(ChatConversation $conversation): bool
+    {
+        return (bool) rescue(fn () => $conversation->external_id && ClientPerson::where('status', 'do_not_contact')
+            ->whereHas('telegramUser', fn ($q) => $q->where('telegram_id', $conversation->external_id))->exists(), false, false);
+    }
+
     public static function followUpDue(ChatConversation $conversation, SalesAssistantSetting $settings, ?Carbon $now = null): bool
     {
         $now ??= now();
+        if (self::doNotContact($conversation)) {
+            return false;
+        }
         $state = (array) ($conversation->sales_state ?? []);
 
         return isset($state['follow_up_at']) && ! isset($state['follow_up_sent']) && Carbon::parse($state['follow_up_at'])->lte($now) && $settings->isWorkingTime($now);

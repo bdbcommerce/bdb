@@ -16,6 +16,8 @@ use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\ChatConversationController;
 use App\Http\Controllers\Admin\ChatLeadController;
+use App\Http\Controllers\Admin\ClientController;
+use App\Http\Controllers\Admin\ClientPersonController;
 use App\Http\Controllers\Admin\ClientRequestController;
 use App\Http\Controllers\Admin\ColorThemeController;
 use App\Http\Controllers\Admin\CompanyInfoController;
@@ -182,6 +184,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('ai-team/sandbox', [AiTraceController::class, 'start'])->name('ai-team.sandbox.start');
         Route::post('ai-team/sandbox/{chat}/message', [AiTraceController::class, 'message'])->middleware('throttle:10,1')->name('ai-team.sandbox.message');
         Route::resource('ai-test-cases', AiTestCaseController::class)->except('show');
+        Route::resource('clients', ClientController::class);
+        Route::resource('client-people', ClientPersonController::class)->except(['index', 'show'])->parameters(['client-people' => 'clientPerson']);
+        Route::post('client-people/{clientPerson}/move', [ClientPersonController::class, 'move'])->name('client-people.move');
         Route::post('ai-employees/{aiEmployee}/tests/{which}', [AiTestCaseController::class, 'run'])->whereIn('which', ['draft', 'published'])->middleware('throttle:10,1')->name('ai-employees.tests');
         Route::get('ai-test-runs/{run}', [AiTestCaseController::class, 'showRun'])->name('ai-test-runs.show');
         Route::get('ai-team/shadow', [AiShadowDraftController::class, 'index'])->name('ai-team.shadow');

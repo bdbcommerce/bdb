@@ -162,6 +162,20 @@
                 <button type="submit" class="w-full bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700 transition-colors">Save</button>
             </div>
         </form>
+
+        @php $portrait = \App\Models\ClientPerson::current($user); @endphp
+        <section class="bg-white border border-slate-200 rounded-xl p-4 space-y-2 text-sm" aria-labelledby="portrait-h">
+            <h2 id="portrait-h" class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Client portrait</h2>
+            @if ($portrait)
+                <p><a href="{{ route('admin.client-people.edit', $portrait) }}" class="font-medium text-slate-900 underline">{{ $portrait->name }}</a>
+                    <span class="text-slate-600">{{ collect([$portrait->position, $portrait->part ? \App\Models\ClientPerson::PARTS[$portrait->part] ?? null : null])->filter()->implode(' · ') }}</span></p>
+                @if ($portrait->client)<p class="text-slate-600">at <a href="{{ route('admin.clients.show', $portrait->client) }}" class="underline">{{ $portrait->client->name }}</a></p>@endif
+                <p class="text-xs text-slate-500">{{ \App\Models\ClientPerson::STATUSES[$portrait->status] ?? $portrait->status }} · the AI team reads this portrait.</p>
+            @else
+                <p class="text-slate-600">No portrait yet.</p>
+                <a href="{{ route('admin.client-people.create', ['telegram_user' => $user->id]) }}" class="inline-block text-sm rounded-lg border border-slate-300 px-3 py-1.5 hover:border-slate-500">Create a portrait (filled in from the chat)</a>
+            @endif
+        </section>
     </aside>
 
     {{-- Conversation history --}}
