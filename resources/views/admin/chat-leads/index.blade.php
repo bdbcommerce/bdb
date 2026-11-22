@@ -16,7 +16,11 @@
                 <div id="lead-{{ $lead->id }}" class="p-4 hover:bg-slate-50 target:bg-amber-50 scroll-mt-20" x-data="{ open: false }">
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                         <span class="font-medium text-slate-900">{{ $lead->name }}</span>
-                        <a href="tel:{{ $lead->phone }}" class="text-sm text-slate-600 hover:text-slate-900">{{ $lead->phone }}</a>
+                        @if(filled($lead->phone))
+                            <a href="tel:{{ $lead->phone }}" class="text-sm text-slate-600 hover:text-slate-900">{{ $lead->phone }}</a>
+                        @else
+                            <span class="text-sm text-slate-400">no phone yet</span>
+                        @endif
                         <span class="text-xs uppercase text-slate-400">{{ $lead->locale }}</span>
                         @if($lead->channel === 'telegram')
                             <span class="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-300 text-slate-600">Telegram</span>

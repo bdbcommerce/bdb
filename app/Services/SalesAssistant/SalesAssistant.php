@@ -43,6 +43,9 @@ class SalesAssistant
     /** A customer message older than this is never answered by the assistant (e.g. after a pause or the first deploy). */
     public const MAX_AGE_HOURS = 12;
 
+    /** Stages in which the customer still owes us an answer (a silence there gets a reminder, then closes as unfinished). */
+    public const OPEN_STAGES = ['greeting', 'need', 'questions', 'contacts', 'confirm'];
+
     /** Messages of the conversation Claude sees. */
     private const HISTORY = 60;
 
@@ -201,6 +204,12 @@ TXT;
 
     private function allowed(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user): bool
     {
+        return $this->mayWrite($conversation, $settings, $user) && self::decision($conversation, $settings) !== 'no';
+    }
+
+    /** The assistant is on for this customer and channel, and the Premium account lets the bot reply. */
+    private function mayWrite(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user): bool
+    {
         if (! in_array($conversation->channel, ['telegram', 'business'], true) || ! $settings->enabledFor($conversation->channel, $user, $conversation->external_id)) {
             return false;
         }
@@ -211,10 +220,10 @@ TXT;
             }
         }
 
-        return self::decision($conversation, $settings) !== 'no';
+        return true;
     }
 
-    private function turn(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user): bool
+    private function turn(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user, ?string $task = null): bool
     {
         $key = InvoiceParserSetting::current()->apiKey();
         if (! $key) {
@@ -234,7 +243,8 @@ TXT;
         Cache::increment($chatKey);
         Cache::increment("sales-assistant-turns:{$day}");
 
-        [$data, $images, $query, $photoIds] = $this->data($conversation, $settings, $user);
+        $seen = count($conversation->messages ?? []); // what this turn shows Claude
+        [$data, $images, $query, $photoIds] = $this->data($conversation, $settings, $user, $task);
         if ($photoIds) { // a picture is sent to Claude once, also when that turn stays silent
             $conversation->sales_state = ['seen_photos' => array_slice([...(array) (($conversation->sales_state ?? [])['seen_photos'] ?? []), ...$photoIds], -50)] + (array) ($conversation->sales_state ?? []);
             $conversation->save();
@@ -259,11 +269,11 @@ TXT;
             return false;
         }
 
-        return $this->apply($conversation, $user, $json);
+        return $this->apply($conversation, $user, $json, $seen);
     }
 
     /** @return array{0: string, 1: list<array{type: string, data: string}>, 2: string, 3: list<string>} the data text, photos, search words, photo file IDs */
-    private function data(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user): array
+    private function data(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user, ?string $task = null): array
     {
         $tz = SalesAssistantSetting::TZ;
         $state = (array) ($conversation->sales_state ?? []);
@@ -329,10 +339,10 @@ TXT;
             $profile[] = 'Earlier request still with the manager: '.($open->sales_state['handed_over'] ?? '');
         }
 
-        return ["# CONVERSATION CONTEXT\n".implode("\n", $profile)."\n\n# CONVERSATION\n".implode("\n", $lines)."\n\nWrite your next turn as JSON.", $images, trim($query), $photos];
+        return ["# CONVERSATION CONTEXT\n".implode("\n", $profile)."\n\n# CONVERSATION\n".implode("\n", $lines).($task ? "\n\n# TASK NOW\n{$task}" : '')."\n\nWrite your next turn as JSON.", $images, trim($query), $photos];
     }
 
-    private function apply(ChatConversation $conversation, ?TelegramUser $user, array $json): bool
+    private function apply(ChatConversation $conversation, ?TelegramUser $user, array $json, int $seen): bool
     {
         $s = fn ($v, int $max = 200) => is_scalar($v) ? mb_substr(trim((string) $v), 0, $max) : '';
         $state = (array) ($conversation->sales_state ?? []);
@@ -352,6 +362,7 @@ TXT;
             'summary' => $s($json['summary'] ?? '', 800),
             'updated_at' => now()->toIso8601String(),
         ]);
+        unset($state['closed_at']); // talking again: a later silence gets its own reminder and close
 
         // Contacts go to the customer card (never overwriting what an admin or a verified share set).
         if ($user) {
@@ -373,6 +384,7 @@ TXT;
             $state['cancelled_at'] = now()->toIso8601String();
             if (! empty($json['follow_up_agreed'])) {
                 $state['follow_up_at'] = now()->addDays(SalesAssistantSetting::current()->follow_up_days)->toIso8601String();
+                unset($state['follow_up_sent']); // a new agreement gets its own follow-up
             }
         }
 
@@ -384,10 +396,17 @@ TXT;
         }
 
         $phone = $user?->phone ?: TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? ''));
-        if (! empty($json['confirmed']) && $phone && $state['summary'] !== '' && md5($state['summary']) !== ($state['lead_hash'] ?? null)) {
+        $partial = ! empty($state['lead_partial']);
+        if (! empty($json['confirmed']) && $phone && $state['summary'] !== '' && ($partial || md5($state['summary']) !== ($state['lead_hash'] ?? null))) {
             $open = isset($state['lead_id']) ? ChatLead::whereKey($state['lead_id'])->where('is_handled', false)->first() : null;
             $leadsToday = 'sales-assistant-leads:'.now()->format('Y-m-d').":{$conversation->external_id}";
-            if ($open) {
+            unset($state['lead_partial']);
+            if ($open && $partial) {
+                // The unfinished request is now confirmed: it gets the phone and the sales chat a "New request" post.
+                $this->handOver($conversation, $user, $state, $phone, verified: $user?->phone === $phone && $user->hasVerifiedPhone(), existing: $open);
+                $state['lead_hash'] = md5($state['summary']);
+                $state['handed_over'] = $state['summary'];
+            } elseif ($open) {
                 // One open request per conversation: a later confirmation updates it, without a new post.
                 $open->update(['topic' => mb_substr($state['summary'], 0, 1000)]);
                 $state['lead_hash'] = md5($state['summary']);
@@ -407,9 +426,11 @@ TXT;
 
         $text = $s($json['reply'] ?? '', 3500);
         $conversation->refresh();
-        $lastRole = collect($conversation->messages ?? [])->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit']))->last()['role'] ?? null;
-        if (in_array($lastRole, ['owner', 'admin'], true)) {
-            return false; // a manager answered while Claude was thinking
+        $newer = collect(array_slice($conversation->messages ?? [], $seen))->filter(fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit']));
+        if ($newer->contains(fn ($m) => in_array($m['role'] ?? null, ['user', 'owner', 'admin'], true))) {
+            // Someone wrote while Claude was thinking: a manager took over, or the customer said more — this reply
+            // did not see it, so it is dropped (the customer's message is answered by the next turn).
+            return false;
         }
 
         return $text !== '' && $this->send($conversation, $text, $language, ! empty($json['ask_phone_button']));
@@ -439,25 +460,219 @@ TXT;
         return true;
     }
 
+    /**
+     * What a silent customer is due: 'remind' (once, after remind_after_hours, in working hours) or 'close'
+     * (after close_after_hours: what was collected goes to the manager as an unfinished request). Only when the
+     * assistant spoke last in an open stage — never after a manager, "Mark answered", a cancel or the follow-up.
+     */
+    public static function nudgeDue(ChatConversation $conversation, SalesAssistantSetting $settings, ?Carbon $now = null): ?string
+    {
+        $now ??= now();
+        $state = (array) ($conversation->sales_state ?? []);
+        if (! in_array($state['stage'] ?? null, self::OPEN_STAGES, true) || ! empty($state['closed_at'])) {
+            return null;
+        }
+        $raw = $conversation->messages ?? [];
+        $visible = array_values(array_filter($raw, fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit'])));
+        $last = end($visible);
+        $counted = self::counted($raw); // late edits are appended but are not new messages
+        if (! $last || ($last['role'] ?? null) !== 'assistant' || (int) $conversation->handled_count >= $counted
+            || ($state['follow_up_sent'] ?? null) === $counted || ! collect($visible)->contains(fn ($m) => ($m['role'] ?? null) === 'user')) {
+            return null;
+        }
+        $reminded = ($state['reminded'] ?? null) === $counted;
+        $since = Carbon::parse($reminded ? ($state['silent_since'] ?? $last['at'] ?? $conversation->updated_at) : ($last['at'] ?? $conversation->updated_at));
+        if ($since->lte($now->copy()->subHours($settings->close_after_hours))) {
+            return 'close';
+        }
+
+        return ! $reminded && $since->lte($now->copy()->subHours($settings->remind_after_hours)) && $settings->isWorkingTime($now) ? 'remind' : null;
+    }
+
+    /** Messages of a conversation without late edits (those are appended but never count as a new message). */
+    private static function counted(array $messages): int
+    {
+        return collect($messages)->reject(fn ($m) => ! empty($m['late_edit']))->count();
+    }
+
+    /** Saves sales_state only, without touching updated_at (which decides where the next message is recorded). */
+    private static function saveState(ChatConversation $conversation, array $state): void
+    {
+        $conversation->sales_state = $state;
+        $conversation->timestamps = false;
+        try {
+            $conversation->save();
+        } finally {
+            $conversation->timestamps = true;
+        }
+    }
+
+    /** Sends the reminder or closes the silent conversation (see nudgeDue). Returns what was done. */
+    public function nudge(ChatConversation $conversation): ?string
+    {
+        $lock = Cache::lock('sales-assistant:'.$conversation->id, 150);
+        if (! $lock->get()) {
+            return null;
+        }
+        try {
+            $conversation->refresh();
+            $settings = SalesAssistantSetting::current();
+            $user = TelegramUser::where('telegram_id', $conversation->external_id)->first();
+            $due = self::nudgeDue($conversation, $settings);
+            if ($due === null || ($due === 'remind' ? ! $this->mayWrite($conversation, $settings, $user) : ! $settings->enabledFor($conversation->channel, $user, $conversation->external_id))) {
+                return null;
+            }
+            $state = (array) ($conversation->sales_state ?? []);
+            $visible = array_values(array_filter($conversation->messages ?? [], fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit'])));
+            $silentSince = end($visible)['at'] ?? now()->toIso8601String();
+
+            if ($due === 'close') {
+                $open = isset($state['lead_id']) && ChatLead::whereKey($state['lead_id'])->where('is_handled', false)->exists();
+                // Already with the manager (even if handled since): nothing new to hand over.
+                $same = isset($state['lead_hash']) && md5((string) ($state['summary'] ?? '')) === $state['lead_hash'];
+                if (! $open && ! $same && (filled($state['summary'] ?? null) || ! empty($state['items']))) {
+                    $phone = $user?->phone ?: (TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? '')) ?? '');
+                    $state['summary'] = filled($state['summary'] ?? null) ? $state['summary'] : 'Not finished: see the items.';
+                    $lead = $this->handOver($conversation, $user, $state, $phone, verified: $phone !== '' && $user?->phone === $phone && $user->hasVerifiedPhone(), partial: true);
+                    $state['lead_id'] = $lead->id;
+                    $state['lead_hash'] = md5($state['summary']);
+                    $state['handed_over'] = $state['summary'];
+                    $state['lead_partial'] = true; // a later confirmation completes this lead
+                }
+                $state['closed_at'] = now()->toIso8601String();
+                self::saveState($conversation, $state);
+
+                return 'closed';
+            }
+
+            $count = count($conversation->messages ?? []);
+            self::saveState($conversation, ['reminded' => self::counted($conversation->messages ?? []), 'silent_since' => $silentSince] + $state);
+            $hours = $settings->remind_after_hours;
+            $this->turn($conversation, $settings, $user, "The customer has not answered your last message for about {$hours} hours. Write ONE short, friendly reminder (1–2 sentences) in the customer's language: what you still need from them to pass the request to the manager (the open question, or the phone number). No pressure, do not repeat the whole summary, do not greet again. If nothing is missing, leave the reply empty.");
+            $conversation->refresh();
+            $after = (array) ($conversation->sales_state ?? []);
+            $newer = array_slice($conversation->messages ?? [], $count);
+            // The reminder (or a silent turn) is the one reminder. A customer message that arrived meanwhile dropped the
+            // reminder (apply) and is answered by the next tick: `handled` stays before it.
+            self::saveState($conversation, ['reminded' => self::counted($conversation->messages ?? []), 'silent_since' => $silentSince,
+                'handled' => max($count, (int) ($after['handled'] ?? 0))] + $after);
+
+            return 'reminded';
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** A cancelled request whose customer agreed to hear from us again, and the day has come (sent in working hours only). */
+    public static function followUpDue(ChatConversation $conversation, SalesAssistantSetting $settings, ?Carbon $now = null): bool
+    {
+        $now ??= now();
+        $state = (array) ($conversation->sales_state ?? []);
+
+        return isset($state['follow_up_at']) && ! isset($state['follow_up_sent']) && Carbon::parse($state['follow_up_at'])->lte($now) && $settings->isWorkingTime($now);
+    }
+
+    /**
+     * The agreed follow-up: the assistant writes to the customer, then the sales chat is asked to send the offer.
+     * Dropped when the customer wrote again after cancelling (the conversation went on by itself).
+     */
+    public function followUp(ChatConversation $conversation): bool
+    {
+        $lock = Cache::lock('sales-assistant:'.$conversation->id, 150);
+        if (! $lock->get()) {
+            return false;
+        }
+        try {
+            $conversation->refresh();
+            $settings = SalesAssistantSetting::current();
+            if (! self::followUpDue($conversation, $settings)) {
+                return false;
+            }
+            $state = (array) $conversation->sales_state;
+            unset($state['follow_up_at']);
+            $cancelled = Carbon::parse($state['cancelled_at'] ?? $conversation->sales_state['follow_up_at']);
+            $sessions = ChatConversation::where('channel', $conversation->channel)->where('external_id', $conversation->external_id)->where('id', '>=', $conversation->id)->get();
+            $wrote = fn (array $roles) => $sessions->contains(fn (ChatConversation $c) => collect($c->messages ?? [])->contains(fn ($m) => is_array($m)
+                && in_array($m['role'] ?? null, $roles, true) && empty($m['late_edit']) && empty($m['deleted']) && isset($m['at']) && Carbon::parse($m['at'])->gt($cancelled)));
+            $user = TelegramUser::where('telegram_id', $conversation->external_id)->first();
+            $days = $settings->follow_up_days;
+            if ($wrote(['user']) || ! $settings->enabledFor($conversation->channel, $user, $conversation->external_id)) {
+                self::saveState($conversation, ['follow_up_sent' => 'skipped'] + $state); // the conversation went on by itself
+
+                return false;
+            }
+            // A manager has been in touch since (or the chat moved to a newer session, or the bot may not write there):
+            // the assistant stays out, the sales chat is reminded of the agreed offer.
+            if ($wrote(['owner', 'admin']) || $sessions->count() > 1 || ! $this->mayWrite($conversation, $settings, $user)) {
+                self::saveState($conversation, ['follow_up_sent' => 'manager'] + $state);
+                $this->followUpNote($conversation, $user, $state, $days, 'manager');
+
+                return true;
+            }
+            self::saveState($conversation, ['follow_up_sent' => 'sending'] + $state); // never twice, also when the turn fails
+            $sent = $this->turn($conversation, $settings, $user, "About {$days} days ago the customer cancelled the request and agreed that we may contact them again with an offer. Write ONE short, polite message in the customer's language: greet them, remind them in a few words what they were interested in, and ask whether it is still relevant — our manager will send them an offer. Never state prices or stock. Set stage to need, cancelled false.");
+            $conversation->refresh();
+            $after = (array) ($conversation->sales_state ?? []);
+            unset($after['follow_up_at']);
+            self::saveState($conversation, ['follow_up_sent' => $sent ? self::counted($conversation->messages ?? []) : 'failed'] + $after);
+            $this->followUpNote($conversation, $user, $after, $days, $sent ? 'sent' : 'failed');
+
+            return true;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** "Bot writes, then manager": the sales chat is asked to send the offer. */
+    private function followUpNote(ChatConversation $conversation, ?TelegramUser $user, array $state, int $days, string $how): void
+    {
+        $what = match ($how) {
+            'sent' => 'The assistant has just written to them — please send an offer.',
+            'failed' => 'The assistant could not write to them — please contact them with an offer.',
+            default => 'A manager has been in this chat since, so the assistant did not write — please contact them with an offer.',
+        };
+        $e = fn ($v) => e((string) $v);
+        $c = (array) ($state['customer'] ?? []);
+        $name = trim(($c['first_name'] ?? '').' '.($c['last_name'] ?? '')) ?: ($user?->displayName() ?? 'Telegram '.$conversation->external_id);
+        $phone = $user?->phone ?: TelegramUser::normalizePhone((string) ($c['phone'] ?? ''));
+        $lines = ['📅 <b>Offer follow-up — '.($conversation->channel === 'business' ? 'Premium-account chat' : 'Telegram bot').'</b>',
+            '<i>'.$days.' days ago the customer cancelled but agreed to hear from us. '.$what.'</i>', '',
+            '<b>Name:</b> '.$e(mb_strimwidth($name, 0, 100, '…')), '<b>Phone:</b> '.($phone ? $e($phone) : '—')];
+        if ($user?->username) {
+            $lines[] = '<b>Telegram:</b> @'.$e($user->username);
+        }
+        if (filled($state['summary'] ?? null)) {
+            $lines[] = '';
+            $lines[] = $e(mb_strimwidth((string) $state['summary'], 0, 800, '…'));
+        }
+        $lines[] = '';
+        $lines[] = '<a href="'.$e(SeoFiles::publicUrl(route('admin.chat-conversations.show', $conversation))).'">Open the chat</a>';
+        $this->notifier->send(implode("\n", $lines));
+    }
+
     /** The confirmed request: a lead (Admin → Chat leads) and a message to the sales chat. */
-    private function handOver(ChatConversation $conversation, ?TelegramUser $user, array $state, string $phone, bool $verified = false): ChatLead
+    private function handOver(ChatConversation $conversation, ?TelegramUser $user, array $state, string $phone, bool $verified = false, bool $partial = false, ?ChatLead $existing = null): ChatLead
     {
         $c = (array) ($state['customer'] ?? []);
         $name = trim(($c['first_name'] ?? '').' '.($c['last_name'] ?? '')) ?: ($user?->displayName() ?? 'Telegram '.$conversation->external_id);
         $items = collect($state['items'] ?? [])->map(fn ($i) => mb_strimwidth($i['product'].($i['details'] !== '' ? ': '.$i['details'] : ''), 0, 250, '…'))->all();
         $link = SeoFiles::publicUrl(route('admin.chat-conversations.show', $conversation));
 
-        $lead = ChatLead::create([
+        $attributes = [
             'channel' => $conversation->channel === 'business' ? 'business' : 'telegram',
             'name' => mb_substr($name, 0, 100), 'phone' => $phone, 'locale' => $state['language'] ?? 'ru',
-            'topic' => mb_substr($state['summary'], 0, 1000), 'page_url' => $link,
+            'topic' => mb_substr(($partial ? '[Unfinished] ' : '').$state['summary'], 0, 1000), 'page_url' => $link,
             'transcript' => ['items' => $items, 'city' => $c['city'] ?? null, 'company' => $c['company'] ?? null,
                 'business_type' => $state['business_type'] ?? null, 'software' => $state['software'] ?? null, 'conversation_id' => $conversation->id],
-        ]);
+        ];
+        $lead = $existing ? tap($existing)->update($attributes) : ChatLead::create($attributes);
 
         $e = fn ($v) => e((string) $v);
-        $lines = ['🆕 <b>New request — '.($conversation->channel === 'business' ? 'Premium-account chat' : 'Telegram bot').'</b>', '',
-            '<b>Name:</b> '.$e($name), '<b>Phone:</b> '.$e($phone).($verified ? '' : ' <i>(typed, not verified)</i>')];
+        $where = $conversation->channel === 'business' ? 'Premium-account chat' : 'Telegram bot';
+        $lines = [$partial ? '⏳ <b>Unfinished request — '.$where.'</b>' : '🆕 <b>New request — '.$where.'</b>',
+            ...($partial ? ['<i>The customer stopped answering before confirming. This is what was collected.</i>'] : []),
+            ...($existing ? ['<i>The unfinished request sent earlier is now confirmed by the customer.</i>'] : []), '',
+            '<b>Name:</b> '.$e($name), '<b>Phone:</b> '.($phone === '' ? '— <i>(not given)</i>' : $e($phone).($verified ? '' : ' <i>(typed, not verified)</i>'))];
         foreach (['city' => 'City', 'company' => 'Company'] as $k => $label) {
             if (filled($c[$k] ?? null)) {
                 $lines[] = "<b>{$label}:</b> ".$e($c[$k]);
@@ -472,7 +687,7 @@ TXT;
             $lines[] = '<b>Telegram:</b> @'.$e($user->username);
         }
         // Every text is shortened before escaping and items are dropped until it fits, so the HTML is never cut.
-        $tail = ['', $e(mb_strimwidth($state['summary'], 0, 800, '…')), '', '<a href="'.$e($link).'">Open the chat</a>'];
+        $tail = ['', $e(mb_strimwidth((string) $state['summary'], 0, 800, '…')), '', '<a href="'.$e($link).'">Open the chat</a>'];
         $bullets = array_map(fn ($i) => '• '.$e($i), $items);
         while ($bullets && mb_strlen(implode("\n", [...$lines, '', ...$bullets, '• …', ...$tail])) > 4000) {
             array_pop($bullets);

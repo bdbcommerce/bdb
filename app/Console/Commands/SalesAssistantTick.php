@@ -9,7 +9,9 @@ use Illuminate\Console\Command;
 
 /**
  * Every minute: answers customers whose wait is over — in working hours a manager gets `wait_minutes` first
- * (Premium-account chats, and bot chats where a manager was talking). Only the latest session per chat, last 24 h.
+ * (Premium-account chats, and bot chats where a manager was talking). Only the latest session per chat. Also: one
+ * reminder to a customer who went silent mid-way, the unfinished request to the manager after close_after_hours,
+ * and the agreed follow-up after follow_up_days.
  */
 class SalesAssistantTick extends Command
 {
@@ -23,17 +25,32 @@ class SalesAssistantTick extends Command
         if ($settings->bot_mode !== 'on' && $settings->business_mode !== 'on') {
             return self::SUCCESS;
         }
-        $answered = 0;
-        ChatConversation::whereIn('channel', ['telegram', 'business'])->where('updated_at', '>=', now()->subDay())
+        $answered = $reminded = $closed = $followedUp = 0;
+        // Long enough to see a silence through to its close (the latest session per chat only).
+        ChatConversation::whereIn('channel', ['telegram', 'business'])->where('updated_at', '>=', now()->subHours(max(24, $settings->close_after_hours + 24)))
             ->orderBy('id')->get()
             ->groupBy(fn (ChatConversation $c) => $c->channel.'|'.$c->external_id.'|'.$c->business_connection_id)
-            ->each(function ($sessions) use ($assistant, $settings, &$answered) {
+            ->each(function ($sessions) use ($assistant, $settings, &$answered, &$reminded, &$closed) {
                 $latest = $sessions->last();
                 if (SalesAssistant::decision($latest, $settings) === 'now' && $assistant->respond($latest)) {
                     $answered++;
+                } elseif (SalesAssistant::nudgeDue($latest, $settings) !== null) {
+                    match ($assistant->nudge($latest)) {
+                        'reminded' => $reminded++,
+                        'closed' => $closed++,
+                        default => null,
+                    };
                 }
             });
-        $this->info("Answered {$answered} conversations.");
+        // Agreed follow-ups ("may we send an offer in 2 weeks?").
+        ChatConversation::whereIn('channel', ['telegram', 'business'])->where('sales_state', 'like', '%follow_up_at%')
+            ->where('updated_at', '>=', now()->subDays($settings->follow_up_days + 30))->orderBy('id')->get()
+            ->each(function (ChatConversation $c) use ($assistant, $settings, &$followedUp) {
+                if (SalesAssistant::followUpDue($c, $settings) && $assistant->followUp($c)) {
+                    $followedUp++;
+                }
+            });
+        $this->info("Answered {$answered}, reminded {$reminded}, closed {$closed} as unfinished, followed up {$followedUp}.");
 
         return self::SUCCESS;
     }
