@@ -43,7 +43,7 @@
                         <legend class="text-slate-600">Chats</legend>
                         <div class="mt-1 flex flex-wrap gap-4">
                             @foreach (AiEmployee::CHANNELS as $k => $label)
-                                <label class="inline-flex items-center gap-2"><input type="checkbox" name="channels[]" value="{{ $k }}" @checked(in_array($k, old('channels', $e->channels ?? []), true)) class="rounded border-slate-300"> {{ $label }}</label>
+                                <label class="inline-flex items-center gap-2"><input type="checkbox" name="channels[]" value="{{ $k }}" @checked(in_array($k, $errors->any() ? (array) old('channels', []) : ($e->channels ?? []), true)) class="rounded border-slate-300"> {{ $label }}</label>
                             @endforeach
                         </div>
                     </fieldset>
@@ -110,7 +110,7 @@
 
                 <details class="bg-white border border-slate-200 rounded-xl">
                     <summary class="px-5 py-4 cursor-pointer text-sm font-medium text-slate-900">What the AI gets ({{ $previewOf ?? 'no prompt yet' }}){{ $e->kind === 'sales' ? ' — then the sales playbook, working hours and knowledge' : '' }}</summary>
-                    <pre class="px-5 pb-5 text-xs text-slate-700 whitespace-pre-wrap font-mono leading-5">{{ $preview }}</pre>
+                    <pre class="px-5 pb-5 text-xs text-slate-700 whitespace-pre-wrap break-words font-mono leading-5">{{ $preview }}</pre>
                 </details>
             @endif
         </div>

@@ -88,8 +88,10 @@ class AiEmployeeController extends Controller
             'prompt' => ['required', 'string', 'max:20000', 'not_regex:/\[TO FILL/i'],
             'note' => ['nullable', 'string', 'max:200'],
         ], ['prompt.not_regex' => 'Replace the [TO FILL: …] placeholders first.']);
+        $data['prompt'] = str_replace(["\r\n", "\r"], "\n", $data['prompt']);
 
         DB::transaction(function () use ($aiEmployee, $data, $request) {
+            AiEmployee::whereKey($aiEmployee->id)->lockForUpdate()->first();
             $draft = $aiEmployee->draftPrompt();
             $fields = ['prompt' => $data['prompt'], 'note' => $data['note'] ?? $draft?->note, 'author' => $request->user()->name];
             $draft ? $draft->update($fields) : $aiEmployee->prompts()->create($fields + [
@@ -107,6 +109,7 @@ class AiEmployeeController extends Controller
             return back()->withErrors(['employee' => 'There is no draft to publish.']);
         }
         DB::transaction(function () use ($aiEmployee, $draft) {
+            AiEmployee::whereKey($aiEmployee->id)->lockForUpdate()->first();
             $aiEmployee->prompts()->where('status', 'published')->update(['status' => 'archived']);
             $draft->update(['status' => 'published', 'published_at' => now()]);
         });
@@ -119,6 +122,7 @@ class AiEmployeeController extends Controller
     {
         abort_unless($prompt->ai_employee_id === $aiEmployee->id, 404);
         DB::transaction(function () use ($aiEmployee, $prompt, $request) {
+            AiEmployee::whereKey($aiEmployee->id)->lockForUpdate()->first();
             $fields = ['prompt' => $prompt->prompt, 'note' => "From v{$prompt->version}", 'author' => $request->user()->name];
             ($draft = $aiEmployee->draftPrompt()) ? $draft->update($fields) : $aiEmployee->prompts()->create($fields + [
                 'version' => (int) $aiEmployee->prompts()->max('version') + 1, 'status' => 'draft']);
@@ -131,7 +135,8 @@ class AiEmployeeController extends Controller
     public function updateRules(Request $request)
     {
         $rules = $request->validate(['platform_rules' => ['nullable', 'string', 'max:10000', 'not_regex:/\[TO FILL/i']])['platform_rules'] ?? null;
-        $rules = filled($rules) && trim($rules) !== trim(AiEmployeeTemplates::PLATFORM_RULES) ? trim($rules) : null;
+        $rules = str_replace(["\r\n", "\r"], "\n", (string) $rules); // browsers send CRLF
+        $rules = trim($rules) !== '' && trim($rules) !== trim(AiEmployeeTemplates::PLATFORM_RULES) ? trim($rules) : null;
         SalesAssistantSetting::current()->update(['platform_rules' => $rules]);
 
         return back()->with('success', $rules ? 'Platform rules saved.' : 'Platform rules reset to the default.');
@@ -140,7 +145,7 @@ class AiEmployeeController extends Controller
     private function validated(Request $request, ?AiEmployee $employee): array
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:40', 'regex:/^[\pL][\pL\s\'’-]*$/u'],
+            'name' => ['required', 'string', 'max:40', 'regex:/^[\pL][\pL \'’-]*$/u'],
             'role' => ['required', 'string', 'max:80'],
             'kind' => ['required', Rule::in(array_keys(AiEmployee::KINDS))],
             'status' => ['required', Rule::in(array_keys(AiEmployee::STATUSES))],

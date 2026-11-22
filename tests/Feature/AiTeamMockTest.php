@@ -22,7 +22,6 @@ class AiTeamMockTest extends TestCase
             auth()->logout();
         }
         $this->actingAs($admin)->get('/admin/ai-team/nonsense')->assertNotFound();
-        $this->actingAs($admin)->get(route('admin.ai-team.show', 'test-chat'))->assertSee('Malika — Sales consultant');
         $this->actingAs($admin)->get(route('admin.ai-team.show', 'clients'))->assertOk()
             ->assertSee('Oila Market')->assertSee('Left the company')->assertSee('Now at Sifat Pharm');
     }

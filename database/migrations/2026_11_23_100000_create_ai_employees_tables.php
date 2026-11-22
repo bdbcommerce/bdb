@@ -50,6 +50,11 @@ return new class extends Migration
             return;
         }
         $templates = AiEmployeeTemplates::all();
+        DB::transaction(fn () => $this->seed($templates));
+    }
+
+    private function seed(array $templates): void
+    {
         foreach (AiEmployeeTemplates::DEFAULTS as $key) {
             $t = $templates[$key];
             $id = DB::table('ai_employees')->insertGetId([

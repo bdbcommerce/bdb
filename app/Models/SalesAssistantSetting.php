@@ -25,12 +25,12 @@ class SalesAssistantSetting extends Model
 
     protected $fillable = [
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
-        'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules',
+        'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
     ];
 
     protected function casts(): array
     {
-        return ['work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer'];
+        return ['work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean'];
     }
 
     public static function current(): self
@@ -110,16 +110,22 @@ class SalesAssistantSetting extends Model
     }
 
     /** The full system prompt the assistant gets (Preview prompt shows exactly this). */
-    public function systemPrompt(): string
+    /**
+     * $as / $rolePrompt: another AI employee or prompt text to try (the sandbox); default the live sales consultant
+     * with the published prompt. The sales playbook is added for sales consultants only.
+     */
+    public function systemPrompt(?AiEmployee $as = null, ?string $rolePrompt = null): string
     {
         $days = implode(', ', array_map(fn ($d) => self::DAYS[$d], $this->workDays()));
 
         // The live sales consultant's card (platform rules, name, temperament, role prompt) comes first; the owner's
         // sales playbook follows. Without a live sales consultant: the playbook alone, as before.
-        $employee = rescue(fn () => AiEmployee::live('sales'), null, false);
-        $head = $employee
-            ? $employee->promptLayers()."\n\n# SALES PLAYBOOK (the owner's rules for the sales conversation)\n".trim($this->promptText())
-            : trim($this->promptText());
+        $employee = $as ?? rescue(fn () => AiEmployee::live('sales'), null, false);
+        $head = match (true) {
+            ! $employee => trim($this->promptText()),
+            $employee->kind === 'sales' => $employee->promptLayers($rolePrompt)."\n\n# SALES PLAYBOOK (the owner's rules for the sales conversation)\n".trim($this->promptText()),
+            default => $employee->promptLayers($rolePrompt),
+        };
 
         return $head
             ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours you answer at once."

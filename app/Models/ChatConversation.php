@@ -168,25 +168,28 @@ class ChatConversation extends Model
     }
 
     /**
-     * Subquery condition: `newer` is a later session of the same customer chat as `chat_conversations`. Within one
-     * channel the higher id is newer; between an older Premium session (channel business) and the merged conversation
-     * (channel telegram) the one updated later is (on a tie the merged one) — new messages of both chats go there, whatever its id.
+     * Subquery condition: `newer` is a later session of the same chat as `chat_conversations` (for a customer: the
+     * bot chat, the merged conversation and older Premium sessions alike). One total order, so exactly one session is
+     * the newest: updated last (new messages always go to the session updated last), then the merged conversation
+     * (channel telegram), then the higher id.
      */
     public static function newerSession($q): mixed
     {
         return $q->whereColumn('newer.external_id', 'chat_conversations.external_id')
-            ->where(fn ($q) => $q->where(fn ($q) => $q->whereColumn('newer.channel', 'chat_conversations.channel')->whereColumn('newer.id', '>', 'chat_conversations.id'))
-                ->orWhere(fn ($q) => $q->whereColumn('newer.channel', '!=', 'chat_conversations.channel')
-                    ->whereIn('newer.channel', self::REPLY_CHANNELS)->whereIn('chat_conversations.channel', self::REPLY_CHANNELS)
-                    ->where(fn ($q) => $q->whereColumn('newer.updated_at', '>', 'chat_conversations.updated_at')
-                        ->orWhere(fn ($q) => $q->whereColumn('newer.updated_at', 'chat_conversations.updated_at')->where('newer.channel', 'telegram')))));
+            ->where(fn ($q) => $q->whereColumn('newer.channel', 'chat_conversations.channel')
+                ->orWhere(fn ($q) => $q->whereIn('newer.channel', self::REPLY_CHANNELS)->whereIn('chat_conversations.channel', self::REPLY_CHANNELS)))
+            ->where(fn ($q) => $q->whereColumn('newer.updated_at', '>', 'chat_conversations.updated_at')
+                ->orWhere(fn ($q) => $q->whereColumn('newer.updated_at', 'chat_conversations.updated_at')
+                    ->where(fn ($q) => $q->where(fn ($q) => $q->where('newer.channel', 'telegram')->where('chat_conversations.channel', '!=', 'telegram'))
+                        ->orWhere(fn ($q) => $q->whereRaw("(newer.channel = 'telegram') = (chat_conversations.channel = 'telegram')")
+                            ->whereColumn('newer.id', '>', 'chat_conversations.id')))));
     }
 
-    /** The newest of these sessions of one customer chat, by the same rule as newerSession(). */
+    /** The newest of these sessions of one chat, by the same order as newerSession(). */
     public static function newestOf(iterable $sessions): ?self
     {
-        return collect($sessions)->groupBy('channel')->map(fn ($s) => $s->sortBy('id')->last())
-            ->sort(fn (self $a, self $b) => [$a->updated_at?->getTimestamp() ?? 0, $a->channel === 'telegram', $a->id] <=> [$b->updated_at?->getTimestamp() ?? 0, $b->channel === 'telegram', $b->id])->last();
+        return collect($sessions)->sort(fn (self $a, self $b) => [$a->updated_at?->getTimestamp() ?? 0, $a->channel === 'telegram', $a->id]
+            <=> [$b->updated_at?->getTimestamp() ?? 0, $b->channel === 'telegram', $b->id])->last();
     }
 
     /** Staff answered outside the panel / Telegram (e.g. by phone): off the list until the customer writes again. */
