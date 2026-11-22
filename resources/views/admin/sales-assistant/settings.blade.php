@@ -1,0 +1,113 @@
+@extends('admin.layout')
+@section('title', 'Sales assistant')
+@section('heading', 'Sales assistant — Settings')
+
+@php
+    $input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400';
+    $days = array_map('intval', (array) old('work_days', $settings->workDays()));
+    $num = fn (string $name, string $label, string $hint, int $min, int $max) => compact('name', 'label', 'hint', 'min', 'max');
+@endphp
+
+@section('content')
+<div class="w-full space-y-6">
+    <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-600 space-y-2">
+        <p><b class="text-slate-900">What it does.</b> The sales assistant talks with new and returning customers step by step, in the language they start in: it understands their business and what they need, asks the questions for each product (<a href="{{ route('admin.sales-knowledge.index') }}" class="underline">Knowledge</a>), collects name, surname, phone and city, sends a summary to confirm and hands the request to a manager. It never gives prices, stock or delivery dates and never invents facts.</p>
+        <p>In the <b>bot chat</b> it answers at once. In <b>Premium-account (Business) chats</b> it waits for a manager first during working hours, answers at once outside them, and stops as soon as a manager writes.</p>
+        <p class="text-amber-700">Being built: these settings, the knowledge and the prompt are ready; the conversation itself is switched on in the next step. Until then the modes below have no effect.</p>
+    </div>
+
+    <form method="POST" action="{{ route('admin.sales-assistant.update') }}" class="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
+        @csrf @method('PUT')
+
+        <div class="grid gap-5 sm:grid-cols-2">
+            @foreach (['bot_mode' => 'Telegram bot chat', 'business_mode' => 'Premium-account (Business) chats'] as $field => $label)
+                <div>
+                    <label for="{{ $field }}" class="block text-sm font-medium text-slate-700 mb-1">{{ $label }}</label>
+                    <select id="{{ $field }}" name="{{ $field }}" class="{{ $input }}">
+                        @foreach (\App\Models\SalesAssistantSetting::MODES as $value => $name)
+                            <option value="{{ $value }}" @selected(old($field, $settings->{$field}) === $value)>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                    @error($field)<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+            @endforeach
+        </div>
+
+        <fieldset class="space-y-3">
+            <legend class="text-sm font-medium text-slate-700">Working hours (Tashkent time)</legend>
+            <div class="flex flex-wrap gap-x-4 gap-y-1">
+                @foreach (\App\Models\SalesAssistantSetting::DAYS as $d => $name)
+                    <label class="flex items-center gap-2 text-sm text-slate-700">
+                        <input type="checkbox" name="work_days[]" value="{{ $d }}" @checked(in_array($d, $days, true)) class="rounded border-slate-300"> {{ $name }}
+                    </label>
+                @endforeach
+            </div>
+            @error('work_days')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+            <div class="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+                <label for="work_start" class="sr-only">Start</label>
+                <input id="work_start" type="time" name="work_start" value="{{ old('work_start', $settings->work_start) }}" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <span>–</span>
+                <label for="work_end" class="sr-only">End</label>
+                <input id="work_end" type="time" name="work_end" value="{{ old('work_end', $settings->work_end) }}" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            </div>
+            @error('work_start')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+            @error('work_end')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+        </fieldset>
+
+        <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            @foreach ([
+                $num('wait_minutes', 'Wait for a manager (minutes)', 'Business chats, working hours: the assistant answers when no manager has answered the customer in this time.', 0, 120),
+                $num('remind_after_hours', 'Reminder after (hours)', 'One friendly reminder when the customer stops answering mid-way (working hours only).', 1, 48),
+                $num('close_after_hours', 'Close incomplete after (hours)', 'The request closes as incomplete; the manager still gets what was collected.', 1, 168),
+                $num('follow_up_days', 'Offer again after (days)', 'When a customer cancelled but agreed to hear from us later.', 1, 90),
+            ] as $f)
+                <div>
+                    <label for="{{ $f['name'] }}" class="block text-sm font-medium text-slate-700 mb-1">{{ $f['label'] }}</label>
+                    <input id="{{ $f['name'] }}" type="number" name="{{ $f['name'] }}" min="{{ $f['min'] }}" max="{{ $f['max'] }}" value="{{ old($f['name'], $settings->{$f['name']}) }}" class="{{ $input }}">
+                    <p class="text-xs text-slate-400 mt-1">{{ $f['hint'] }}</p>
+                    @error($f['name'])<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+            @endforeach
+        </div>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+            <div>
+                <label for="model" class="block text-sm font-medium text-slate-700 mb-1">AI model</label>
+                <select id="model" name="model" class="{{ $input }}">
+                    @foreach (\App\Models\SalesAssistantSetting::MODELS as $value => $name)
+                        <option value="{{ $value }}" @selected(old('model', $settings->model) === $value)>{{ $name }}</option>
+                    @endforeach
+                </select>
+                <p class="text-xs text-slate-400 mt-1">Uses ANTHROPIC_API_KEY. Every customer message is a paid request.</p>
+                @error('model')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="employee_ids" class="block text-sm font-medium text-slate-700 mb-1">More employees (Telegram IDs or @usernames)</label>
+                <textarea id="employee_ids" name="employee_ids" rows="3" maxlength="3000" class="{{ $input }} font-mono" placeholder="123456789&#10;@aziz_sales">{{ old('employee_ids', $settings->employee_ids) }}</textarea>
+                <p class="text-xs text-slate-400 mt-1">For staff who never wrote to the bot. Others: tick “Employee” on their page in Telegram → Users.</p>
+                @error('employee_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+        </div>
+
+        <div class="flex justify-end">
+            <button type="submit" class="bg-slate-900 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-slate-700 transition-colors">Save settings</button>
+        </div>
+    </form>
+
+    <div class="grid gap-6 sm:grid-cols-2">
+        @foreach (['Employees — never talked to' => [$employees, 'employees'], 'Testers — get the assistant in Test mode' => [$testers, 'testers']] as $title => [$list, $filter])
+            <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm" data-list="{{ $filter }}">
+                <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{{ $title }}</h2>
+                @forelse ($list as $u)
+                    <a href="{{ route('admin.telegram-users.show', $u) }}" class="block py-1 underline text-slate-700">{{ $u->displayName() }}</a>
+                @empty
+                    <p class="text-slate-500">Nobody yet. Tick it on a user's page in <a href="{{ route('admin.telegram-users.index') }}" class="underline">Telegram → Users</a>.</p>
+                @endforelse
+                @if ($list->isNotEmpty())
+                    <a href="{{ route('admin.telegram-users.index', ['filter' => $filter]) }}" class="inline-block mt-2 text-xs text-slate-500 underline">Show in Users</a>
+                @endif
+            </div>
+        @endforeach
+    </div>
+</div>
+@endsection

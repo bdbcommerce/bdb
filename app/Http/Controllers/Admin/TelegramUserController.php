@@ -19,7 +19,7 @@ class TelegramUserController extends Controller
     /** Conversations rendered on a user page (newest first); older ones are linked from Conversations. */
     public const SHOWN = 30;
 
-    public const FILTERS = ['all' => 'All', 'registered' => 'Registered', 'pending' => 'Not finished registration'];
+    public const FILTERS = ['all' => 'All', 'registered' => 'Registered', 'pending' => 'Not finished registration', 'employees' => 'Employees', 'testers' => 'Testers'];
 
     public function index(Request $request)
     {
@@ -31,6 +31,8 @@ class TelegramUserController extends Controller
             ->withMax('conversations as last_message_at', 'updated_at')
             ->when($filter === 'registered', fn ($q) => $q->registered())
             ->when($filter === 'pending', fn ($q) => $q->whereNull('registered_at'))
+            ->when($filter === 'employees', fn ($q) => $q->where('is_employee', true))
+            ->when($filter === 'testers', fn ($q) => $q->where('is_tester', true))
             ->when($search !== '', function ($query) use ($search) {
                 // "!" escapes LIKE wildcards the same way on SQLite and MySQL (a backslash does not).
                 $like = fn (string $s) => '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $s).'%';
@@ -64,6 +66,8 @@ class TelegramUserController extends Controller
                 'all' => TelegramUser::count(),
                 'registered' => TelegramUser::registered()->count(),
                 'pending' => TelegramUser::whereNull('registered_at')->count(),
+                'employees' => TelegramUser::where('is_employee', true)->count(),
+                'testers' => TelegramUser::where('is_tester', true)->count(),
             ],
         ]);
     }
@@ -109,6 +113,8 @@ class TelegramUserController extends Controller
             'company' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'ask_registration' => ['sometimes', 'boolean'],
+            'is_employee' => ['sometimes', 'boolean'],
+            'is_tester' => ['sometimes', 'boolean'],
             'locale' => ['nullable', Rule::in(['uz', 'ru', 'en'])],
         ], ['phone.regex' => 'Enter the phone with the country code, e.g. +998901234567 (or 9 digits like 90 123 45 67 for Uzbekistan).']);
 
@@ -116,6 +122,8 @@ class TelegramUserController extends Controller
             $data['phone'] = '+'.$data['phone'];
         }
         $data['ask_registration'] = $request->boolean('ask_registration') && ! $telegramUser->isRegistered();
+        $data['is_employee'] = $request->boolean('is_employee');
+        $data['is_tester'] = $request->boolean('is_tester') && ! $data['is_employee']; // the assistant never talks to employees
         // Ticking or unticking starts the questions over: a step left from an abandoned attempt must
         // not turn the customer's next message into their name.
         if (! config('services.telegram.replies') && $data['ask_registration'] !== $telegramUser->ask_registration && ! $telegramUser->isRegistered()) {

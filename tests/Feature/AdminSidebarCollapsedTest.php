@@ -17,7 +17,7 @@ class AdminSidebarCollapsedTest extends TestCase
 
         $html = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->getContent();
         $this->assertDoesNotMatchRegularExpression('/aria-expanded="true"\s+aria-controls="nav-group-/', $html);
-        $this->assertSame(7, preg_match_all('/aria-expanded="false"\s+aria-controls="nav-group-/', $html));
+        $this->assertSame(8, preg_match_all('/aria-expanded="false"\s+aria-controls="nav-group-/', $html));
         foreach (['company', 'catalog', 'careers', 'invoices', 'content', 'assistant', 'telegram'] as $key) {
             $this->assertMatchesRegularExpression('/<ul id="nav-group-'.$key.'"[^>]*x-cloak/', $html, $key);
         }
