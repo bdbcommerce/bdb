@@ -55,7 +55,7 @@
         <button class="bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700">{{ $p->exists ? 'Save' : 'Add person' }}</button>
     </form>
 
-    @if ($p->exists)
+    @if ($p->exists && ! in_array($p->status, ['left', 'fired'], true) && ! $p->next && $clients->where('id', '!=', $p->client_id)->isNotEmpty())
         <form method="POST" action="{{ route('admin.client-people.move', $p) }}" class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             @csrf
             <h2 class="text-sm font-semibold text-slate-900">Moved to another company</h2>
@@ -70,6 +70,8 @@
             </div>
             <button class="text-sm rounded-lg border border-slate-300 px-4 py-2 hover:border-slate-500">Move</button>
         </form>
+    @endif
+    @if ($p->exists)
         <form method="POST" action="{{ route('admin.client-people.destroy', $p) }}" onsubmit="return confirm('Delete this person?')">
             @csrf @method('DELETE')
             <button class="text-sm text-slate-500 underline hover:text-red-700">Delete this person</button>

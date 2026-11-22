@@ -26,8 +26,15 @@
         <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:border-slate-500">Search</button>
     </form>
 
-    @if ($unassigned)
-        <p class="text-sm text-slate-600">{{ $unassigned }} {{ \Illuminate\Support\Str::plural('person', $unassigned) }} without a company (their company card was deleted).</p>
+    @if ($unassigned->isNotEmpty())
+        <section class="bg-white border border-slate-200 rounded-xl p-4 text-sm" aria-labelledby="unassigned-h">
+            <h2 id="unassigned-h" class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{{ $unassigned->count() }} {{ \Illuminate\Support\Str::plural('person', $unassigned->count()) }} without a company</h2>
+            <ul class="flex flex-wrap gap-x-4 gap-y-1">
+                @foreach ($unassigned as $p)
+                    <li><a href="{{ route('admin.client-people.edit', $p) }}" class="underline text-slate-800">{{ $p->name }}</a> <span class="text-xs text-slate-500">{{ ClientPerson::STATUSES[$p->status] ?? $p->status }}</span></li>
+                @endforeach
+            </ul>
+        </section>
     @endif
 
     <div class="grid gap-4 lg:grid-cols-2">

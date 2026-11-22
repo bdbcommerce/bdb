@@ -31,9 +31,10 @@ class ClientPersonController extends Controller
         $data = $this->validated($request);
         $person = DB::transaction(function () use ($data, $request) {
             // "New company" typed in the form (e.g. from the AI's suggestion) is created with the person.
-            if (empty($data['client_id']) && filled($request->input('new_company'))) {
-                $data['client_id'] = Client::create(['name' => mb_substr(trim((string) $request->input('new_company')), 0, 150), 'status' => 'prospect',
-                    'city' => mb_substr((string) $request->input('new_city'), 0, 80) ?: null, 'industry' => mb_substr((string) $request->input('new_industry'), 0, 100) ?: null])->id;
+            $text = fn (string $k, int $max) => is_string($v = $request->input($k)) ? mb_substr(trim($v), 0, $max) : '';
+            if (empty($data['client_id']) && $text('new_company', 150) !== '') {
+                $data['client_id'] = Client::create(['name' => $text('new_company', 150), 'status' => 'prospect',
+                    'city' => $text('new_city', 80) ?: null, 'industry' => $text('new_industry', 100) ?: null])->id;
             }
 
             return ClientPerson::create($data);
@@ -65,15 +66,20 @@ class ClientPersonController extends Controller
     /** The person moved to another company: the old card becomes "left", a new active card starts there (same Telegram link). */
     public function move(Request $request, ClientPerson $clientPerson)
     {
+        if (in_array($clientPerson->status, ['left', 'fired'], true) || $clientPerson->next()->exists()) {
+            return back()->withErrors(['client_id' => 'This card is history already — move the person from their current card'.($clientPerson->next ? ' (at '.$clientPerson->next->client?->name.')' : '').'.']);
+        }
         $data = $request->validate([
             'client_id' => ['required', Rule::exists('clients', 'id'), Rule::notIn([$clientPerson->client_id])],
             'position' => ['nullable', 'string', 'max:100'],
         ], ['client_id.not_in' => 'Choose a different company.']);
-        $new = DB::transaction(function () use ($clientPerson, $data) {
+        $keep = $clientPerson->status === 'do_not_contact'; // the person still does not want to be contacted
+        $new = DB::transaction(function () use ($clientPerson, $data, $keep) {
             $clientPerson->update(['status' => 'left']);
 
             return ClientPerson::create(['client_id' => $data['client_id'], 'previous_id' => $clientPerson->id, 'telegram_user_id' => $clientPerson->telegram_user_id,
-                'name' => $clientPerson->name, 'position' => $data['position'] ?? null, 'style' => $clientPerson->style, 'phone' => $clientPerson->phone, 'status' => 'active']);
+                'name' => $clientPerson->name, 'position' => $data['position'] ?? null, 'style' => $clientPerson->style, 'phone' => $clientPerson->phone,
+                'status' => $keep ? 'do_not_contact' : 'active']);
         });
 
         return redirect()->route('admin.clients.show', $new->client_id)->with('success', "{$new->name} moved here; the earlier card is kept as \"left\".");
@@ -88,10 +94,10 @@ class ClientPersonController extends Controller
 
     private function validated(Request $request, ?ClientPerson $person = null): array
     {
-        if ($request->has('notes')) {
-            $request->merge(['notes' => str_replace(["\r\n", "\r"], "\n", (string) $request->input('notes'))]);
+        if (is_string($request->input('notes'))) {
+            $request->merge(['notes' => str_replace(["\r\n", "\r"], "\n", $request->input('notes'))]);
         }
-        $telegramId = trim((string) $request->input('telegram_id'));
+        $telegramId = is_scalar($request->input('telegram_id')) ? trim((string) $request->input('telegram_id')) : '';
         $request->merge(['telegram_user_id' => $telegramId !== '' ? TelegramUser::where('telegram_id', $telegramId)->value('id') ?? 0 : null]);
 
         return $request->validate([

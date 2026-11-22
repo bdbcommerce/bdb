@@ -55,8 +55,9 @@ class ClientPerson extends Model
         if ($c = $this->client) {
             $lines[] = 'Company: '.$c->name.collect([$c->industry, $c->city, $c->size])->filter()->map(fn ($v) => ', '.$v)->implode('')
                 .'; '.mb_strtolower(Client::STATUSES[$c->status] ?? $c->status).($c->since ? ' since '.$c->since : '')
-                .($c->installedItems() ? '. Installed: '.implode('; ', $c->installedItems()) : '')
-                .($c->consumables ? '. Consumables: '.$c->consumables : '').($c->notes ? '. Notes: '.$c->notes : '');
+                .($c->notes ? '. Notes: '.mb_strimwidth($c->notes, 0, 600, '…') : '')
+                .($c->consumables ? '. Consumables: '.mb_strimwidth($c->consumables, 0, 300, '…') : '')
+                .($c->installedItems() ? '. Installed: '.mb_strimwidth(implode('; ', $c->installedItems()), 0, 500, '…') : '');
             $others = $c->people()->where('id', '!=', $this->id)->where('status', 'active')->limit(8)->get()
                 ->map(fn (self $p) => $p->name.' ('.collect([$p->position, $p->part ? mb_strtolower(self::PARTS[$p->part] ?? $p->part) : null])->filter()->implode(', ').')');
             if ($others->isNotEmpty()) {
@@ -64,6 +65,7 @@ class ClientPerson extends Model
             }
         }
 
-        return array_map(fn ($l) => mb_strimwidth($l, 0, 1500, '…'), $lines);
+        // One line each (a typed line break could look like a new prompt section).
+        return array_map(fn ($l) => mb_strimwidth(preg_replace('/\s*\R\s*/u', ' / ', $l), 0, 1500, '…'), $lines);
     }
 }

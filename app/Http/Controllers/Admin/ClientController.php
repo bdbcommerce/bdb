@@ -14,19 +14,24 @@ class ClientController extends Controller
 {
     public function index(Request $request)
     {
-        $search = trim((string) $request->query('q', ''));
+        $search = is_string($request->query('q')) ? trim($request->query('q')) : '';
+        $like = fn (string $s) => '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $s).'%';
+        $variants = array_unique([$search, mb_strtolower($search), mb_convert_case($search, MB_CASE_TITLE), mb_strtoupper($search)]);
         $status = array_key_exists((string) $request->query('status'), Client::STATUSES) ? (string) $request->query('status') : null;
 
         return view('admin.clients.index', [
             'clients' => Client::query()->with('people.telegramUser')
-                ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.addcslashes($search, '%_\\').'%')
-                    ->orWhere('inn', 'like', '%'.addcslashes($search, '%_\\').'%')
-                    ->orWhereHas('people', fn ($q) => $q->where('name', 'like', '%'.addcslashes($search, '%_\\').'%'))))
+                ->when($search !== '', fn ($q) => $q->where(function ($q) use ($variants, $like) {
+                    foreach ($variants as $v) {
+                        $q->orWhereRaw("name LIKE ? ESCAPE '!'", [$like($v)])->orWhereRaw("inn LIKE ? ESCAPE '!'", [$like($v)])
+                            ->orWhereHas('people', fn ($q) => $q->whereRaw("name LIKE ? ESCAPE '!'", [$like($v)]));
+                    }
+                }))
                 ->when($status, fn ($q) => $q->where('status', $status))
                 ->orderBy('name')->paginate(20)->withQueryString(),
             'search' => $search,
             'status' => $status,
-            'unassigned' => ClientPerson::whereNull('client_id')->count(),
+            'unassigned' => ClientPerson::whereNull('client_id')->orderBy('name')->limit(50)->get(),
         ]);
     }
 
@@ -69,8 +74,8 @@ class ClientController extends Controller
     private function validated(Request $request): array
     {
         foreach (['installed', 'consumables', 'notes'] as $k) {
-            if ($request->has($k)) {
-                $request->merge([$k => str_replace(["\r\n", "\r"], "\n", (string) $request->input($k))]);
+            if (is_string($request->input($k))) {
+                $request->merge([$k => str_replace(["\r\n", "\r"], "\n", $request->input($k))]);
             }
         }
 

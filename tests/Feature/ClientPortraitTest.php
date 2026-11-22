@@ -117,7 +117,7 @@ class ClientPortraitTest extends TestCase
         $this->bot(1, 'Etiketka kerak');
         $data = $this->calls[0];
         $this->assertStringContainsString('Client portrait: Akmal Rasulov — Owner; in decisions: decides; how to talk to them: Short, direct', $data);
-        $this->assertStringContainsString('Company: Oila Market, Supermarkets, Tashkent; active customer since 2024. Installed: 9 POS terminals; 3 label printers. Consumables: Labels 58x40', $data);
+        $this->assertStringContainsString('Company: Oila Market, Supermarkets, Tashkent; active customer since 2024. Notes: Dislikes long messages. Consumables: Labels 58x40, 20 rolls a month. Installed: 9 POS terminals; 3 label printers', $data);
         $this->assertStringContainsString('Other people there: Gulnora (Chief accountant, pays)', $data);
         $this->assertStringNotContainsString('Bekzod', $data, 'people who left are not listed');
         $this->assertStringNotContainsString('+998901112233', $data, 'no phone from the portrait');
