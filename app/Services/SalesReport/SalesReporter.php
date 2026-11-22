@@ -198,38 +198,46 @@ class SalesReporter
             $times = [];
             $waitingSince = null;
             $lastAt = null;
+            $items = [];
             foreach ($group as $session) {
                 foreach ($session->messages ?? [] as $m) {
-                    if (! is_array($m) || ! empty($m['aside']) || ! empty($m['late_edit'])
-                        || (in_array($session->channel, ChatConversation::REPLY_CHANNELS, true) && ! in_array($session->viaOf($m) === 'assistant' ? 'business' : 'telegram', $channels, true))) {
-                        continue; // registration steps, commands, button taps; edits of messages from an older session
-                    }
-                    try {
-                        $at = isset($m['at']) ? Carbon::parse($m['at']) : $lastAt;
-                    } catch (Throwable) {
-                        $at = $lastAt;
-                    }
-                    if (! $at) {
-                        continue;
-                    }
-                    $lastAt = $at;
-                    if ($at->lt($from) || $at->gte($to)) {
-                        continue;
-                    }
-                    [$who, $side] = $this->speaker($m, $first->channel, is_string($m['connection'] ?? null) ? ($owners->get($m['connection'])?->label() ?? $owner) : $owner);
-                    if ($who === null) {
-                        continue;
-                    }
-                    $lines[] = '['.$at->copy()->setTimezone(self::TZ)->format('D d.m H:i').'] '.$who.': '.$this->text($m);
+                    $items[] = [$session, $m];
+                }
+            }
+            if (count(array_unique(array_map(fn ($s) => $s->channel, $group))) > 1) {
+                $at = fn ($m) => is_array($m) && is_string($m['at'] ?? null) ? (strtotime($m['at']) ?: 0) : 0;
+                usort($items, fn ($a, $b) => $at($a[1]) <=> $at($b[1])); // stable: same-time messages keep their order
+            }
+            foreach ($items as [$session, $m]) {
+                if (! is_array($m) || ! empty($m['aside']) || ! empty($m['late_edit'])
+                    || (in_array($session->channel, ChatConversation::REPLY_CHANNELS, true) && ! in_array($session->viaOf($m) === 'assistant' ? 'business' : 'telegram', $channels, true))) {
+                    continue; // registration steps, commands, button taps; edits of messages from an older session
+                }
+                try {
+                    $at = isset($m['at']) ? Carbon::parse($m['at']) : $lastAt;
+                } catch (Throwable) {
+                    $at = $lastAt;
+                }
+                if (! $at) {
+                    continue;
+                }
+                $lastAt = $at;
+                if ($at->lt($from) || $at->gte($to)) {
+                    continue;
+                }
+                [$who, $side] = $this->speaker($m, $first->channel, is_string($m['connection'] ?? null) ? ($owners->get($m['connection'])?->label() ?? $owner) : $owner);
+                if ($who === null) {
+                    continue;
+                }
+                $lines[] = '['.$at->copy()->setTimezone(self::TZ)->format('D d.m H:i').'] '.$who.': '.$this->text($m);
 
-                    if ($side === 'customer') {
-                        $waitingSince ??= $at;
-                    } elseif ($side === 'team' && $waitingSince) { // people only: the AI answers at once and has no time of its own
-                        $times[$who][] = $replyTimes[$who][] = max(0, $waitingSince->diffInSeconds($at, true));
-                        $waitingSince = null;
-                    } elseif ($who === 'Bot (AI)') {
-                        $waitingSince = null; // answered (by the AI assistant), not timed
-                    }
+                if ($side === 'customer') {
+                    $waitingSince ??= $at;
+                } elseif ($side === 'team' && $waitingSince) { // people only: the AI answers at once and has no time of its own
+                    $times[$who][] = $replyTimes[$who][] = max(0, $waitingSince->diffInSeconds($at, true));
+                    $waitingSince = null;
+                } elseif ($who === 'Bot (AI)') {
+                    $waitingSince = null; // answered (by the AI assistant), not timed
                 }
             }
             if (! $lines) {

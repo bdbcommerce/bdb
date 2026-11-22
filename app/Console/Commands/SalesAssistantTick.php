@@ -32,7 +32,7 @@ class SalesAssistantTick extends Command
             // One customer = one chat: older Premium-account sessions (channel business) and the bot chat together.
             ->groupBy(fn (ChatConversation $c) => $c->external_id ?? 'id:'.$c->id)
             ->each(function ($sessions) use ($assistant, $settings, &$answered, &$reminded, &$closed) {
-                $latest = $sessions->last();
+                $latest = ChatConversation::newestOf($sessions);
                 if (SalesAssistant::decision($latest, $settings) === 'now' && $assistant->respond($latest)) {
                     $answered++;
                 } elseif (SalesAssistant::nudgeDue($latest, $settings) !== null) {

@@ -25,7 +25,7 @@ class SalesAssistantSetting extends Model
 
     protected $fillable = [
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
-        'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids',
+        'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules',
     ];
 
     protected function casts(): array
@@ -114,7 +114,14 @@ class SalesAssistantSetting extends Model
     {
         $days = implode(', ', array_map(fn ($d) => self::DAYS[$d], $this->workDays()));
 
-        return trim($this->promptText())
+        // The live sales consultant's card (platform rules, name, temperament, role prompt) comes first; the owner's
+        // sales playbook follows. Without a live sales consultant: the playbook alone, as before.
+        $employee = rescue(fn () => AiEmployee::live('sales'), null, false);
+        $head = $employee
+            ? $employee->promptLayers()."\n\n# SALES PLAYBOOK (the owner's rules for the sales conversation)\n".trim($this->promptText())
+            : trim($this->promptText());
+
+        return $head
             ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours you answer at once."
             ."\n\n# KNOWLEDGE (use only this; never add facts)\n".SalesKnowledge::forPrompt();
     }

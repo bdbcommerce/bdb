@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AiEmployeeController;
 use App\Http\Controllers\Admin\AiInstructionController;
 use App\Http\Controllers\Admin\AiModelController;
 use App\Http\Controllers\Admin\AiTeamController;
@@ -168,9 +169,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('awaiting-replies', [AwaitingReplyController::class, 'index'])->name('awaiting-replies.index');
         Route::get('telegram-chats', [ChatConversationController::class, 'index'])->name('telegram-chats.index');
         Route::post('chat-conversations/{chatConversation}/handled', [AwaitingReplyController::class, 'handled'])->name('chat-conversations.handled');
-        // AI Sales & Support Team — mock-up pages (static sample data, nothing is saved yet).
-        Route::get('ai-team/employees/{slug}', [AiTeamController::class, 'employee'])->where('slug', '[a-z]+')->name('ai-team.employee');
-        Route::get('ai-team/{page?}', [AiTeamController::class, 'show'])->whereIn('page', AiTeamController::PAGES)->name('ai-team.show');
+        // AI Sales & Support Team: AI employees (real) and the training / client pages (mock-up, sample data).
+        Route::resource('ai-employees', AiEmployeeController::class)->except('show');
+        Route::post('ai-employees/{aiEmployee}/draft', [AiEmployeeController::class, 'saveDraft'])->name('ai-employees.draft');
+        Route::post('ai-employees/{aiEmployee}/publish', [AiEmployeeController::class, 'publish'])->name('ai-employees.publish');
+        Route::post('ai-employees/{aiEmployee}/versions/{prompt}/copy', [AiEmployeeController::class, 'copyToDraft'])->name('ai-employees.copy');
+        Route::put('ai-team/platform-rules', [AiEmployeeController::class, 'updateRules'])->name('ai-team.rules');
+        Route::get('ai-team/{page}', [AiTeamController::class, 'show'])->whereIn('page', AiTeamController::PAGES)->name('ai-team.show');
         Route::get('sales-assistant', [SalesAssistantController::class, 'edit'])->name('sales-assistant.edit');
         Route::put('sales-assistant', [SalesAssistantController::class, 'update'])->name('sales-assistant.update');
         Route::get('sales-assistant/prompt', [SalesAssistantController::class, 'prompt'])->name('sales-assistant.prompt');

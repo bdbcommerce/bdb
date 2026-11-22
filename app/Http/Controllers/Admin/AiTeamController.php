@@ -3,23 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Support\AiTeamMock;
+use App\Models\AiEmployee;
 
-/** AI Sales & Support Team — MOCK-UP pages to agree the structure; they show sample data and save nothing. */
+/** AI Sales & Support Team — MOCK-UP pages (client portraits and training) to agree the structure; they save nothing. */
 class AiTeamController extends Controller
 {
-    public const PAGES = ['team', 'clients', 'test-chat', 'test-cases', 'audit', 'gaps'];
+    public const PAGES = ['clients', 'test-chat', 'test-cases', 'audit', 'gaps'];
 
-    public function show(string $page = 'team')
+    public function show(string $page)
     {
-        return view('admin.ai-team.'.$page, ['employees' => AiTeamMock::employees()]);
-    }
-
-    public function employee(string $slug)
-    {
-        $employee = AiTeamMock::employee($slug);
-        abort_unless($employee, 404);
-
-        return view('admin.ai-team.employee', ['employee' => $employee, 'versions' => AiTeamMock::versions()]);
+        return view('admin.ai-team.'.$page, ['employees' => AiEmployee::orderBy('sort')->orderBy('id')->get()]);
     }
 }

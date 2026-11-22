@@ -30,7 +30,7 @@
             <div class="self-start max-w-[80%] bg-white rounded-lg px-3 py-2 text-sm shadow-sm">2 ta kassa, ha markirovka bor. Narxi qancha?</div>
             <div class="self-end max-w-[80%] bg-[#d9fdd3] rounded-lg px-3 py-2 text-sm shadow-sm">Markirovka uchun 2D skaner kerak bo‘ladi. Aniq narx va taklifni menejerimiz yuboradi — telefon raqamingizni qoldirasizmi?</div>
             <div class="mt-auto flex gap-2 pt-2">
-                <input type="text" disabled placeholder="Write as the customer…" class="flex-1 rounded-full border-slate-300 bg-white text-sm">
+                <input type="text" disabled aria-label="Message as the customer" placeholder="Write as the customer…" class="flex-1 rounded-full border-slate-300 bg-white text-sm">
                 <button type="button" disabled class="rounded-full bg-slate-900 text-white px-4 text-sm opacity-50">Send</button>
             </div>
         </section>
