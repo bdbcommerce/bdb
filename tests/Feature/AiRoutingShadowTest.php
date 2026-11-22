@@ -100,7 +100,7 @@ class AiRoutingShadowTest extends TestCase
         $this->assertStringNotContainsString('Dilshod', $this->calls[0]['system'], 'a draft colleague is not offered');
         $this->assertStringStartsWith('You are Javohir, technical support', $this->calls[1]['system']);
         $this->assertStringNotContainsString('SALES PLAYBOOK', $this->calls[1]['system']);
-        $this->assertStringContainsString('Your colleague Malika has just handed this customer to you', $this->calls[1]['data']);
+        $this->assertStringContainsString('your colleague Malika routed this chat to you', $this->calls[1]['data']);
         $this->assertSame(['Bu savolga texnik mutaxassisimiz Javohir yordam beradi.', 'Salom, men Javohir. Printer modeli qanday?'], $this->sentTo('7001'));
 
         $c = ChatConversation::sole();

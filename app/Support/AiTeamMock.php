@@ -9,6 +9,7 @@ namespace App\Support;
  */
 class AiTeamMock
 {
+    /** @deprecated sample data of the old mock-up page */
     public static function testCases(): array
     {
         return [

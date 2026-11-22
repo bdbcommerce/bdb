@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AiInstructionController;
 use App\Http\Controllers\Admin\AiModelController;
 use App\Http\Controllers\Admin\AiShadowDraftController;
 use App\Http\Controllers\Admin\AiTeamController;
+use App\Http\Controllers\Admin\AiTestCaseController;
 use App\Http\Controllers\Admin\AiTraceController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\ArticleCategoryController;
@@ -180,6 +181,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('ai-team/sandbox', [AiTraceController::class, 'sandbox'])->name('ai-team.sandbox');
         Route::post('ai-team/sandbox', [AiTraceController::class, 'start'])->name('ai-team.sandbox.start');
         Route::post('ai-team/sandbox/{chat}/message', [AiTraceController::class, 'message'])->middleware('throttle:10,1')->name('ai-team.sandbox.message');
+        Route::resource('ai-test-cases', AiTestCaseController::class)->except('show');
+        Route::post('ai-employees/{aiEmployee}/tests/{which}', [AiTestCaseController::class, 'run'])->whereIn('which', ['draft', 'published'])->middleware('throttle:10,1')->name('ai-employees.tests');
+        Route::get('ai-test-runs/{run}', [AiTestCaseController::class, 'showRun'])->name('ai-test-runs.show');
         Route::get('ai-team/shadow', [AiShadowDraftController::class, 'index'])->name('ai-team.shadow');
         Route::post('ai-team/shadow/{draft}/send', [AiShadowDraftController::class, 'send'])->middleware('throttle:30,1')->name('ai-team.shadow.send');
         Route::post('ai-team/shadow/{draft}/discard', [AiShadowDraftController::class, 'discard'])->name('ai-team.shadow.discard');

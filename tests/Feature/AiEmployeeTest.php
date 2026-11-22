@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AiEmployee;
 use App\Models\AiEmployeePrompt;
+use App\Models\AiTestCase;
 use App\Models\SalesAssistantSetting;
 use App\Models\User;
 use App\Support\AiEmployeeTemplates;
@@ -57,6 +58,7 @@ class AiEmployeeTest extends TestCase
 
     public function test_draft_then_publish_archives_the_old_version_and_reaches_the_engine(): void
     {
+        AiTestCase::query()->update(['is_active' => false]); // no publish gate here (AiTestCaseTest covers it)
         $admin = $this->admin();
         $m = $this->malika();
         $this->actingAs($admin)->post(route('admin.ai-employees.draft', $m), ['prompt' => 'Ask two questions about the business first.', 'note' => 'Two questions'])

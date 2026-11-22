@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AiEmployee;
 use App\Models\AiEmployeePrompt;
 use App\Models\SalesAssistantSetting;
+use App\Services\SalesAssistant\TestRunner;
 use App\Support\AiEmployeeTemplates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +62,8 @@ class AiEmployeeController extends Controller
             'prompt' => $draft?->prompt ?? $published?->prompt ?? '',
             'preview' => $aiEmployee->promptLayers($draft?->prompt),
             'previewOf' => $draft ? 'draft v'.$draft->version : ($published ? 'published v'.$published->version : null),
+            'tests' => ['published' => TestRunner::summary($aiEmployee, $published), 'draft' => TestRunner::summary($aiEmployee, $draft),
+                'gate' => $draft ? TestRunner::gate($aiEmployee, $draft) : null],
         ]);
     }
 
@@ -107,6 +110,9 @@ class AiEmployeeController extends Controller
         $draft = $aiEmployee->draftPrompt();
         if (! $draft) {
             return back()->withErrors(['employee' => 'There is no draft to publish.']);
+        }
+        if ($blocked = TestRunner::gate($aiEmployee, $draft)) {
+            return back()->withErrors(['employee' => $blocked]);
         }
         DB::transaction(function () use ($aiEmployee, $draft) {
             AiEmployee::whereKey($aiEmployee->id)->lockForUpdate()->first();

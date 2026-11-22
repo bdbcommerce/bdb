@@ -8,7 +8,7 @@ use App\Models\AiEmployee;
 /** AI Sales & Support Team — MOCK-UP pages (client portraits and training) to agree the structure; they save nothing. */
 class AiTeamController extends Controller
 {
-    public const PAGES = ['clients', 'test-cases', 'audit', 'gaps'];
+    public const PAGES = ['clients', 'audit', 'gaps'];
 
     public function show(string $page)
     {

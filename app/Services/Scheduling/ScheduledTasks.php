@@ -2,6 +2,8 @@
 
 namespace App\Services\Scheduling;
 
+use App\Models\AiSandboxChat;
+use App\Models\AiTrace;
 use App\Models\ChatConversation;
 use App\Models\JobApplication;
 use App\Models\LinkClick;
@@ -79,6 +81,13 @@ final class ScheduledTasks
                 'cron' => '* * * * *', 'every' => 'Every minute',
                 'overlap' => 10, 'background' => true, 'max_minutes' => 10,
             ],
+            'ai-tests' => [
+                'label' => 'AI employees: run test cases',
+                'description' => 'Runs the test cases queued from AI team → Test cases (real Claude calls; Claude Haiku grades the answers).',
+                'command' => 'ai:run-tests', 'parameters' => [],
+                'cron' => '* * * * *', 'every' => 'Every minute',
+                'overlap' => 30, 'background' => true, 'max_minutes' => 30,
+            ],
             'sales-report' => [
                 'label' => 'Weekly sales report',
                 'description' => 'Claude Opus 5.5 analyses the last 7 days of Telegram sales chats (leads, orders, results, team rating) and posts one message per conversation plus a summary to the invoice parser\'s source group.',
@@ -97,9 +106,10 @@ final class ScheduledTasks
             ],
             'prune' => [
                 'label' => 'Delete old records',
-                'description' => 'Deletes conversations after 90 days, CVs and sales reports after 365 days, analytics after 400 days and task runs after '.ScheduledTaskRun::KEEP_DAYS.' days.',
+                'description' => 'Deletes conversations after 90 days, CVs and sales reports after 365 days, analytics after 400 days, task runs after '.ScheduledTaskRun::KEEP_DAYS.' days and AI traces / sandbox chats after '.AiTrace::KEEP_DAYS.' days.',
                 'command' => 'model:prune',
-                'parameters' => ['--model' => [ChatConversation::class, JobApplication::class, PageView::class, LinkClick::class, ScheduledTaskRun::class, SalesReport::class]],
+                'parameters' => ['--model' => [ChatConversation::class, JobApplication::class, PageView::class, LinkClick::class, ScheduledTaskRun::class, SalesReport::class,
+                    AiTrace::class, AiSandboxChat::class]],
                 'cron' => '0 0 * * *', 'every' => 'Daily at 00:00', 'max_minutes' => 30,
             ],
             'webhook-connect' => [

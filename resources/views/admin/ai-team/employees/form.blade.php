@@ -94,7 +94,7 @@
                         @if ($draft)
                             <form method="POST" action="{{ route('admin.ai-employees.publish', $e) }}" onsubmit="return confirm(@js('Publish draft v'.$draft->version.'?'.($e->isLive() ? ' Customers get it from the next message.' : '')))">
                                 @csrf
-                                <button class="text-sm rounded-lg bg-slate-900 text-white px-3 py-1.5 hover:bg-slate-700">Publish v{{ $draft->version }}</button>
+                                <button class="text-sm rounded-lg bg-slate-900 text-white px-3 py-1.5 hover:bg-slate-700 disabled:opacity-50" @disabled($tests['gate']) @if($tests['gate']) title="{{ $tests['gate'] }}" @endif>Publish v{{ $draft->version }}</button>
                             </form>
                         @endif
                     </div>
@@ -137,6 +137,26 @@
                             </li>
                         @endforeach
                     </ol>
+                </section>
+
+                <section class="bg-white border border-slate-200 rounded-xl p-5 space-y-3" aria-labelledby="tests-h">
+                    <h2 id="tests-h" class="text-sm font-semibold text-slate-900">Test cases ({{ $tests['published']['cases'] }})</h2>
+                    @foreach (['draft' => $draft, 'published' => $published] as $which => $version)
+                        @if ($version)
+                            @php $t = $tests[$which]; @endphp
+                            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                <span>{{ ucfirst($which) }} v{{ $version->version }}:
+                                    <span class="font-semibold">{{ $t['score'] !== null ? $t['score'].'%' : '—' }}</span>
+                                    <span class="text-xs text-slate-500">{{ $t['done'] }}/{{ $t['cases'] }} graded{{ $t['waiting'] ? ' · '.$t['waiting'].' running' : '' }}</span></span>
+                                <form method="POST" action="{{ route('admin.ai-employees.tests', [$e, $which]) }}">
+                                    @csrf
+                                    <button class="text-xs rounded-lg border border-slate-300 px-2.5 py-1 hover:border-slate-500" @disabled(! $tests['published']['cases'])>Run tests</button>
+                                </form>
+                            </div>
+                        @endif
+                    @endforeach
+                    @if ($tests['gate'])<p class="text-xs text-slate-700 border-l-2 border-slate-400 pl-2">Publishing is blocked: {{ $tests['gate'] }}</p>@endif
+                    <p class="text-xs text-slate-500">Each run is real Claude calls (billed); Claude Haiku grades the checklist. <a href="{{ route('admin.ai-test-cases.index') }}" class="underline">All test cases</a></p>
                 </section>
 
                 @php $shadow = \App\Models\AiShadowDraft::stats($e->id); @endphp

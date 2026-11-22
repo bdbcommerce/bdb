@@ -49,8 +49,11 @@
 
         <section class="lg:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col" aria-label="Test conversation">
             @if ($chat)
-                <div class="px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-sm text-slate-700">
-                    #{{ $chat->id }} · {{ $chat->employee?->name ?? 'deleted employee' }} · {{ $chat->prompt === 'draft' ? 'draft prompt' : 'published prompt' }} · {{ $chat->via === 'assistant' ? 'Premium-account chat' : 'bot chat' }}
+                <div class="px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-sm text-slate-700 flex flex-wrap items-center justify-between gap-2">
+                    <span>#{{ $chat->id }} · {{ $chat->employee?->name ?? 'deleted employee' }} · {{ $chat->prompt === 'draft' ? 'draft prompt' : 'published prompt' }} · {{ $chat->via === 'assistant' ? 'Premium-account chat' : 'bot chat' }}</span>
+                    @if (collect($chat->messages ?? [])->where('role', 'user')->isNotEmpty())
+                        <a href="{{ route('admin.ai-test-cases.create', ['sandbox' => $chat->id]) }}" class="text-xs underline text-slate-600 hover:text-slate-900">Save as test case</a>
+                    @endif
                 </div>
                 <div class="flex-1 bg-[#efeae2] p-4 min-h-[18rem] max-h-[32rem] overflow-y-auto">
                     @if ($chat->messages)

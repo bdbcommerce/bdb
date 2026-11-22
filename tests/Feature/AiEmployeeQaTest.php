@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AiEmployee;
 use App\Models\AiEmployeePrompt;
+use App\Models\AiTestCase;
 use App\Models\ChatConversation;
 use App\Models\SalesAssistantSetting;
 use App\Models\User;
@@ -54,6 +55,11 @@ class AiEmployeeQaTest extends TestCase
         $this->assertSame(3, AiEmployee::count());
         $this->assertSame(3, AiEmployeePrompt::count());
 
+        // Later migrations reference these tables: they go first.
+        $later = fn (string $name) => require database_path("migrations/{$name}.php");
+        foreach (['2026_11_23_130000_create_ai_test_tables', '2026_11_23_120000_create_ai_shadow_drafts_table', '2026_11_23_110000_create_ai_traces_tables'] as $name) {
+            $later($name)->down();
+        }
         $this->migration()->down();
         $this->assertFalse(DB::getSchemaBuilder()->hasTable('ai_employees'));
         $this->migration()->up();
@@ -116,6 +122,7 @@ class AiEmployeeQaTest extends TestCase
 
     public function test_second_sales_consultant_publishing_does_not_replace_the_live_one(): void
     {
+        AiTestCase::query()->update(['is_active' => false]); // no publish gate here (AiTestCaseTest covers it)
         $t = AiEmployeeTemplates::all()['malika'];
         $this->actingAs($this->admin)->post(route('admin.ai-employees.store'), ['name' => 'Zarina', 'role' => 'Sales consultant', 'kind' => 'sales', 'status' => 'draft', 'scales' => $t['scales'], 'prompt' => 'Zarina prompt'])->assertRedirect();
         $z = AiEmployee::where('name', 'Zarina')->sole();

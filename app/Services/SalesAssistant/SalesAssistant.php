@@ -3,6 +3,7 @@
 namespace App\Services\SalesAssistant;
 
 use App\Models\AiEmployee;
+use App\Models\AiEmployeePrompt;
 use App\Models\AiSandboxChat;
 use App\Models\AiShadowDraft;
 use App\Models\AiTrace;
@@ -55,6 +56,9 @@ class SalesAssistant
 
     /** The trace of the turn running now (dev mode or sandbox), else null. */
     private ?Trace $trace = null;
+
+    /** The kind of the turn running now: reply | reminder | follow-up | handover. */
+    private string $turnKind = 'reply';
 
     /** Messages of the conversation Claude sees. */
     private const HISTORY = 60;
@@ -215,7 +219,7 @@ TXT;
                 $from = ($conversation->sales_state ?? [])['handed_from'] ?? null;
                 if ((($conversation->sales_state ?? [])['kind'] ?? 'sales') !== $kind && $this->mayWrite($conversation, $settings, $user)) {
                     $count = count($conversation->messages ?? []);
-                    $sent = $this->turn($conversation, $settings, $user, 'Your colleague'.($from ? ' '.$from : '').' has just handed this customer to you. Greet them in one short sentence with your name and answer their last message.', 'handover') || $sent;
+                    $sent = $this->turn($conversation, $settings, $user, 'The customer\'s question is your work: your colleague'.($from ? ' '.$from : '').' routed this chat to you. Greet them in one short sentence with your name and answer their last message.', 'handover') || $sent;
                     $conversation->refresh();
                     $conversation->sales_state = ['handled' => $count] + (array) ($conversation->sales_state ?? []);
                     $conversation->save();
@@ -257,6 +261,7 @@ TXT;
     private function turn(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user, ?string $task = null, string $kind = 'reply'): bool
     {
         $this->trace = $settings->dev_mode ? new Trace('live', $kind) : null;
+        $this->turnKind = $kind;
         try {
             return $this->runTurn($conversation, $settings, $user, $task);
         } finally {
@@ -348,7 +353,12 @@ TXT;
      */
     public static function answerer(ChatConversation $conversation): ?AiEmployee
     {
-        $kind = (string) (($conversation->sales_state ?? [])['kind'] ?? 'sales');
+        $kind = ($conversation->sales_state ?? [])['kind'] ?? null;
+        if ($kind === null && $conversation->exists && $conversation->external_id) {
+            $kind = ChatConversation::query()->sameChatAs($conversation)->where('id', '<', $conversation->id)->where('updated_at', '>=', now()->subDays(7))
+                ->whereNotNull('sales_state')->latest('id')->limit(3)->get()->map(fn ($c) => ($c->sales_state ?? [])['kind'] ?? null)->filter()->first();
+        }
+        $kind = (string) ($kind ?? 'sales');
 
         return rescue(fn () => ($kind !== 'sales' ? AiEmployee::active($kind) : null) ?? AiEmployee::active('sales'), null, false);
     }
@@ -467,7 +477,6 @@ TXT;
      */
     public function sandbox(AiSandboxChat $chat, string $text): ?AiTrace
     {
-        $settings = SalesAssistantSetting::current();
         $employee = $chat->employee;
         $prompt = $chat->prompt === 'draft' ? ($employee?->draftPrompt() ?? $employee?->publishedPrompt()) : $employee?->publishedPrompt();
         $premium = $chat->via === 'assistant';
@@ -478,58 +487,18 @@ TXT;
         $chat->update(['messages' => $messages]);
         $trace->step('customer', 'Customer wrote (sandbox — you)', ['messages' => [['at' => now()->toIso8601String(), 'chat' => $premium ? 'Premium account' : 'bot', 'text' => $text]]]);
 
-        try {
-            $key = InvoiceParserSetting::current()->apiKey();
-            $day = 'ai-sandbox-turns:'.now()->format('Y-m-d');
-            if (! $key || (int) Cache::get($day, 0) >= self::SANDBOX_DAILY) {
-                $trace->step('laravel', $key ? 'Stopped: sandbox limit for today reached ('.self::SANDBOX_DAILY.' turns)' : 'Stopped: ANTHROPIC_API_KEY is not set');
-                $trace->status = $key ? 'limit' : 'failed';
-
-                return $trace->save();
-            }
-            Cache::add($day, 0, now()->addDay());
-            Cache::increment($day);
-
-            // An unsaved conversation: data() reads it like a real one (a sandbox ID matches no real customer).
-            $conversation = new ChatConversation(['channel' => 'telegram', 'external_id' => 'sandbox-'.$chat->id, 'messages' => $messages, 'sales_state' => $chat->state ?? [], 'locale' => 'ru']);
-            $trace->step('laravel', 'Laravel: who answers and how', [
-                'ai_employee' => $employee ? $employee->name.' — '.$employee->role : 'none — the sales playbook alone',
-                'prompt_version' => $prompt ? 'v'.$prompt->version.' ('.($prompt->status === 'draft' ? 'draft' : 'published').')' : null,
-                'model' => $settings->model, 'answers_in' => $premium ? 'Premium-account chat' : 'bot chat', 'working_hours' => $settings->isWorkingTime(),
-            ]);
-            [$data, $images, $query] = $this->data($conversation, $settings, null);
-            $trace->step('laravel', 'Laravel: context built', ['knowledge_search_words' => $query, 'photos_sent' => count($images), 'conversation_lines' => preg_match_all('/^\{"at"/m', $data)]);
-            $locale = $chat->state['language'] ?? 'ru';
-            $system = $settings->systemPrompt($employee, $prompt?->prompt)
-                ."\n\n# WEBSITE DATA (the company's own database — use only this and KNOWLEDGE)\n".app(ChatAssistant::class)->websiteData(in_array($locale, ['uz', 'ru', 'en'], true) ? $locale : 'ru', $query)
-                .self::CONTRACT;
-            $trace->step('claude', 'Laravel → Claude API: request', ['model' => $settings->model, 'system_prompt' => $system, 'user_message' => $data,
-                'images' => count($images), 'answer_format' => 'JSON schema: '.implode(', ', array_keys(self::schema()['properties']))]);
-            $called = microtime(true);
-            $reply = $this->ai->turn($key, $settings->model, $system, $data, $images, self::schema());
-            $trace->usage($reply);
-            $trace->step('claude', 'Claude API → Laravel: answer', ['raw_answer' => $reply['text'], 'input_tokens' => $reply['input_tokens'] ?? 0,
-                'output_tokens' => $reply['output_tokens'] ?? 0, 'took_ms' => (int) round((microtime(true) - $called) * 1000)]);
-            $json = AiClient::decodeJson($reply['text']);
-            if (! is_array($json)) {
-                throw new RuntimeException('Claude did not return JSON ('.mb_strlen($reply['text']).' characters).');
-            }
-        } catch (Throwable $e) {
-            $trace->step('claude', 'Claude request failed', ['error' => AiErrorAlerts::withoutSecrets($e->getMessage(), (string) ($key ?? ''))]);
-            $trace->status = 'failed';
-
+        $turn = $this->dryTurn($employee, $prompt, $messages, (array) ($chat->state ?? []), $chat->via, 'sandbox-'.$chat->id, $trace);
+        if ($turn === null) {
             return $trace->save();
         }
-
-        $state = self::merged((array) ($chat->state ?? []), $json);
-        $reply = is_scalar($json['reply'] ?? null) ? mb_substr(trim((string) $json['reply']), 0, 3500) : '';
+        ['reply' => $reply, 'json' => $json, 'state' => $state] = $turn;
         $unknown = is_scalar($json['unknown_question'] ?? null) ? mb_substr(trim((string) $json['unknown_question']), 0, 500) : '';
         $would = array_values(array_filter([
             $unknown !== '' ? 'Would post the unknown question to the source group and Client requests' : null,
             ! empty($json['confirmed']) && $state['summary'] !== '' ? (TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? '')) ? 'Would post the request to the sales chat' : 'Confirmed, but no phone yet — no request would be posted') : null,
             is_string($json['hand_to'] ?? null) && $json['hand_to'] !== '' && ($to = AiEmployee::active($json['hand_to'])) ? "Would hand the customer to {$to->name} — start a sandbox chat with {$to->name} to try their answer" : null,
             $employee?->isShadow() ? 'Shadow mode: a manager would get this reply to send, edit or discard' : null,
-            ! empty($json['cancelled']) ? 'Would cancel the request'.(! empty($json['follow_up_agreed']) ? ' and plan an offer follow-up in '.$settings->follow_up_days.' days' : '') : null,
+            ! empty($json['cancelled']) ? 'Would cancel the request'.(! empty($json['follow_up_agreed']) ? ' and plan an offer follow-up in '.SalesAssistantSetting::current()->follow_up_days.' days' : '') : null,
             array_filter($state['customer'] ?? []) ? 'Would save on the customer card (when empty there): '.implode(', ', array_keys(array_filter($state['customer']))) : null,
         ]));
         $trace->step('laravel', 'Laravel: answer applied (sandbox — nothing is done)', ['reply' => $reply, 'stage' => $state['stage'], 'summary' => $state['summary'],
@@ -542,6 +511,66 @@ TXT;
         $trace->status = $reply === '' ? 'silent' : 'sent';
 
         return $trace->save();
+    }
+
+    /**
+     * One Claude turn without side effects (the sandbox and test cases): $messages is the conversation so far (the
+     * customer's message last), $state its sales_state. Returns the reply, Claude's JSON, the new state and the usage,
+     * or null when it could not run (the reason is in $trace and in $error).
+     *
+     * @return array{reply: string, json: array, state: array, usage: array}|null
+     */
+    public function dryTurn(?AiEmployee $employee, ?AiEmployeePrompt $prompt, array $messages, array $state, string $via, string $ref, ?Trace $trace = null, ?string &$error = null): ?array
+    {
+        $settings = SalesAssistantSetting::current();
+        $premium = $via === 'assistant';
+        $key = InvoiceParserSetting::current()->apiKey();
+        $day = 'ai-sandbox-turns:'.now()->format('Y-m-d');
+        if (! $key || (int) Cache::get($day, 0) >= self::SANDBOX_DAILY) {
+            $error = $key ? 'Sandbox and test limit for today reached ('.self::SANDBOX_DAILY.' turns)' : 'ANTHROPIC_API_KEY is not set';
+            $trace?->step('laravel', 'Stopped: '.$error);
+            $trace && $trace->status = $key ? 'limit' : 'failed';
+
+            return null;
+        }
+        Cache::add($day, 0, now()->addDay());
+        Cache::increment($day);
+
+        try {
+            // An unsaved conversation: data() reads it like a real one (the reference matches no real customer).
+            $conversation = new ChatConversation(['channel' => 'telegram', 'external_id' => $ref, 'messages' => $messages, 'sales_state' => $state, 'locale' => 'ru']);
+            $trace?->step('laravel', 'Laravel: who answers and how', [
+                'ai_employee' => $employee ? $employee->name.' — '.$employee->role : 'none — the sales playbook alone',
+                'prompt_version' => $prompt ? 'v'.$prompt->version.' ('.($prompt->status === 'draft' ? 'draft' : 'published').')' : null,
+                'model' => $settings->model, 'answers_in' => $premium ? 'Premium-account chat' : 'bot chat', 'working_hours' => $settings->isWorkingTime(),
+            ]);
+            [$data, $images, $query] = $this->data($conversation, $settings, null);
+            $trace?->step('laravel', 'Laravel: context built', ['knowledge_search_words' => $query, 'photos_sent' => count($images), 'conversation_lines' => preg_match_all('/^\{"at"/m', $data)]);
+            $locale = $state['language'] ?? 'ru';
+            $system = $settings->systemPrompt($employee, $prompt?->prompt)
+                ."\n\n# WEBSITE DATA (the company's own database — use only this and KNOWLEDGE)\n".app(ChatAssistant::class)->websiteData(in_array($locale, ['uz', 'ru', 'en'], true) ? $locale : 'ru', $query)
+                .self::CONTRACT;
+            $trace?->step('claude', 'Laravel → Claude API: request', ['model' => $settings->model, 'system_prompt' => $system, 'user_message' => $data,
+                'images' => count($images), 'answer_format' => 'JSON schema: '.implode(', ', array_keys(self::schema()['properties']))]);
+            $called = microtime(true);
+            $usage = $this->ai->turn($key, $settings->model, $system, $data, $images, self::schema());
+            $trace?->usage($usage);
+            $trace?->step('claude', 'Claude API → Laravel: answer', ['raw_answer' => $usage['text'], 'input_tokens' => $usage['input_tokens'] ?? 0,
+                'output_tokens' => $usage['output_tokens'] ?? 0, 'took_ms' => (int) round((microtime(true) - $called) * 1000)]);
+            $json = AiClient::decodeJson($usage['text']);
+            if (! is_array($json)) {
+                throw new RuntimeException('Claude did not return JSON ('.mb_strlen($usage['text']).' characters).');
+            }
+        } catch (Throwable $e) {
+            $error = AiErrorAlerts::withoutSecrets($e->getMessage(), (string) $key);
+            $trace?->step('claude', 'Claude request failed', ['error' => $error]);
+            $trace && $trace->status = 'failed';
+
+            return null;
+        }
+
+        return ['reply' => is_scalar($json['reply'] ?? null) ? mb_substr(trim((string) $json['reply']), 0, 3500) : '', 'json' => $json,
+            'state' => self::merged($state, $json), 'usage' => $usage];
     }
 
     private function apply(ChatConversation $conversation, ?TelegramUser $user, array $json, int $seen, ?AiEmployee $employee = null): bool
@@ -618,13 +647,13 @@ TXT;
             }
         }
 
-        // Routing: the customer's need is a colleague's work — the colleague takes the chat (and answers next).
+        // Routing: the customer's need is a colleague's work — the colleague takes the chat and answers next. Applied
+        // below, only when this reply is not dropped; a colleague's first (handover) turn never hands on again.
         $handTo = is_string($json['hand_to'] ?? null) ? $json['hand_to'] : '';
-        $current = (string) ($state['kind'] ?? 'sales');
-        if ($handTo !== '' && $handTo !== $current && in_array($handTo, AiEmployee::RUNNABLE_KINDS, true) && ($colleague = AiEmployee::active($handTo))) {
-            $state['kind'] = $handTo;
-            $state['handed_from'] = $employee?->name;
-            $actions[] = "Handed to {$colleague->name} (".mb_strtolower($colleague->role).')';
+        $colleague = $this->turnKind !== 'handover' && $handTo !== '' && $handTo !== (string) ($state['kind'] ?? 'sales')
+            && in_array($handTo, AiEmployee::RUNNABLE_KINDS, true) ? AiEmployee::active($handTo) : null;
+        if ($colleague) {
+            $actions[] = "Hands the customer to {$colleague->name} (".mb_strtolower($colleague->role).')';
         }
 
         $conversation->sales_state = $state;
@@ -643,6 +672,10 @@ TXT;
 
             return false;
         }
+        if ($colleague) {
+            $conversation->sales_state = ['kind' => $colleague->kind, 'handed_from' => $employee?->name] + (array) ($conversation->sales_state ?? []);
+            $conversation->save();
+        }
         if ($text === '') {
             $this->trace?->step('laravel', 'Nothing sent: the AI chose silence');
             $this->trace && $this->trace->status = 'silent';
@@ -658,7 +691,8 @@ TXT;
             return false;
         }
 
-        $sent = $this->send($conversation, $text, $language, ! empty($json['ask_phone_button']), $employee?->name);
+        // A hand-off line ("my colleague will help") is not an answer: Waiting for reply and the reminders ignore it.
+        $sent = $this->send($conversation, $text, $language, ! empty($json['ask_phone_button']), $employee?->name, $colleague ? ['handoff' => true] : []);
         $this->trace?->step('telegram', $sent ? 'Laravel → Telegram → customer: sent' : 'Telegram did not deliver the message', [
             'chat' => $conversation->via() === 'assistant' ? 'Premium-account chat (on behalf of the account)' : 'bot chat', 'text' => $text]);
         $this->trace && $this->trace->status = $sent ? 'sent' : 'failed';
@@ -671,8 +705,12 @@ TXT;
         $extra += $employee ? ['employee' => $employee] : [];
         if ($conversation->via() === 'assistant') {
             $connection = TelegramBusinessConnection::where('connection_id', $conversation->viaConnectionId())->first();
+            if (! $connection || ! $connection->is_enabled || ! $connection->can_reply || ! $this->recorder->sendAsAccount($conversation->refresh(), $connection, $text, 'assistant', $extra)) {
+                return false;
+            }
+            self::staleDrafts($conversation);
 
-            return $connection && $this->recorder->sendAsAccount($conversation->refresh(), $connection, $text, 'assistant', $extra);
+            return true;
         }
 
         $markup = $phoneButton
@@ -687,8 +725,18 @@ TXT;
             'message_id' => is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null, 'at' => now()->toIso8601String(), 'sales' => true]];
         $conversation->message_count = count($conversation->messages);
         $conversation->save();
+        self::staleDrafts($conversation);
 
         return true;
+    }
+
+    /** Waiting shadow drafts of this chat are out of date (someone answered the customer). */
+    public static function staleDrafts(ChatConversation $conversation): void
+    {
+        if ($conversation->exists) {
+            AiShadowDraft::whereIn('chat_conversation_id', ChatConversation::query()->sameChatAs($conversation)->select('id'))
+                ->where('status', 'pending')->update(['status' => 'stale']);
+        }
     }
 
     /**
@@ -700,14 +748,15 @@ TXT;
     {
         $now ??= now();
         $state = (array) ($conversation->sales_state ?? []);
-        if (! in_array($state['stage'] ?? null, self::OPEN_STAGES, true) || ! empty($state['closed_at'])) {
-            return null;
+        if (! in_array($state['stage'] ?? null, self::OPEN_STAGES, true) || ! empty($state['closed_at'])
+            || ($conversation->exists && AiShadowDraft::where('chat_conversation_id', $conversation->id)->where('status', 'pending')->exists())) {
+            return null; // (a shadow reply waiting for a manager: the customer is waiting for us, not silent)
         }
         $raw = $conversation->messages ?? [];
         $visible = array_values(array_filter($raw, fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit'])));
         $last = end($visible);
         $counted = self::counted($raw); // late edits are appended but are not new messages
-        if (! $last || ($last['role'] ?? null) !== 'assistant' || (int) $conversation->handled_count >= $counted
+        if (! $last || ($last['role'] ?? null) !== 'assistant' || ! empty($last['handoff']) || (int) $conversation->handled_count >= $counted
             || ($state['follow_up_sent'] ?? null) === $counted || ! collect($visible)->contains(fn ($m) => ($m['role'] ?? null) === 'user')) {
             return null;
         }
@@ -845,8 +894,9 @@ TXT;
             $conversation->refresh();
             $after = (array) ($conversation->sales_state ?? []);
             unset($after['follow_up_at']);
-            self::saveState($conversation, ['follow_up_sent' => $sent ? self::counted($conversation->messages ?? []) : 'failed'] + $after);
-            $this->followUpNote($conversation, $user, $after, $days, $sent ? 'sent' : 'failed');
+            $shadow = ! $sent && AiShadowDraft::where('chat_conversation_id', $conversation->id)->where('status', 'pending')->exists();
+            self::saveState($conversation, ['follow_up_sent' => $sent ? self::counted($conversation->messages ?? []) : ($shadow ? 'shadow' : 'failed')] + $after);
+            $this->followUpNote($conversation, $user, $after, $days, $sent ? 'sent' : ($shadow ? 'shadow' : 'failed'));
 
             return true;
         } finally {
@@ -860,6 +910,7 @@ TXT;
         $what = match ($how) {
             'sent' => 'The assistant has just written to them — please send an offer.',
             'failed' => 'The assistant could not write to them — please contact them with an offer.',
+            'shadow' => 'The AI employee drafted a message for them (shadow mode) — send it from the chat, then send an offer.',
             default => 'A manager has been in this chat since, so the assistant did not write — please contact them with an offer.',
         };
         $e = fn ($v) => e((string) $v);
@@ -950,9 +1001,14 @@ TXT;
      */
     public function sendDraft(AiShadowDraft $draft, string $text, string $by): bool
     {
+        if (! AiShadowDraft::whereKey($draft->id)->where('status', 'pending')->update(['status' => 'sending'])) {
+            return false; // already sent, discarded or out of date
+        }
         $conversation = $draft->conversation->latestSession();
         $language = ($conversation->sales_state ?? [])['language'] ?? 'ru';
         if (! $this->send($conversation, $text, $language, false, $draft->employee?->name, ['approved_by' => mb_substr($by, 0, 100)])) {
+            AiShadowDraft::whereKey($draft->id)->where('status', 'sending')->update(['status' => 'pending']);
+
             return false;
         }
         $draft->update(['final' => $text, 'status' => trim($text) === trim($draft->draft) ? 'sent' : 'edited', 'decided_by' => mb_substr($by, 0, 100), 'decided_at' => now()]);

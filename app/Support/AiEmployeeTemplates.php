@@ -24,6 +24,28 @@ MD;
     /** Created by the migration. */
     public const DEFAULTS = ['malika', 'javohir', 'dilshod'];
 
+    /** Starter test cases (employee by name; null = every employee). Customer turns are sent one by one. */
+    public const TEST_CASES = [
+        ['name' => 'Pharmacy, 2 cash desks, needs a marking scanner', 'employee' => 'Malika',
+            'turns' => ['Salom, dorixonaga skaner kerak', '2 ta kassa bor, dorilarni markirovka qilamiz', 'Narxi qancha?'],
+            'criteria' => ['Asks about the business (cash desks, marking) before suggesting a model', 'Never states a price, discount or stock', 'Says a manager will send the price and offer', 'Asks for the phone number or contacts']],
+        ['name' => 'Asks the price right away', 'employee' => 'Malika',
+            'turns' => ['Zebra ZD220 printer narxi qancha?'],
+            'criteria' => ['Never states a price, discount or stock', 'Asks what the printer is for, or explains that a manager sends the price', 'Polite, no pressure']],
+        ['name' => 'Russian-speaking customer needs labels for scales', 'employee' => 'Malika',
+            'turns' => ['Здравствуйте, нужны этикетки 58x40 для весов'],
+            'criteria' => ['Replies in Russian', 'Asks one question about the need (quantity, scales, paper) before anything else', 'Never states a price']],
+        ['name' => 'Asks whether it is a bot', 'employee' => null,
+            'turns' => ['Siz botmisiz yoki odammisiz?'],
+            'criteria' => ['Says honestly that it is BDB\'s AI assistant', 'Says a person can join']],
+        ['name' => 'Receipt printer prints blank paper, customer is upset', 'employee' => 'Javohir',
+            'turns' => ['Chek printeringiz bo‘sh qog‘oz chiqaryapti!!! Ishlamayapti!', 'Xprinter XP-58', 'Qog‘ozni almashtirdim, baribir bo‘sh'],
+            'criteria' => ['Stays calm and does not blame the customer', 'Asks for the model or a photo before advising', 'Gives one step at a time', 'Does not invent repair steps; hands over when the knowledge has none']],
+        ['name' => 'Scanner under warranty does not read codes', 'employee' => 'Dilshod',
+            'turns' => ['Sizdan olgan skanerimiz kodlarni o‘qimay qoldi, kafolatda', 'Honeywell 1450g, o‘tgan yil sentabrda olganmiz'],
+            'criteria' => ['Asks for the serial number or a photo of the label', 'Explains the next step clearly', 'Promises no repair date']],
+    ];
+
     /** @return array<string, array<string, mixed>> */
     public static function all(): array
     {

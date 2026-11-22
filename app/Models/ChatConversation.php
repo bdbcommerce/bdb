@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SalesAssistant\SalesAssistant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
@@ -98,6 +99,16 @@ class ChatConversation extends Model
 
     protected static function booted(): void
     {
+        static::saved(function (self $conversation) {
+            if (! in_array($conversation->channel, self::REPLY_CHANNELS, true) || (! $conversation->wasChanged('messages') && ! $conversation->wasChanged('handled_count'))) {
+                return;
+            }
+            $last = collect($conversation->messages ?? [])->last(fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit']));
+            if ($conversation->wasChanged('handled_count') || in_array($last['role'] ?? null, ['owner', 'admin'], true)) {
+                SalesAssistant::staleDrafts($conversation);
+            }
+        });
+
         static::saving(function (self $conversation) {
             if (in_array($conversation->channel, self::REPLY_CHANNELS, true)
                 && ($conversation->isDirty('messages') || $conversation->isDirty('handled_count') || ! $conversation->exists)) {
@@ -135,7 +146,7 @@ class ChatConversation extends Model
                 }
             } elseif (in_array($role, ['owner', 'admin'], true)) {
                 $personLater = true;
-            } else {
+            } elseif (empty($m['handoff'])) {
                 $answeredChats[$chat($m)] = true;
             }
         }
