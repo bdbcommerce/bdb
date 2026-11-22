@@ -7,7 +7,8 @@ use Throwable;
 
 /**
  * Weekly sales report settings (singleton). Admin → Telegram → Sales report.
- * The report always goes to the invoice parser's source group (InvoiceParserSetting::source_chat_id) — nowhere else.
+ * The weekly report always goes to the invoice parser's source group (InvoiceParserSetting::source_chat_id) — nowhere else;
+ * the daily report goes to the invoice parser's JSON recipient (json_chat_id, usually a user ID).
  */
 class SalesReportSetting extends Model
 {
@@ -20,11 +21,11 @@ class SalesReportSetting extends Model
 
     public const DEFAULT_CHANNELS = ['telegram', 'business'];
 
-    protected $fillable = ['enabled', 'language', 'channels', 'instructions'];
+    protected $fillable = ['enabled', 'daily_enabled', 'language', 'channels', 'instructions'];
 
     protected function casts(): array
     {
-        return ['enabled' => 'boolean', 'channels' => 'array'];
+        return ['enabled' => 'boolean', 'daily_enabled' => 'boolean', 'channels' => 'array'];
     }
 
     public static function current(): self
@@ -32,7 +33,7 @@ class SalesReportSetting extends Model
         try {
             return static::firstOrCreate(['id' => 1])->refresh();
         } catch (Throwable) {
-            return new static(['enabled' => false]);
+            return new static(['enabled' => false, 'daily_enabled' => false]);
         }
     }
 
@@ -55,5 +56,21 @@ class SalesReportSetting extends Model
         $id = trim((string) InvoiceParserSetting::current()->source_chat_id);
 
         return str_starts_with($id, '-') ? $id : null;
+    }
+
+    /** The daily report's recipient: the invoice parser's JSON recipient — never the invoice (accountants') chat or the source group. */
+    public static function dailyChatId(): ?string
+    {
+        $settings = InvoiceParserSetting::current();
+        $id = trim((string) $settings->json_chat_id);
+
+        // Not the invoice chat and not the source group (that one gets the weekly report): settings saved before the rules.
+        return $id !== '' && ! in_array($id, [trim((string) $settings->target_chat_id), trim((string) $settings->source_chat_id)], true) ? $id : null;
+    }
+
+    /** Where a report of this period ('week' | 'day') goes. */
+    public static function chatFor(string $period): ?string
+    {
+        return $period === 'day' ? self::dailyChatId() : self::chatId();
     }
 }

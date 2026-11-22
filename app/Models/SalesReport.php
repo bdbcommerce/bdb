@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 
-/** One weekly sales report (App\Services\SalesReport\SalesReporter). Kept a year. */
+/** One weekly or daily (period week | day) sales report (App\Services\SalesReport\SalesReporter). Kept a year. */
 class SalesReport extends Model
 {
     use MassPrunable;
@@ -14,7 +14,7 @@ class SalesReport extends Model
     public const KEEP_DAYS = 365;
 
     protected $fillable = [
-        'period_start', 'period_end', 'trigger', 'status', 'chat_id', 'conversations', 'report', 'html', 'message_ids',
+        'period', 'period_start', 'period_end', 'trigger', 'status', 'chat_id', 'conversations', 'report', 'html', 'message_ids',
         'model', 'input_tokens', 'output_tokens', 'cost_usd', 'error',
     ];
 

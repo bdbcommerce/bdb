@@ -250,6 +250,53 @@ class SalesReportTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_daily_report_covers_one_day_and_goes_only_to_the_json_recipient(): void
+    {
+        InvoiceParserSetting::current()->update(['json_chat_id' => '555000111']);
+        $this->seedWeek(); // Ali's last message is 2 days old; chat 502 is from the last 24 hours
+        $this->answer([
+            ['ref' => 1, 'kind' => 'support', 'result' => 'none', 'handled_by' => 'Staff: Dilnoza', 'summary' => 'Asked for help', 'next_step' => '', 'lost_reason' => '', 'score' => 6, 'score_comment' => ''],
+        ]);
+
+        $this->artisan('sales:weekly-report --daily')->assertSuccessful();
+
+        $this->assertStringNotContainsString('DS2208', $this->calls[0]['data'], 'only the last 24 hours');
+        $this->assertStringContainsString('one day', $this->calls[0]['system']);
+        $this->assertStringContainsString('goal for tomorrow', $this->calls[0]['system']);
+        $sent = $this->sent();
+        $this->assertSame(['555000111'], array_values(array_unique(array_column($sent, 'chat'))), 'only the JSON recipient, not the group');
+        $this->assertStringContainsString('Kunlik savdo hisoboti', $sent[0]['text']);
+        $this->assertStringContainsString('Ertangi maqsad', end($sent)['text']);
+        $report = SalesReport::sole();
+        $this->assertSame(['day', 'sent', '555000111'], [$report->period, $report->status, $report->chat_id]);
+        $this->assertSame(24.0, abs($report->period_end->diffInHours($report->period_start)));
+    }
+
+    public function test_daily_report_needs_a_recipient_and_respects_its_switch(): void
+    {
+        $this->seedWeek();
+        $this->artisan('sales:weekly-report --daily')->assertFailed();
+        $this->assertStringContainsString('JSON recipient', SalesReport::sole()->error);
+        $this->assertSame([], $this->sent());
+
+        // The invoice (accountants') chat is never a recipient, even in settings saved earlier.
+        InvoiceParserSetting::current()->update(['json_chat_id' => '-1002222222222']);
+        $this->assertNull(SalesReportSetting::dailyChatId());
+
+        InvoiceParserSetting::current()->update(['json_chat_id' => '555000111']);
+        SalesReportSetting::current()->update(['daily_enabled' => false]);
+        $this->artisan('sales:weekly-report --daily')->assertSuccessful()->expectsOutputToContain('daily sales report is switched off');
+        $this->assertSame(1, SalesReport::count());
+    }
+
+    public function test_daily_scheduled_at_six_pm_tashkent(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-19 12:00', 'UTC')); // 17:00 in Tashkent
+        $this->assertSame('2026-11-19 18:00', ScheduledTasks::nextRun('sales-report-daily')->copy()->setTimezone('Asia/Tashkent')->format('Y-m-d H:i'));
+        Carbon::setTestNow();
+        $this->assertSame(['--daily' => true], ScheduledTasks::get('sales-report-daily')['parameters']);
+    }
+
     public function test_admin_page_settings_and_send_now(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
@@ -257,7 +304,10 @@ class SalesReportTest extends TestCase
 
         $this->actingAs($admin)->put(route('admin.sales-report.update'), ['language' => 'ru', 'channels' => ['business']])->assertSessionHasNoErrors();
         $s = SalesReportSetting::current();
-        $this->assertSame(['ru', ['business'], false], [$s->language, $s->channels, $s->enabled]);
+        $this->assertSame(['ru', ['business'], false, false], [$s->language, $s->channels, $s->enabled, $s->daily_enabled]);
+        $this->actingAs($admin)->put(route('admin.sales-report.update'), ['language' => 'ru', 'channels' => ['business'], 'daily_enabled' => '1'])->assertSessionHasNoErrors();
+        $this->assertTrue(SalesReportSetting::current()->daily_enabled);
+        $this->actingAs($admin)->post(route('admin.sales-report.run'), ['period' => 'day'])->assertSessionHasErrors('run');
         $this->actingAs($admin)->put(route('admin.sales-report.update'), ['language' => 'de', 'channels' => ['web']])->assertSessionHasErrors(['language', 'channels.0']);
         $this->actingAs($admin)->put(route('admin.sales-report.update'), ['language' => 'uz'])->assertSessionHasErrors('channels');
 
@@ -269,5 +319,11 @@ class SalesReportTest extends TestCase
 
         $this->actingAs(User::factory()->create(['is_admin' => false]))->get(route('admin.sales-report.index'))->assertStatus(302);
         $this->assertSame(1, SalesReport::count());
+
+        InvoiceParserSetting::current()->update(['json_chat_id' => '555000111']);
+        $this->actingAs($admin)->get(route('admin.sales-report.index'))->assertOk()->assertSee('555000111')->assertSee('Send daily now');
+        $this->actingAs($admin)->post(route('admin.sales-report.run'), ['period' => 'day'])->assertSessionHasNoErrors();
+        $this->assertSame('success', ScheduledTaskRun::where('task', 'sales-report-daily')->sole()->status);
+        $this->assertSame(['day', '555000111'], [SalesReport::latest('id')->first()->period, SalesReport::latest('id')->first()->chat_id]);
     }
 }

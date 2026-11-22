@@ -80,6 +80,14 @@ final class ScheduledTasks
                 'overlap' => 120, 'background' => true, 'exclusive' => true, 'max_minutes' => 120,
                 'manual_parameters' => ['--manual' => true],
             ],
+            'sales-report-daily' => [
+                'label' => 'Daily sales report',
+                'description' => 'Claude Opus 5.5 analyses the last 24 hours of Telegram sales chats and sends one message per conversation plus a summary to the invoice parser\'s JSON recipient (a Telegram user ID).',
+                'command' => 'sales:weekly-report', 'parameters' => ['--daily' => true],
+                'cron' => '0 18 * * *', 'timezone' => 'Asia/Tashkent', 'every' => 'Daily at 18:00 (Tashkent)',
+                'overlap' => 120, 'background' => true, 'exclusive' => true, 'max_minutes' => 120,
+                'manual_parameters' => ['--manual' => true],
+            ],
             'prune' => [
                 'label' => 'Delete old records',
                 'description' => 'Deletes conversations after 90 days, CVs and sales reports after 365 days, analytics after 400 days and task runs after '.ScheduledTaskRun::KEEP_DAYS.' days.',
@@ -253,7 +261,11 @@ final class ScheduledTasks
     {
         $out = [];
         foreach ($parameters as $name => $value) {
-            str_starts_with((string) $name, '--') ? $out[$name] = $value : $out[] = $value;
+            if ($value === true) {
+                $out[] = $name; // a flag (--daily): Laravel would write --daily="1", which a flag refuses
+            } else {
+                str_starts_with((string) $name, '--') ? $out[$name] = $value : $out[] = $value;
+            }
         }
 
         return $out;
@@ -269,7 +281,9 @@ final class ScheduledTasks
 
         $args = [];
         foreach ($task['parameters'] as $name => $value) {
-            if (str_starts_with((string) $name, '--')) {
+            if ($value === true) {
+                $args[] = $name;
+            } elseif (str_starts_with((string) $name, '--')) {
                 foreach ((array) $value as $v) {
                     $args[] = $name.'="'.$v.'"';
                 }

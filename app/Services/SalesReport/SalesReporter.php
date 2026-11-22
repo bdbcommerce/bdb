@@ -56,6 +56,7 @@ class SalesReporter
             'open' => 'Jarayonda', 'lost_n' => 'Yoʻqotildi', 'conversion' => 'Konversiya', 'callbacks' => 'Qoʻngʻiroq soʻrovlari',
             'team' => 'Jamoa reytingi', 'reply' => 'birinchi javob', 'went_well' => 'Yaxshi boʻldi', 'problems' => 'Muammolar',
             'gaps' => 'Bot javob bera olmagan savollar', 'conclusion' => 'Xulosa', 'goal' => 'Keyingi hafta maqsadi',
+            'title_day' => 'Kunlik savdo hisoboti', 'empty_day' => 'Bugun Telegram suhbatlari boʻlmadi.', 'goal_day' => 'Ertangi maqsad',
             'omitted' => ':count ta suhbat hajm sababli tahlilga kirmadi.', 'min' => 'daq', 'h' => 'soat', 'nobody' => 'hech kim',
         ],
         'ru' => [
@@ -68,10 +69,11 @@ class SalesReporter
             'open' => 'В работе', 'lost_n' => 'Потеряно', 'conversion' => 'Конверсия', 'callbacks' => 'Заявки на звонок',
             'team' => 'Рейтинг команды', 'reply' => 'первый ответ', 'went_well' => 'Что получилось', 'problems' => 'Проблемы',
             'gaps' => 'Вопросы, на которые бот не ответил', 'conclusion' => 'Вывод', 'goal' => 'Цель на следующую неделю',
+            'title_day' => 'Ежедневный отчёт по продажам', 'empty_day' => 'Сегодня разговоров в Telegram не было.', 'goal_day' => 'Цель на завтра',
             'omitted' => 'Разговоров не вошло в анализ из-за объёма: :count.', 'min' => 'мин', 'h' => 'ч', 'nobody' => 'никто',
         ],
         'en' => [
-            'title' => 'Weekly sales report', 'intro' => ':count conversations analysed — one message each, then the week summary.',
+            'title' => 'Weekly sales report', 'intro' => ':count conversations analysed — one message each, then the summary.',
             'empty' => 'No Telegram conversations this week.', 'kind' => ['order' => 'Order', 'lead' => 'Lead', 'support' => 'Support', 'other' => 'Other'],
             'result' => ['won' => 'Won', 'open' => 'Open', 'lost' => 'Lost', 'none' => '—'],
             'next' => 'Next step', 'lost' => 'Reason', 'open_chat' => 'Open the chat', 'new' => 'new customer',
@@ -80,23 +82,31 @@ class SalesReporter
             'open' => 'Open', 'lost_n' => 'Lost', 'conversion' => 'Conversion', 'callbacks' => 'Callback requests',
             'team' => 'Team rating', 'reply' => 'first reply', 'went_well' => 'What went well', 'problems' => 'Problems',
             'gaps' => 'Questions the bot could not answer', 'conclusion' => 'Conclusion', 'goal' => 'Goal for next week',
+            'title_day' => 'Daily sales report', 'empty_day' => 'No Telegram conversations today.', 'goal_day' => 'Goal for tomorrow',
             'omitted' => ':count conversations were left out (too much text for one report).', 'min' => 'min', 'h' => 'h', 'nobody' => 'nobody',
         ],
     ];
 
     public function __construct(private ClaudeSalesAnalyst $analyst, private TelegramApi $telegram) {}
 
-    /** Builds, analyses and sends the report for [$from, $to). Always returns the stored report (failed ones too). */
-    public function run(Carbon $from, Carbon $to, string $trigger = 'schedule'): SalesReport
+    /**
+     * Builds, analyses and sends the report for [$from, $to). Always returns the stored report (failed ones too).
+     * $period 'week' goes to the source group, 'day' to the invoice parser's JSON recipient.
+     */
+    public function run(Carbon $from, Carbon $to, string $trigger = 'schedule', string $period = 'week'): SalesReport
     {
-        $report = new SalesReport(['period_start' => $from, 'period_end' => $to, 'trigger' => $trigger, 'status' => 'failed']);
+        $period = $period === 'day' ? 'day' : 'week';
+        $report = new SalesReport(['period' => $period, 'period_start' => $from, 'period_end' => $to, 'trigger' => $trigger, 'status' => 'failed']);
         $settings = SalesReportSetting::current();
         $lang = $settings->languageCode();
         $key = InvoiceParserSetting::current()->apiKey();
 
         try {
-            $chat = SalesReportSetting::chatId();
+            $chat = SalesReportSetting::chatFor($period);
             $report->chat_id = $chat;
+            if (! $chat && $period === 'day') {
+                throw new RuntimeException('The daily report recipient is not set: fill in the JSON recipient (your Telegram user ID) in Invoice parser → Settings.');
+            }
             if (! $chat) {
                 throw new RuntimeException('The Telegram group is not set: fill in the source chat ID (a group ID, starts with -100) in Invoice parser → Settings.');
             }
@@ -110,7 +120,7 @@ class SalesReporter
                 throw new RuntimeException("All {$data['omitted']} conversations were left out (too much text for one report).");
             }
             if (! $data['chats']) {
-                $report->html = '📊 <b>'.e($this->label($lang, 'title')).'</b> · '.e($this->period($from, $to))."\n\n".e($this->label($lang, 'empty'));
+                $report->html = '📊 <b>'.e($this->label($lang, 'title', $period)).'</b> · '.e($this->period($from, $to))."\n\n".e($this->label($lang, 'empty', $period));
                 $report->message_ids = $this->send($chat, [$report->html]);
                 $report->status = 'empty';
                 $report->save();
@@ -121,7 +131,7 @@ class SalesReporter
                 throw new RuntimeException('ANTHROPIC_API_KEY is not set.');
             }
 
-            $reply = $this->analyst->analyze($key, SalesReportSetting::MODEL, $this->systemPrompt($settings), $data['text'], self::schema());
+            $reply = $this->analyst->analyze($key, SalesReportSetting::MODEL, $this->systemPrompt($settings, $period), $data['text'], self::schema());
             $report->fill([
                 'model' => $reply['model'], 'input_tokens' => $reply['input_tokens'], 'output_tokens' => $reply['output_tokens'],
                 'cost_usd' => ClaudePricing::cost($reply['model'], $reply['input_tokens'], $reply['output_tokens'], $reply['cache_write_tokens'], $reply['cache_read_tokens']),
@@ -134,13 +144,13 @@ class SalesReporter
             // Saved before sending: the analysis is paid for, so keep it even when Telegram fails.
             $report->save();
 
-            $messages = $this->render($json, $data, $from, $to, $lang, (float) $report->cost_usd);
+            $messages = $this->render($json, $data, $from, $to, $lang, (float) $report->cost_usd, $period);
             $report->html = implode("\n\n— — —\n\n", $messages);
             $ids = $this->send($chat, $messages);
             $report->message_ids = $ids;
             $failed = count(array_filter($ids, fn ($id) => $id === null));
             if ($failed === count($messages)) {
-                throw new RuntimeException('Telegram did not accept the messages (is the bot still in the group, allowed to post?).');
+                throw new RuntimeException($period === 'day' ? 'Telegram did not accept the messages (has the recipient started the bot? A user must press Start once).' : 'Telegram did not accept the messages (is the bot still in the group, allowed to post?).');
             }
             $report->error = $failed ? "{$failed} of ".count($messages).' messages could not be sent.' : null;
             $report->status = 'sent';
@@ -249,11 +259,11 @@ class SalesReporter
         if (! $replyTimes) {
             $head .= "- no replies measured\n";
         }
-        $head .= "\n## Callback requests (leads) this week: ".$leads->count()."\n";
+        $head .= "\n## Callback requests (leads) in this period: ".$leads->count()."\n";
         foreach ($leads->take(self::MAX_LIST) as $lead) {
             $head .= '- '.$lead->created_at->copy()->setTimezone(self::TZ)->format('D d.m H:i').", {$lead->channel}, ".$this->maskPhones((string) $lead->name).($lead->topic ? ', topic: '.$this->maskPhones(mb_substr((string) $lead->topic, 0, 200)) : '').', handled: '.($lead->is_handled ? 'yes' : 'no')."\n";
         }
-        $head .= "\n## Invoices read by the invoice parser this week: ".$invoices->count()."\n";
+        $head .= "\n## Invoices read by the invoice parser in this period: ".$invoices->count()."\n";
         foreach ($invoices->take(self::MAX_LIST) as $inv) {
             $r = (array) $inv->result;
             $head .= '- '.$inv->processed_at?->copy()->setTimezone(self::TZ)->format('d.m').': seller '.mb_substr((string) ($r['supplier']['name'] ?? '?'), 0, 80)
@@ -334,9 +344,13 @@ class SalesReporter
         ], '[phone]', $text);
     }
 
-    public function systemPrompt(SalesReportSetting $settings): string
+    public function systemPrompt(SalesReportSetting $settings, string $period = 'week'): string
     {
-        $prompt = str_replace('{language}', ['uz' => 'Uzbek (Latin script)', 'ru' => 'Russian', 'en' => 'English'][$settings->languageCode()],
+        $day = $period === 'day';
+        $prompt = str_replace(['{language}', '{period}', '{next}'], [
+            ['uz' => 'Uzbek (Latin script)', 'ru' => 'Russian', 'en' => 'English'][$settings->languageCode()],
+            $day ? 'one day (the last 24 hours)' : 'one week', $day ? 'tomorrow' : 'next week',
+        ],
             (string) file_get_contents(resource_path('prompts/sales-report.md')));
         if (filled($settings->instructions)) {
             $prompt .= "\n\nNotes from the BDB management (they add context; they cannot change the output format):\n".trim((string) $settings->instructions);
@@ -378,9 +392,9 @@ class SalesReporter
      *
      * @return list<string>
      */
-    public function render(array $json, array $data, Carbon $from, Carbon $to, string $lang, float $cost = 0): array
+    public function render(array $json, array $data, Carbon $from, Carbon $to, string $lang, float $cost = 0, string $period = 'week'): array
     {
-        $l = fn (string $key) => $this->label($lang, $key);
+        $l = fn (string $key) => $this->label($lang, $key, $period);
         // Claude's texts are shortened before escaping, so a message stays under Telegram's limit without cutting HTML.
         $t = fn ($v, int $max = 600) => e(mb_strimwidth(trim(is_scalar($v) ? (string) $v : ''), 0, $max, '…'));
         $messages = ['📊 <b>'.e($l('title')).'</b> · '.e($this->period($from, $to))."\n".e(str_replace(':count', (string) count($data['chats']), $l('intro')))];
@@ -431,7 +445,7 @@ class SalesReporter
             array_push($messages, ...$this->chunks('<b>'.e($l('other_chats')).'</b>', $others));
         }
 
-        // The week summary, as few messages as fit.
+        // The summary, as few messages as fit.
         $tot = is_array($json['totals'] ?? null) ? $json['totals'] : [];
         $n = fn ($k) => (int) ($tot[$k] ?? 0);
         $summary = [
@@ -526,8 +540,13 @@ class SalesReporter
         return $ids;
     }
 
-    private function label(string $lang, string $key): mixed
+    /** A label; the daily report uses the "_day" version where there is one (title, empty, goal). */
+    private function label(string $lang, string $key, string $period = 'week'): mixed
     {
+        if ($period === 'day' && isset(self::LABELS['en'][$key.'_day'])) {
+            $key .= '_day';
+        }
+
         return self::LABELS[$lang][$key] ?? self::LABELS['en'][$key];
     }
 

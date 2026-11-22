@@ -33,7 +33,8 @@ class ScheduledTasksTest extends TestCase
     {
         foreach (ScheduledTasks::all() as $key => $task) {
             $event = collect(app(Schedule::class)->events())->first(fn (Event $e) => str_contains($e->command, " {$task['command']}")
-                && ($task['parameters'] === [] || str_contains($e->command, '"'.($task['parameters']['action'] ?? '').'"') || isset($task['parameters']['--model'])));
+                && str_contains($e->command, '--daily') === isset($task['parameters']['--daily'])
+                && ($task['parameters'] === [] || isset($task['parameters']['--daily']) || str_contains($e->command, '"'.($task['parameters']['action'] ?? '').'"') || isset($task['parameters']['--model'])));
             if ($task['cron'] === null) {
                 $this->assertFalse(collect(app(Schedule::class)->events())->contains(fn (Event $e) => str_contains($e->command, 'telegram:webhook "set"')), 'by hand only');
 

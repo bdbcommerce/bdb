@@ -1,6 +1,6 @@
 @extends('admin.layout')
 @section('title', 'Sales report')
-@section('heading', 'Sales report — '.$report->period_end->copy()->setTimezone('Asia/Tashkent')->format('d.m.Y'))
+@section('heading', ($report->period === 'day' ? 'Daily' : 'Weekly').' sales report — '.$report->period_end->copy()->setTimezone('Asia/Tashkent')->format('d.m.Y'))
 
 @section('content')
 <div class="w-full space-y-4">
