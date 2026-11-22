@@ -9,10 +9,10 @@ return new class extends Migration
     public function up(): void
     {
         // The daily report (18:00 Tashkent) goes to the invoice parser's JSON recipient.
-        Schema::table('sales_report_settings', function (Blueprint $table) {
+        Schema::hasColumn('sales_report_settings', 'daily_enabled') || Schema::table('sales_report_settings', function (Blueprint $table) {
             $table->boolean('daily_enabled')->default(true)->after('enabled');
         });
-        Schema::table('sales_reports', function (Blueprint $table) {
+        Schema::hasColumn('sales_reports', 'period') || Schema::table('sales_reports', function (Blueprint $table) {
             $table->string('period', 4)->default('week')->after('id'); // week | day
         });
     }

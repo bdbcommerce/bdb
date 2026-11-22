@@ -10,7 +10,7 @@ return new class extends Migration
     public function up(): void
     {
         // The sales assistant's state per conversation: stage, collected details, lead, unanswered questions.
-        Schema::table('chat_conversations', function (Blueprint $table) {
+        Schema::hasColumn('chat_conversations', 'sales_state') || Schema::table('chat_conversations', function (Blueprint $table) {
             $table->json('sales_state')->nullable();
         });
         // Switched on for everyone (the owner's decision: no test phase); new rows default to "on" in the model.

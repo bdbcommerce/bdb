@@ -10,8 +10,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Admin → Sales assistant → Settings (singleton).
-        Schema::create('sales_assistant_settings', function (Blueprint $table) {
+        // Admin → Sales assistant → Settings (singleton). Each step is skipped when done already (MySQL keeps tables of a failed run).
+        Schema::hasTable('sales_assistant_settings') || Schema::create('sales_assistant_settings', function (Blueprint $table) {
             $table->id();
             $table->string('bot_mode', 4)->default('on'); // on | off — the bot chat
             $table->string('business_mode', 4)->default('on'); // on | off — Premium account chats
@@ -29,7 +29,8 @@ return new class extends Migration
         });
 
         // Admin → Sales assistant → Knowledge: what the assistant may use (and nothing else).
-        Schema::create('sales_knowledge', function (Blueprint $table) {
+        $seed = ! Schema::hasTable('sales_knowledge');
+        $seed && Schema::create('sales_knowledge', function (Blueprint $table) {
             $table->id();
             $table->string('kind', 20); // SalesKnowledge::KINDS
             $table->string('title');
@@ -40,10 +41,13 @@ return new class extends Migration
             $table->index(['kind', 'sort']);
         });
 
-        Schema::table('telegram_users', function (Blueprint $table) {
+        Schema::hasColumn('telegram_users', 'is_employee') || Schema::table('telegram_users', function (Blueprint $table) {
             $table->boolean('is_employee')->default(false); // the assistant never talks to them
         });
 
+        if (! $seed && DB::table('sales_knowledge')->exists()) {
+            return;
+        }
         $now = now();
         $rows = [];
         foreach (SalesKnowledge::DEFAULTS as $kind => $items) {
