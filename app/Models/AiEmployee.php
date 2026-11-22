@@ -49,6 +49,12 @@ class AiEmployee extends Model
         return ['channels' => 'array', 'scales' => 'array', 'traits' => 'array'];
     }
 
+    protected static function booted(): void
+    {
+        // Its own test cases go with it (a case without an employee is one for every employee).
+        static::deleting(fn (self $employee) => AiTestCase::where('ai_employee_id', $employee->id)->delete());
+    }
+
     public function prompts(): HasMany
     {
         return $this->hasMany(AiEmployeePrompt::class)->orderByDesc('version');

@@ -32,6 +32,15 @@ TXT;
 
     public function __construct(private SalesAssistant $assistant, private SalesAssistantAi $ai) {}
 
+    /**
+     * What a score is valid for: the employee's whole part of the prompt (platform rules, card, colleagues and this
+     * role prompt). Editing any of them makes earlier scores of the version stale.
+     */
+    public static function hash(AiEmployee $employee, AiEmployeePrompt $prompt): string
+    {
+        return md5($employee->promptLayers($prompt->prompt));
+    }
+
     /** Queue every active case of $employee against its draft or published prompt; returns how many were queued. */
     public function queue(AiEmployee $employee, string $which, string $by): int
     {
@@ -42,10 +51,10 @@ TXT;
         $queued = 0;
         foreach (AiTestCase::query()->for($employee)->get() as $case) {
             $open = AiTestRun::where('ai_test_case_id', $case->id)->where('ai_employee_prompt_id', $prompt->id)
-                ->where('prompt_hash', md5($prompt->prompt))->whereIn('status', ['queued', 'running'])->exists();
+                ->where('prompt_hash', self::hash($employee, $prompt))->where('case_hash', $case->hash())->whereIn('status', ['queued', 'running'])->exists();
             if (! $open) {
                 AiTestRun::create(['ai_test_case_id' => $case->id, 'ai_employee_id' => $employee->id, 'ai_employee_prompt_id' => $prompt->id,
-                    'prompt_version' => $prompt->version, 'prompt_hash' => md5($prompt->prompt), 'started_by' => mb_substr($by, 0, 100)]);
+                    'prompt_version' => $prompt->version, 'prompt_hash' => self::hash($employee, $prompt), 'case_hash' => $case->hash(), 'started_by' => mb_substr($by, 0, 100)]);
                 $queued++;
             }
         }
@@ -64,7 +73,8 @@ TXT;
             $until = microtime(true) + $seconds;
             $done = 0;
             // A run left "running" by a killed worker is retried.
-            AiTestRun::where('status', 'running')->where('updated_at', '<', now()->subMinutes(15))->update(['status' => 'queued']);
+            AiTestRun::where('status', 'running')->where('updated_at', '<', now()->subMinutes(15))
+                ->update(['status' => 'failed', 'error' => 'The run stopped half-way (the worker was stopped). Run it again.', 'finished_at' => now()]);
             while (microtime(true) < $until && ($run = AiTestRun::where('status', 'queued')->orderBy('id')->first())) {
                 $this->run($run);
                 $done++;
@@ -82,8 +92,8 @@ TXT;
         $case = $run->testCase;
         $employee = $run->employee;
         $prompt = $run->prompt;
-        if (! $case || ! $employee || ! $prompt || md5($prompt->prompt) !== $run->prompt_hash) {
-            return tap($run)->update(['status' => 'failed', 'error' => 'The prompt version changed or was deleted before the run.', 'finished_at' => now()]);
+        if (! $case || ! $employee || ! $prompt || self::hash($employee, $prompt) !== $run->prompt_hash || $case->hash() !== $run->case_hash) {
+            return tap($run)->update(['status' => 'failed', 'error' => 'The prompt, the employee card or the test case changed before the run.', 'finished_at' => now()]);
         }
 
         $messages = [];
@@ -139,6 +149,9 @@ TXT;
             throw new RuntimeException('Grading failed: '.AiErrorAlerts::withoutSecrets($e->getMessage(), $key), 0, $e);
         }
         $json = AiClient::decodeJson($reply['text']);
+        if (! is_array($json) || ! is_array($json['results'] ?? null) || $json['results'] === []) {
+            throw new RuntimeException('Grading failed: Claude Haiku did not return the checklist results.');
+        }
         $byItem = collect(is_array($json['results'] ?? null) ? $json['results'] : [])->filter(fn ($r) => is_array($r))->keyBy(fn ($r) => (int) ($r['item'] ?? 0));
         $results = [];
         foreach ($criteria as $i => $criterion) {
@@ -161,8 +174,9 @@ TXT;
         if (! $prompt) {
             return ['cases' => $cases->count(), 'done' => 0, 'waiting' => 0, 'score' => null, 'runs' => collect()];
         }
-        $runs = AiTestRun::where('ai_employee_prompt_id', $prompt->id)->where('prompt_hash', md5($prompt->prompt))->whereIn('ai_test_case_id', $cases)
-            ->orderByDesc('id')->get();
+        $hashes = AiTestCase::whereIn('id', $cases)->get()->mapWithKeys(fn (AiTestCase $c) => [$c->id => $c->hash()]);
+        $runs = AiTestRun::where('ai_employee_prompt_id', $prompt->id)->where('prompt_hash', self::hash($employee, $prompt))->whereIn('ai_test_case_id', $cases)
+            ->orderByDesc('id')->get()->filter(fn (AiTestRun $r) => $r->case_hash === ($hashes[$r->ai_test_case_id] ?? null));
         $latest = $runs->where('status', 'done')->unique('ai_test_case_id');
 
         return ['cases' => $cases->count(), 'done' => $latest->count(), 'waiting' => $runs->whereIn('status', ['queued', 'running'])->count(),

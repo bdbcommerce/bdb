@@ -29,6 +29,7 @@ return new class extends Migration
             $table->foreignId('ai_employee_prompt_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('prompt_version');
             $table->string('prompt_hash', 32);
+            $table->string('case_hash', 32)->nullable(); // the case's script + checklist: an edited case needs a new run
             $table->string('status', 10)->default('queued'); // queued | running | done | failed
             $table->unsignedTinyInteger('score')->nullable();
             $table->json('transcript')->nullable();
@@ -48,6 +49,9 @@ return new class extends Migration
         $ids = DB::table('ai_employees')->pluck('id', 'name');
         DB::transaction(function () use ($ids) {
             foreach (AiEmployeeTemplates::TEST_CASES as $case) {
+                if ($case['employee'] && ! isset($ids[$case['employee']])) {
+                    continue; // that employee was renamed or removed: never turn their case into one for everybody
+                }
                 DB::table('ai_test_cases')->insert([
                     'name' => $case['name'], 'ai_employee_id' => $case['employee'] ? ($ids[$case['employee']] ?? null) : null, 'via' => 'bot',
                     'turns' => json_encode($case['turns'], JSON_UNESCAPED_UNICODE), 'criteria' => json_encode($case['criteria'], JSON_UNESCAPED_UNICODE),

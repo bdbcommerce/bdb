@@ -11,7 +11,7 @@ class AiTestRun extends Model
     /** A case passes at this score (% of checklist items met). */
     public const PASS_SCORE = 80;
 
-    protected $fillable = ['ai_test_case_id', 'ai_employee_id', 'ai_employee_prompt_id', 'prompt_version', 'prompt_hash', 'status', 'score',
+    protected $fillable = ['ai_test_case_id', 'ai_employee_id', 'ai_employee_prompt_id', 'prompt_version', 'prompt_hash', 'case_hash', 'status', 'score',
         'transcript', 'results', 'error', 'cost_usd', 'started_by', 'finished_at'];
 
     protected function casts(): array

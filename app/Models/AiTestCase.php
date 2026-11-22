@@ -17,6 +17,12 @@ class AiTestCase extends Model
         return ['turns' => 'array', 'criteria' => 'array', 'is_active' => 'boolean'];
     }
 
+    /** Changes when the script or the checklist changes (runs of an older version no longer count). */
+    public function hash(): string
+    {
+        return md5(json_encode([$this->via, array_values($this->turns ?? []), array_values($this->criteria ?? [])]));
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(AiEmployee::class, 'ai_employee_id');

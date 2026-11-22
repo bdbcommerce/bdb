@@ -71,7 +71,7 @@ class AiTestCaseController extends Controller
         abort_unless(in_array($which, ['draft', 'published'], true), 404);
         $queued = $runner->queue($aiEmployee, $which, $request->user()->name);
         if ($queued) {
-            defer(fn () => app(TestRunner::class)->processQueued());
+            defer(fn () => app(TestRunner::class)->processQueued(90)); // the rest: ai:run-tests every minute
         }
 
         return back()->with('success', $queued
