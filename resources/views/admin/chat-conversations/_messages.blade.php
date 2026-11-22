@@ -6,6 +6,7 @@
     $lastDay = null;
     $prevSide = null;
     $prevLabel = null;
+    $prevVia = null;
 @endphp
 <div class="flex flex-col">
 @foreach($messages as $m)
@@ -44,6 +45,10 @@
             default => null,
         };
         $showLabel = $label && ($first || $label !== $prevLabel || $role === 'member');
+        // Bot chat or Premium-account chat (one conversation per customer): shown where it changes.
+        $via = $m['via'] ?? ($defaultVia ?? null);
+        $showVia = $via && $via !== $prevVia && ($prevVia !== null || $via === 'assistant');
+        $prevVia = $via ?? $prevVia;
         $prevLabel = $label;
     @endphp
 
@@ -117,6 +122,7 @@
 
             {{-- Time and status, bottom right like a messenger --}}
             <p class="flex flex-wrap justify-end items-center gap-x-1.5 text-[11px] leading-4 {{ $mine ? 'text-slate-600' : 'text-slate-500' }} mt-0.5 -mb-0.5 text-right">
+                @if($showVia)<span class="font-medium">{{ $via === 'assistant' ? 'via Premium account' : 'via bot' }}</span>@endif
                 @if($isStep)<span>Bot step — not sent to the AI</span>@endif
                 @if($m['deleted'] ?? false)<span class="font-medium text-red-700">deleted in Telegram</span>@endif
                 @if($m['edited'] ?? false)<span>edited</span>@endif

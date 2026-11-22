@@ -127,7 +127,7 @@ class SalesAssistantLogicConflictsTest extends TestCase
 
         $this->businessUpdate(1, ['text' => 'Narxi qancha?']);
 
-        $conversation = ChatConversation::where('channel', 'business')->sole();
+        $conversation = ChatConversation::where('channel', 'telegram')->sole();
         $this->assertEmpty($conversation->messages[0]['aside'] ?? null, 'a real question, not a registration answer');
         $this->assertTrue($conversation->awaiting_reply, 'unanswered customer must be on Waiting for reply');
     }
@@ -141,11 +141,14 @@ class SalesAssistantLogicConflictsTest extends TestCase
         $this->businessUpdate(2, ['text' => 'Salom']);
         Carbon::setTestNow();
 
-        $bot = ChatConversation::where('channel', 'telegram')->sole();
-        $business = ChatConversation::where('channel', 'business')->sole();
+        // Two customers (7001 in the bot chat, 7002 in the Premium-account chat), each answered in their own chat.
+        $bot = ChatConversation::where('external_id', '7001')->sole();
+        $business = ChatConversation::where('external_id', '7002')->sole();
         $this->assertCount(2, $this->calls);
         $this->assertFalse($bot->awaiting_reply);
         $this->assertSame($bot->awaiting_reply, $business->awaiting_reply, 'answered by the assistant in both channels');
+        $this->assertSame(['bot', 'bot'], array_map(fn ($m) => $bot->viaOf($m), $bot->messages));
+        $this->assertSame(['assistant', 'assistant'], array_map(fn ($m) => $business->viaOf($m), $business->messages));
     }
 
     /** Conflict 4: the tick ignores "Mark answered" (handled_count) and answers messages that are hours old (e.g. the first run after deploy). */
@@ -174,7 +177,7 @@ class SalesAssistantLogicConflictsTest extends TestCase
         Carbon::setTestNow(now()->addMinutes(6));
 
         $this->duringTurn = function () {
-            $c = ChatConversation::where('channel', 'business')->sole();
+            $c = ChatConversation::where('channel', 'telegram')->sole();
             $c->messages = [...$c->messages, ['role' => 'owner', 'content' => 'Men Aziz, yordam beraman', 'message_id' => 2, 'at' => now()->toIso8601String()]];
             $c->save();
         };
@@ -193,14 +196,14 @@ class SalesAssistantLogicConflictsTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-11-22 21:00', 'Asia/Tashkent'));
         $this->duringSend = function () {
             $this->duringSend = null;
-            $c = ChatConversation::where('channel', 'business')->sole();
+            $c = ChatConversation::where('channel', 'telegram')->sole();
             $c->messages = [...$c->messages, ['role' => 'user', 'content' => 'Yana bir savol', 'message_id' => 5, 'at' => now()->toIso8601String()]];
             $c->save();
         };
         $this->businessUpdate(1, ['text' => 'Salom']);
         Carbon::setTestNow();
 
-        $contents = array_column(ChatConversation::where('channel', 'business')->sole()->messages, 'content');
+        $contents = array_column(ChatConversation::where('channel', 'telegram')->sole()->messages, 'content');
         $this->assertContains('Yana bir savol', $contents);
     }
 

@@ -29,7 +29,8 @@ class SalesAssistantTick extends Command
         // Long enough to see a silence through to its close (the latest session per chat only).
         ChatConversation::whereIn('channel', ['telegram', 'business'])->where('updated_at', '>=', now()->subHours(max(24, $settings->close_after_hours + 24)))
             ->orderBy('id')->get()
-            ->groupBy(fn (ChatConversation $c) => $c->channel.'|'.$c->external_id.'|'.$c->business_connection_id)
+            // One customer = one chat: older Premium-account sessions (channel business) and the bot chat together.
+            ->groupBy(fn (ChatConversation $c) => $c->external_id ?? 'id:'.$c->id)
             ->each(function ($sessions) use ($assistant, $settings, &$answered, &$reminded, &$closed) {
                 $latest = $sessions->last();
                 if (SalesAssistant::decision($latest, $settings) === 'now' && $assistant->respond($latest)) {

@@ -190,7 +190,7 @@
                 </summary>
                 <div class="border-t border-slate-200 rounded-b-xl overflow-hidden">
                     <div class="bg-[#efeae2] px-3 sm:px-5 py-4 max-h-[32rem] overflow-y-auto" data-chat-scroll x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)">
-                        @include('admin.chat-conversations._messages', ['messages' => $conversation->messages])
+                        @include('admin.chat-conversations._messages', ['messages' => $conversation->messages, 'defaultVia' => $conversation->channel === 'business' ? 'assistant' : ($conversation->channel === 'telegram' ? 'bot' : null)])
                     </div>
                     <div class="px-5 py-2.5">
                         <a href="{{ route('admin.chat-conversations.show', $conversation) }}" class="inline-block text-xs font-medium text-slate-600 underline hover:text-slate-900">Open this conversation</a>

@@ -56,12 +56,12 @@ class ChatScreenHistoryQaTest extends TestCase
         $this->chat('business', '777', [['role' => 'user', 'content' => 'Conn B']], 'now', ['business_connection_id' => 'B']);
         $this->chat('group', '-1001', [['role' => 'member', 'content' => 'Grp old']], '-1 day', ['business_connection_id' => null]);
         $this->chat('group', '-1001', [['role' => 'member', 'content' => 'Grp new']], 'now', ['business_connection_id' => '']);
-        // Same external_id, different channel: separate chats.
+        // Older Premium-account sessions of one customer and the bot chat are one chat now: the newest is listed.
         $this->chat('telegram', '777', [['role' => 'user', 'content' => 'Bot 777']]);
 
         $this->actingAs($this->admin())->get(route('admin.chat-conversations.index'))->assertOk()
-            ->assertSee('Conn A new')->assertDontSee('Conn A old')->assertSee('Conn B')
-            ->assertSee('Grp new')->assertDontSee('Grp old')->assertSee('Bot 777')->assertSee('of 4 chats');
+            ->assertDontSee('Conn A new')->assertDontSee('Conn A old')->assertDontSee('Conn B')
+            ->assertSee('Grp new')->assertDontSee('Grp old')->assertSee('Bot 777')->assertSee('of 2 chats');
     }
 
     public function test_pagination_keeps_filter_and_channel(): void

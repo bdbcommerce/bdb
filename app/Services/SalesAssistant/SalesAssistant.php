@@ -109,7 +109,7 @@ TXT;
         $handled = (int) (($conversation->sales_state ?? [])['handled'] ?? 0);
         $lastIndex = null;
         foreach ($raw as $index => $m) {
-            if (is_array($m) && empty($m['deleted']) && empty($m['late_edit'])) {
+            if (is_array($m) && empty($m['deleted']) && empty($m['late_edit']) && self::chatOn($conversation, $settings, $m)) {
                 $lastIndex = $index;
             }
         }
@@ -122,7 +122,7 @@ TXT;
             || (isset($raw[$lastIndex]['at']) && Carbon::parse($raw[$lastIndex]['at'])->lt($now->copy()->subHours(self::MAX_AGE_HOURS)))) {
             return 'no';
         }
-        $messages = array_values(array_filter($raw, fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit'])));
+        $messages = array_values(array_filter($raw, fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit']) && self::chatOn($conversation, $settings, $m)));
         $last = end($messages);
         if (! $last || ($last['role'] ?? null) !== 'user') {
             return 'no';
@@ -137,12 +137,21 @@ TXT;
         if (in_array($before, ['assistant', 'bot'], true) || ! $settings->isWorkingTime($now)) {
             return 'now';
         }
-        if ($conversation->channel === 'telegram' && ! $manager) {
+        if ($conversation->via() === 'bot' && ! $manager) {
             return 'now'; // the bot chat is answered at once unless a manager is talking
         }
         $since = Carbon::parse($messages[$i]['at'] ?? $conversation->updated_at);
 
         return $since->copy()->addMinutes($settings->wait_minutes)->lte($now) ? 'now' : 'wait';
+    }
+
+    /**
+     * The assistant works in this message's chat: the bot chat (bot_mode) or the Premium-account chat (business_mode).
+     * A chat it is switched off for stays with the managers — the assistant neither sees nor answers it.
+     */
+    public static function chatOn(ChatConversation $conversation, SalesAssistantSetting $settings, array $m): bool
+    {
+        return ($conversation->viaOf($m) === 'assistant' ? $settings->business_mode : $settings->bot_mode) === 'on';
     }
 
     /** A message in the bot chat (already recorded). */
@@ -210,11 +219,11 @@ TXT;
     /** The assistant is on for this customer and channel, and the Premium account lets the bot reply. */
     private function mayWrite(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user): bool
     {
-        if (! in_array($conversation->channel, ['telegram', 'business'], true) || ! $settings->enabledFor($conversation->channel, $user, $conversation->external_id)) {
+        if (! in_array($conversation->channel, ['telegram', 'business'], true) || ! $settings->enabledFor($conversation->modeChannel(), $user, $conversation->external_id)) {
             return false;
         }
-        if ($conversation->channel === 'business') {
-            $connection = TelegramBusinessConnection::where('connection_id', $conversation->business_connection_id)->first();
+        if ($conversation->via() === 'assistant') {
+            $connection = TelegramBusinessConnection::where('connection_id', $conversation->viaConnectionId())->first();
             if (! $connection || ! $connection->is_enabled || ! $connection->can_reply || $connection->user_id === (string) $conversation->external_id) {
                 return false;
             }
@@ -277,7 +286,8 @@ TXT;
     {
         $tz = SalesAssistantSetting::TZ;
         $state = (array) ($conversation->sales_state ?? []);
-        $messages = array_slice(array_values(array_filter($conversation->messages ?? [], fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit']))), -self::HISTORY);
+        $messages = array_slice(array_values(array_filter($conversation->messages ?? [], fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit'])
+            && self::chatOn($conversation, $settings, $m))), -self::HISTORY);
         $earlier = ChatConversation::where('external_id', $conversation->external_id)->whereIn('channel', ['telegram', 'business'])->where('id', '<', $conversation->id)->exists();
 
         $lines = [];
@@ -301,7 +311,7 @@ TXT;
                 $text .= ' '.mb_strimwidth((string) $m['caption'], 0, 500, '…');
             }
             $at = isset($m['at']) ? Carbon::parse($m['at'])->setTimezone($tz)->format('d.m H:i') : '';
-            $lines[] = json_encode(['at' => $at, 'from' => $who, 'text' => $text], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+            $lines[] = json_encode(['at' => $at, 'from' => $who, 'text' => $text, 'chat' => $conversation->viaOf($m) === 'assistant' ? 'premium account' : 'bot'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
             if (($m['role'] ?? null) === 'user') {
                 $query = mb_substr($query.' '.($m['content'] ?? $m['caption'] ?? ''), -1500);
                 if (($m['type'] ?? null) === 'photo' && is_string($m['file_id'] ?? null) && ! in_array($m['file_id'], (array) ($state['seen_photos'] ?? []), true)) {
@@ -323,7 +333,7 @@ TXT;
         }
 
         $profile = [
-            'Channel: '.($conversation->channel === 'business' ? 'Premium-account (Business) chat — no buttons, the phone is typed' : 'bot chat'),
+            'Channel: the customer can write to the bot and to our Premium account; this is one conversation (each line says which chat). Your reply goes to the chat they wrote in last: '.($conversation->via() === 'assistant' ? 'the Premium-account chat — no buttons, the phone is typed' : 'the bot chat'),
             'Now: '.now()->setTimezone($tz)->format('D d.m.Y H:i').' Tashkent — '.($settings->isWorkingTime() ? 'working hours' : 'outside working hours'),
             'Customer: '.($earlier || $user?->phone ? 'returning' : 'new').'; Telegram name: '.($user?->profile_name ?: '—').($user?->username ? ' (@'.$user->username.')' : ''),
             'Known contacts: name '.($user?->name ?: '—').', phone '.($user?->phone ?: '—').', company '.($user?->company ?: '—').', city '.($state['customer']['city'] ?? '—'),
@@ -438,8 +448,8 @@ TXT;
 
     private function send(ChatConversation $conversation, string $text, string $language, bool $phoneButton): bool
     {
-        if ($conversation->channel === 'business') {
-            $connection = TelegramBusinessConnection::where('connection_id', $conversation->business_connection_id)->first();
+        if ($conversation->via() === 'assistant') {
+            $connection = TelegramBusinessConnection::where('connection_id', $conversation->viaConnectionId())->first();
 
             return $connection && $this->recorder->sendAsAccount($conversation->refresh(), $connection, $text, 'assistant');
         }
@@ -519,7 +529,7 @@ TXT;
             $settings = SalesAssistantSetting::current();
             $user = TelegramUser::where('telegram_id', $conversation->external_id)->first();
             $due = self::nudgeDue($conversation, $settings);
-            if ($due === null || ($due === 'remind' ? ! $this->mayWrite($conversation, $settings, $user) : ! $settings->enabledFor($conversation->channel, $user, $conversation->external_id))) {
+            if ($due === null || ($due === 'remind' ? ! $this->mayWrite($conversation, $settings, $user) : ! $settings->enabledFor($conversation->modeChannel(), $user, $conversation->external_id))) {
                 return null;
             }
             $state = (array) ($conversation->sales_state ?? []);
@@ -591,12 +601,12 @@ TXT;
             $state = (array) $conversation->sales_state;
             unset($state['follow_up_at']);
             $cancelled = Carbon::parse($state['cancelled_at'] ?? $conversation->sales_state['follow_up_at']);
-            $sessions = ChatConversation::where('channel', $conversation->channel)->where('external_id', $conversation->external_id)->where('id', '>=', $conversation->id)->get();
+            $sessions = ChatConversation::whereIn('channel', ['telegram', 'business'])->where('external_id', $conversation->external_id)->where('id', '>=', $conversation->id)->get();
             $wrote = fn (array $roles) => $sessions->contains(fn (ChatConversation $c) => collect($c->messages ?? [])->contains(fn ($m) => is_array($m)
                 && in_array($m['role'] ?? null, $roles, true) && empty($m['late_edit']) && empty($m['deleted']) && isset($m['at']) && Carbon::parse($m['at'])->gt($cancelled)));
             $user = TelegramUser::where('telegram_id', $conversation->external_id)->first();
             $days = $settings->follow_up_days;
-            if ($wrote(['user']) || ! $settings->enabledFor($conversation->channel, $user, $conversation->external_id)) {
+            if ($wrote(['user']) || ! $settings->enabledFor($conversation->modeChannel(), $user, $conversation->external_id)) {
                 self::saveState($conversation, ['follow_up_sent' => 'skipped'] + $state); // the conversation went on by itself
 
                 return false;
@@ -635,7 +645,7 @@ TXT;
         $c = (array) ($state['customer'] ?? []);
         $name = trim(($c['first_name'] ?? '').' '.($c['last_name'] ?? '')) ?: ($user?->displayName() ?? 'Telegram '.$conversation->external_id);
         $phone = $user?->phone ?: TelegramUser::normalizePhone((string) ($c['phone'] ?? ''));
-        $lines = ['📅 <b>Offer follow-up — '.($conversation->channel === 'business' ? 'Premium-account chat' : 'Telegram bot').'</b>',
+        $lines = ['📅 <b>Offer follow-up — '.($conversation->via() === 'assistant' ? 'Premium-account chat' : 'Telegram bot').'</b>',
             '<i>'.$days.' days ago the customer cancelled but agreed to hear from us. '.$what.'</i>', '',
             '<b>Name:</b> '.$e(mb_strimwidth($name, 0, 100, '…')), '<b>Phone:</b> '.($phone ? $e($phone) : '—')];
         if ($user?->username) {
@@ -659,7 +669,7 @@ TXT;
         $link = SeoFiles::publicUrl(route('admin.chat-conversations.show', $conversation));
 
         $attributes = [
-            'channel' => $conversation->channel === 'business' ? 'business' : 'telegram',
+            'channel' => $conversation->modeChannel(),
             'name' => mb_substr($name, 0, 100), 'phone' => $phone, 'locale' => $state['language'] ?? 'ru',
             'topic' => mb_substr(($partial ? '[Unfinished] ' : '').$state['summary'], 0, 1000), 'page_url' => $link,
             'transcript' => ['items' => $items, 'city' => $c['city'] ?? null, 'company' => $c['company'] ?? null,
@@ -668,7 +678,7 @@ TXT;
         $lead = $existing ? tap($existing)->update($attributes) : ChatLead::create($attributes);
 
         $e = fn ($v) => e((string) $v);
-        $where = $conversation->channel === 'business' ? 'Premium-account chat' : 'Telegram bot';
+        $where = $conversation->via() === 'assistant' ? 'Premium-account chat' : 'Telegram bot';
         $lines = [$partial ? '⏳ <b>Unfinished request — '.$where.'</b>' : '🆕 <b>New request — '.$where.'</b>',
             ...($partial ? ['<i>The customer stopped answering before confirming. This is what was collected.</i>'] : []),
             ...($existing ? ['<i>The unfinished request sent earlier is now confirmed by the customer.</i>'] : []), '',
@@ -709,7 +719,7 @@ TXT;
         }
         $who = $user?->displayName() ?? 'Telegram '.$conversation->external_id;
         $this->api->sendMessage($chat, "❓ <b>The assistant could not answer — please reply to the customer</b>\n\n<b>Customer:</b> ".e($who)
-            .($user?->username ? ' (@'.e($user->username).')' : '').' · '.($conversation->channel === 'business' ? 'Premium-account chat' : 'Telegram bot')
+            .($user?->username ? ' (@'.e($user->username).')' : '').' · '.($conversation->via() === 'assistant' ? 'Premium-account chat' : 'Telegram bot')
             ."\n<b>Question:</b> ".e($question)
             ."\n\n<a href=\"".e(SeoFiles::publicUrl(route('admin.chat-conversations.show', $conversation))).'">Open the chat</a>',
             ['parse_mode' => 'HTML', 'link_preview_options' => ['is_disabled' => true]]);

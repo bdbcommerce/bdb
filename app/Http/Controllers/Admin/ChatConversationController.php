@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
 use App\Models\ChatConversation;
+use App\Models\TelegramBusinessConnection;
 use App\Services\ChatAssistant;
 use App\Services\Telegram\TelegramApi;
+use App\Services\Telegram\TelegramRecorder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -51,10 +53,13 @@ class ChatConversationController extends Controller
             ->when($channel, fn ($q) => $q->where('channel', $channel))
             ->tap(fn ($q) => $matches($q, 'chat_conversations'))
             ->where(fn ($q) => $q->where('channel', 'web')->orWhereNull('external_id')
+                // A customer's bot and Premium-account sessions are one chat (older ones were stored apart).
                 ->orWhereNotExists(fn ($q) => $matches($q->selectRaw('1')->from('chat_conversations as newer')
-                    ->whereColumn('newer.channel', 'chat_conversations.channel')
+                    ->when($channel, fn ($q) => $q->where('newer.channel', $channel))
+                    ->where(fn ($q) => $q->whereColumn('newer.channel', 'chat_conversations.channel')
+                        ->orWhere(fn ($q) => $q->whereIn('newer.channel', ChatConversation::REPLY_CHANNELS)->whereIn('chat_conversations.channel', ChatConversation::REPLY_CHANNELS)))
                     ->whereColumn('newer.external_id', 'chat_conversations.external_id')
-                    ->whereRaw("coalesce(newer.business_connection_id, '') = coalesce(chat_conversations.business_connection_id, '')")
+                    ->whereRaw("(newer.channel in ('telegram', 'business') or coalesce(newer.business_connection_id, '') = coalesce(chat_conversations.business_connection_id, ''))")
                     ->whereColumn('newer.id', '>', 'chat_conversations.id'), 'newer')))
             ->latest('updated_at')
             ->latest('id')
@@ -88,8 +93,11 @@ class ChatConversationController extends Controller
         ]);
     }
 
-    /** Send a message to the Telegram customer as the bot, and log it in the conversation. */
-    public function reply(Request $request, ChatConversation $chatConversation, TelegramApi $api)
+    /**
+     * Send a message to the Telegram customer and log it in the conversation: through the chat they wrote in
+     * last — the bot, or the Premium account (on its behalf, needs the account's "reply" permission).
+     */
+    public function reply(Request $request, ChatConversation $chatConversation, TelegramApi $api, TelegramRecorder $recorder)
     {
         abort_unless($chatConversation->channel === 'telegram' && $chatConversation->external_id, 404);
 
@@ -98,14 +106,24 @@ class ChatConversationController extends Controller
             ['message.not_regex' => 'Replace the [TO FILL: …] placeholders with real information before sending.'],
         )['message']);
 
-        if (! $api->sendMessage($chatConversation->external_id, $text)) {
-            return back()->withInput()->with('telegram_error',
-                'Telegram did not deliver the message. The customer may have blocked the bot — see storage/logs/laravel.log.');
-        }
-
         // Opened from an older session: the reply belongs at the end of the chat, in its newest session.
         $target = $chatConversation->latestSession();
-        $target->appendAdminMessage($text, $request->user()->name);
+        if ($target->via() === 'assistant') {
+            $connection = TelegramBusinessConnection::where('connection_id', $target->viaConnectionId())->first();
+            if (! $connection || ! $connection->is_enabled || ! $connection->can_reply) {
+                return back()->withInput()->with('telegram_error',
+                    'The customer last wrote to the Premium account, and the bot may not reply there (Telegram Business "reply" permission). Answer in the Telegram app.');
+            }
+            if (! $recorder->sendAsAccount($target, $connection, $text, 'admin', ['author' => $request->user()->name])) {
+                return back()->withInput()->with('telegram_error', 'Telegram did not deliver the message — see storage/logs/laravel.log.');
+            }
+        } else {
+            if (! $api->sendMessage($target->external_id, $text)) {
+                return back()->withInput()->with('telegram_error',
+                    'Telegram did not deliver the message. The customer may have blocked the bot — see storage/logs/laravel.log.');
+            }
+            $target->appendAdminMessage($text, $request->user()->name);
+        }
 
         return redirect()->route('admin.chat-conversations.show', $target)->with('success', 'Message sent to the customer.');
     }

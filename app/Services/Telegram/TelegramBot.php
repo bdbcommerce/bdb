@@ -662,7 +662,7 @@ class TelegramBot
         $conversation = $this->conversation($user);
 
         // Replies BDB staff sent from the admin panel count as the assistant's side.
-        $history = collect($conversation->textMessages())
+        $history = collect($conversation->textMessages('bot'))
             ->map(fn (array $m) => ['role' => $m['role'] === 'user' ? 'user' : 'assistant', 'content' => $m['content']])
             ->slice(-11)
             ->push(['role' => 'user', 'content' => $text])
@@ -750,7 +750,7 @@ class TelegramBot
         }
 
         $conversation = $this->conversation($user);
-        $messages = collect($conversation->textMessages());
+        $messages = collect($conversation->textMessages('bot'));
 
         // Repeated taps within an hour don't create duplicate leads and sales alerts.
         $recent = $conversation->lead()->where('created_at', '>=', now()->subHour())->exists();

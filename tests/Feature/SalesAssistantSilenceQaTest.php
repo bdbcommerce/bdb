@@ -158,7 +158,7 @@ class SalesAssistantSilenceQaTest extends TestCase
         $this->at('2026-11-24 09:05');
         $this->artisan('sales:assistant-tick')->assertSuccessful();
         $this->assertCount(2, $this->calls);
-        $c = ChatConversation::where('channel', 'business')->sole();
+        $c = ChatConversation::where('channel', 'telegram')->sole();
         $this->assertSame('assistant', collect($c->messages)->last()['role']);
         $biz = Http::recorded(fn (Request $r) => str_contains($r->url(), '/sendMessage') && ($r->data()['business_connection_id'] ?? null) === 'bc1');
         $this->assertCount(2, $biz);
@@ -195,7 +195,7 @@ class SalesAssistantSilenceQaTest extends TestCase
         $this->at('2026-11-24 20:05');
         $this->artisan('sales:assistant-tick')->assertSuccessful();
         $this->assertSame(1, ChatLead::count());
-        $this->assertNotNull(ChatConversation::where('channel', 'business')->sole()->sales_state['closed_at'] ?? null);
+        $this->assertNotNull(ChatConversation::where('channel', 'telegram')->sole()->sales_state['closed_at'] ?? null);
     }
 
     public function test_employee_gets_no_reminder(): void
@@ -313,7 +313,7 @@ class SalesAssistantSilenceQaTest extends TestCase
         $this->at('2026-12-08 10:01'); // follow_up_at = 2026-12-07 20:00 Tashkent
         $this->artisan('sales:assistant-tick');
         $this->assertCount(1, $this->calls);
-        $this->assertSame('manager', ChatConversation::where('channel', 'business')->sole()->sales_state['follow_up_sent'] ?? null);
+        $this->assertSame('manager', ChatConversation::where('channel', 'telegram')->sole()->sales_state['follow_up_sent'] ?? null);
         $this->assertCount(1, $this->sentTo('-100555'));
     }
 }

@@ -17,7 +17,7 @@ class SalesReportSetting extends Model
     public const LANGUAGES = ['uz' => 'Oʻzbekcha', 'ru' => 'Русский', 'en' => 'English'];
 
     /** Channels that can be analysed (subset of ChatConversation::CHANNELS). */
-    public const CHANNELS = ['telegram' => 'Telegram bot (customers + staff replies)', 'business' => 'Telegram Business (Premium account chats)', 'group' => 'Telegram groups the bot is in'];
+    public const CHANNELS = ['telegram' => 'Telegram bot chats (customers + staff replies)', 'business' => 'Premium-account chats (Telegram Business)', 'group' => 'Telegram groups the bot is in'];
 
     public const DEFAULT_CHANNELS = ['telegram', 'business'];
 

@@ -64,7 +64,10 @@ class TelegramRecorder
         $fromOwner = $connection->user_id !== '' && (string) ($message['from']['id'] ?? '') === $connection->user_id;
         // Sent by this bot on behalf of the account (a registration question): not the owner's answer.
         $role = isset($message['sender_business_bot']) ? 'bot' : ($fromOwner ? 'owner' : 'user');
-        $conversation = $this->conversation('business', $message['chat'], $connection, $message['from'] ?? [], $edited);
+        // The customer's one conversation (shared with the bot chat); each message keeps the account it came through.
+        // An edit goes to the session holding the original (also an older one stored as channel business).
+        $conversation = ($edited ? $this->sessionWith((string) $message['chat']['id'], $connection->connection_id, $message['message_id'] ?? null) : null)
+            ?? $this->conversation('telegram', $message['chat'], null, $message['from'] ?? [], $edited, 'Telegram');
 
         // The customer side of a Premium-account chat is listed under Telegram → Users.
         $customer = $role === 'user' && ! $edited && isset($message['from']['id']) && (string) $message['from']['id'] === (string) $message['chat']['id']
@@ -86,7 +89,7 @@ class TelegramRecorder
             Cache::forget(self::BUSINESS_REGISTERING.$customer->telegram_id);
             $customer->update(['ask_registration' => false] + (in_array($customer->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true) ? ['step' => $customer->isRegistered() ? TelegramUser::STEP_DONE : TelegramUser::STEP_GUEST] : []));
         }
-        $this->store($conversation, $message, $role, $edited, $answering);
+        $this->store($conversation, $message, $role, $edited, $answering, $connection->connection_id);
 
         // The sales assistant answers the customer on behalf of the account (not employees; a manager gets
         // `wait_minutes` first in working hours — see SalesAssistant::decision). It also collects the contacts.
@@ -161,7 +164,7 @@ class TelegramRecorder
     }
 
     /** Send a message in a Premium-account chat on behalf of the account, and record it as the bot's. */
-    public function sendAsAccount(ChatConversation $conversation, TelegramBusinessConnection $connection, string $text, string $role = 'bot'): bool
+    public function sendAsAccount(ChatConversation $conversation, TelegramBusinessConnection $connection, string $text, string $role = 'bot', array $extra = []): bool
     {
         $sent = $this->api->call('sendMessage', [
             'business_connection_id' => $connection->connection_id,
@@ -174,9 +177,10 @@ class TelegramRecorder
 
         // Re-read: a customer message may have been stored while the request ran.
         $conversation->refresh();
-        $conversation->messages = [...($conversation->messages ?? []), [
+        $conversation->messages = [...($conversation->messages ?? []), $extra + [
             'role' => $role, 'sender' => 'BDB bot', 'content' => $text,
             'message_id' => is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null, 'at' => now()->toIso8601String(),
+            'via' => 'assistant', 'connection' => $connection->connection_id,
         ]];
         $conversation->message_count = count($conversation->messages);
         $conversation->save();
@@ -193,15 +197,18 @@ class TelegramRecorder
             return;
         }
 
-        // The deleted messages may be in an earlier session of this chat.
-        $conversations = ChatConversation::where('channel', 'business')->where('external_id', (string) $chatId)
-            ->where('business_connection_id', (string) $connectionId)->latest('updated_at')->latest('id')->limit(5)->get();
+        // The deleted messages may be in an earlier session of this chat (older ones: channel business).
+        $conversations = ChatConversation::where('external_id', (string) $chatId)
+            ->where(fn ($q) => $q->where('channel', 'telegram')
+                ->orWhere(fn ($q) => $q->where('channel', 'business')->where('business_connection_id', (string) $connectionId)))
+            ->latest('updated_at')->latest('id')->limit(5)->get();
 
         foreach ($conversations as $conversation) {
             $messages = $conversation->messages ?? [];
             $changed = false;
             foreach ($messages as $i => $m) {
-                if (in_array($m['message_id'] ?? null, $ids, true)) {
+                if (in_array($m['message_id'] ?? null, $ids, true) && $conversation->viaOf($m) === 'assistant'
+                    && ($conversation->channel === 'business' || ($m['connection'] ?? null) === (string) $connectionId)) {
                     $messages[$i]['deleted'] = true;
                     $changed = true;
                 }
@@ -227,20 +234,24 @@ class TelegramRecorder
 
     // ---------------------------------------------------------------------------
 
-    private function store(ChatConversation $conversation, array $message, string $role, bool $edited, bool $aside = false): void
+    /** $connection: a Premium-account message (via assistant), matched only against that account's messages. */
+    private function store(ChatConversation $conversation, array $message, string $role, bool $edited, bool $aside = false, ?string $connection = null): void
     {
-        $entry = $this->entry($message, $role) + ($aside ? ['aside' => true] : []);
+        $entry = $this->entry($message, $role) + ($aside ? ['aside' => true] : []) + ($connection !== null ? ['via' => 'assistant', 'connection' => $connection] : []);
         $messages = $conversation->messages ?? [];
+        // Message IDs are numbered per chat: the bot chat and each account's chat count separately.
+        $same = fn (array $m) => ($m['message_id'] ?? null) === $entry['message_id']
+            && ($connection === null || ($conversation->viaOf($m) === 'assistant' && ($m['connection'] ?? $connection) === $connection));
 
         // Telegram echoes the bot's own business messages; they are already recorded when sent.
         if (! $edited && $entry['message_id'] !== null && $role === 'bot'
-            && collect($messages)->contains(fn ($m) => ($m['message_id'] ?? null) === $entry['message_id'])) {
+            && collect($messages)->contains(fn ($m) => is_array($m) && $same($m))) {
             return;
         }
 
         if ($edited && $entry['message_id'] !== null) {
             foreach ($messages as $i => $m) {
-                if (($m['message_id'] ?? null) === $entry['message_id']) {
+                if (is_array($m) && $same($m)) {
                     // A bot-step answer stays a bot step when it is edited.
                     $messages[$i] = ['at' => $m['at'] ?? $entry['at']] + $entry + ['edited' => true] + array_intersect_key($m, ['aside' => true]);
                     $conversation->messages = $messages;
@@ -260,6 +271,11 @@ class TelegramRecorder
         $messages[] = $entry;
         $conversation->messages = $messages;
         $conversation->message_count = count($messages);
+        if ($edited && $conversation->exists) {
+            $this->saveWithoutTouching($conversation); // a late edit does not reopen an old session
+
+            return;
+        }
         $conversation->save();
     }
 
@@ -319,7 +335,7 @@ class TelegramRecorder
         return $name !== '' ? $name : (isset($from['username']) ? '@'.$from['username'] : 'Unknown');
     }
 
-    private function conversation(string $channel, array $chat, ?TelegramBusinessConnection $connection, array $from, bool $edited = false): ChatConversation
+    private function conversation(string $channel, array $chat, ?TelegramBusinessConnection $connection, array $from, bool $edited = false, ?string $page = null): ChatConversation
     {
         $chatId = (string) $chat['id'];
         $title = $chat['title'] ?? (trim(($chat['first_name'] ?? '').' '.($chat['last_name'] ?? '')) ?: (isset($chat['username']) ? '@'.$chat['username'] : null));
@@ -336,7 +352,7 @@ class TelegramRecorder
             'external_id' => $chatId,
             'business_connection_id' => $connection?->connection_id,
             'locale' => in_array($from['language_code'] ?? null, ['uz', 'ru', 'en'], true) ? $from['language_code'] : 'ru',
-            'page' => $connection ? 'Account: '.$connection->label() : 'Group',
+            'page' => $page ?? ($connection ? 'Account: '.$connection->label() : 'Group'),
             'messages' => [],
             'message_count' => 0,
         ]);
@@ -380,6 +396,23 @@ class TelegramRecorder
             ->latest('updated_at')
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * The session of this customer that holds Premium-account message $messageId; with no such session, the oldest
+     * kind still in use: an older business session when the customer has no merged conversation yet (never a new one).
+     */
+    private function sessionWith(string $chatId, string $connectionId, mixed $messageId): ?ChatConversation
+    {
+        $sessions = ChatConversation::where('external_id', $chatId)
+            ->where(fn ($q) => $q->where('channel', 'telegram')
+                ->orWhere(fn ($q) => $q->where('channel', 'business')->where('business_connection_id', $connectionId)))
+            ->latest('id')->limit(5)->get();
+        $id = is_numeric($messageId) ? (int) $messageId : null;
+        $holding = $id === null ? null : $sessions->first(fn (ChatConversation $c) => collect($c->messages ?? [])->contains(fn ($m) => is_array($m)
+            && ($m['message_id'] ?? null) === $id && $c->viaOf($m) === 'assistant' && ($m['connection'] ?? $connectionId) === $connectionId));
+
+        return $holding ?? ($sessions->contains('channel', 'telegram') ? null : $sessions->first());
     }
 
     /** Connections made before the webhook received business_connection updates are fetched from Telegram. */

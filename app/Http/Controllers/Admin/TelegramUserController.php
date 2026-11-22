@@ -81,8 +81,8 @@ class TelegramUserController extends Controller
             'conversations' => $conversations,
             'replyTo' => $conversations->firstWhere('channel', 'telegram'),
             // Premium-account chats: can the bot write there (Telegram Business "reply" permission)?
-            'businessCanReply' => ($biz = $conversations->firstWhere('channel', 'business'))
-                ? (bool) TelegramBusinessConnection::where('connection_id', $biz->business_connection_id)->value('can_reply')
+            'businessCanReply' => ($bizId = $conversations->map(fn (ChatConversation $c) => $c->viaConnectionId())->filter()->first())
+                ? (bool) TelegramBusinessConnection::where('connection_id', $bizId)->value('can_reply')
                 : null,
             'total' => $total,
             'leads' => ChatLead::whereIn('id', $telegramUser->conversations()->whereNotNull('chat_lead_id')->pluck('chat_lead_id'))->latest()->get(),

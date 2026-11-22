@@ -128,7 +128,7 @@
                         <span class="sr-only">Send</span>
                     </button>
                 </div>
-                <p class="text-[11px] text-slate-500 mt-1.5">The customer sees it as a message from the bot. Check AI suggestions and replace any [TO FILL: …] before sending. Ctrl+Enter sends.</p>
+                <p class="text-[11px] text-slate-500 mt-1.5">{{ $latest->via() === 'assistant' ? 'The customer last wrote to the Premium account: it is sent there, on behalf of the account.' : 'The customer sees it as a message from the bot.' }} Check AI suggestions and replace any [TO FILL: …] before sending. Ctrl+Enter sends.</p>
             </form>
         @else
             <div class="shrink-0 bg-slate-50 border-t border-slate-200 px-4 py-3 text-center text-xs text-slate-500">

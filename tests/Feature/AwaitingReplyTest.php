@@ -147,12 +147,12 @@ class AwaitingReplyTest extends TestCase
             ->assertSee('Mark answered')
             ->assertSee('chats waiting for a reply'); // menu badge (sr-only label)
 
-        $this->actingAs($admin)->get(route('admin.awaiting-replies.index', ['channel' => 'business', 'sort' => 'newest']))
-            ->assertOk()->assertSee('Aziz')->assertDontSee('Bot question');
+        $this->actingAs($admin)->get(route('admin.awaiting-replies.index', ['channel' => 'telegram', 'sort' => 'newest']))
+            ->assertOk()->assertSee('Aziz')->assertSee('Bot question');
         $this->actingAs($admin)->get(route('admin.awaiting-replies.index', ['channel' => ['x'], 'sort' => 'bad']))->assertOk();
 
         $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->assertSee('Waiting for reply');
-        $this->actingAs($admin)->get(route('admin.chat-conversations.show', ChatConversation::where('channel', 'business')->sole()))
+        $this->actingAs($admin)->get(route('admin.chat-conversations.show', ChatConversation::where('external_id', '555')->sole()))
             ->assertOk()->assertSee('Mark as answered');
 
         auth()->logout();

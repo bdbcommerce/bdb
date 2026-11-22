@@ -77,7 +77,8 @@ class ClientRequest extends Model
 
         return static::create([
             'chat_conversation_id' => $conversation->id,
-            'channel' => $conversation->channel ?? 'web',
+            // A question asked in the Premium-account chat keeps channel business (the bot never answers it there).
+            'channel' => $conversation->channel === 'telegram' && $conversation->via() === 'assistant' ? 'business' : ($conversation->channel ?? 'web'),
             'external_id' => $conversation->external_id,
             'locale' => $conversation->locale,
             'question' => mb_substr($question, 0, 1000),

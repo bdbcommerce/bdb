@@ -185,6 +185,6 @@ class QaSidebarAndRetickTest extends TestCase
         $last = Http::recorded(fn (Request $r) => str_ends_with($r->url(), '/sendMessage'))->last();
         $this->assertSame(403, $last[1]->status());
         $this->assertSame(TelegramUser::STEP_LANGUAGE, TelegramUser::sole()->step);
-        $this->assertNull(collect(ChatConversation::where('channel', 'business')->sole()->messages)->firstWhere('role', 'bot'));
+        $this->assertNull(collect(ChatConversation::where('channel', 'telegram')->sole()->messages)->firstWhere('role', 'bot'));
     }
 }

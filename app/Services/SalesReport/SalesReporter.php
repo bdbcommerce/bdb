@@ -173,7 +173,10 @@ class SalesReporter
      */
     public function collect(Carbon $from, Carbon $to, array $channels): array
     {
-        $sessions = ChatConversation::query()->whereIn('channel', $channels)
+        // A customer's bot chat and Premium-account chat are one conversation (messages carry `via`): both are read
+        // when either is chosen, and each message is kept only when its own chat is chosen.
+        $reply = array_intersect($channels, ChatConversation::REPLY_CHANNELS);
+        $sessions = ChatConversation::query()->whereIn('channel', $reply ? [...$channels, ...ChatConversation::REPLY_CHANNELS] : $channels)
             ->where(fn ($q) => $q->where('last_message_at', '>=', $from)->orWhere('updated_at', '>=', $from))
             ->orderBy('id')->get();
 
@@ -183,7 +186,7 @@ class SalesReporter
         // Every session of one chat becomes one thread.
         $threads = [];
         foreach ($sessions as $s) {
-            $threads[$s->channel.'|'.$s->external_id.'|'.$s->business_connection_id][] = $s;
+            $threads[in_array($s->channel, ChatConversation::REPLY_CHANNELS, true) ? 'customer|'.$s->external_id : $s->channel.'|'.$s->external_id.'|'.$s->business_connection_id][] = $s;
         }
 
         $chats = [];
@@ -197,7 +200,8 @@ class SalesReporter
             $lastAt = null;
             foreach ($group as $session) {
                 foreach ($session->messages ?? [] as $m) {
-                    if (! is_array($m) || ! empty($m['aside']) || ! empty($m['late_edit'])) {
+                    if (! is_array($m) || ! empty($m['aside']) || ! empty($m['late_edit'])
+                        || (in_array($session->channel, ChatConversation::REPLY_CHANNELS, true) && ! in_array($session->viaOf($m) === 'assistant' ? 'business' : 'telegram', $channels, true))) {
                         continue; // registration steps, commands, button taps; edits of messages from an older session
                     }
                     try {
@@ -212,7 +216,7 @@ class SalesReporter
                     if ($at->lt($from) || $at->gte($to)) {
                         continue;
                     }
-                    [$who, $side] = $this->speaker($m, $first->channel, $owner);
+                    [$who, $side] = $this->speaker($m, $first->channel, is_string($m['connection'] ?? null) ? ($owners->get($m['connection'])?->label() ?? $owner) : $owner);
                     if ($who === null) {
                         continue;
                     }

@@ -109,9 +109,11 @@ class TelegramRecordingTest extends TestCase
         $this->businessMessage(['message_id' => 12, 'photo' => [['file_id' => 'small_photo_123'], ['file_id' => 'large_photo_456']], 'caption' => 'This one?']);
 
         $conversation = ChatConversation::sole();
-        $this->assertSame('business', $conversation->channel);
+        $this->assertSame('telegram', $conversation->channel); // the customer's one conversation (bot + Premium account)
         $this->assertSame('555', $conversation->external_id);
-        $this->assertSame('conn-1', $conversation->business_connection_id);
+        $this->assertNull($conversation->business_connection_id);
+        $this->assertSame(['conn-1', 'conn-1', 'conn-1'], array_column($conversation->messages, 'connection'));
+        $this->assertSame(['assistant', 'assistant', 'assistant'], array_column($conversation->messages, 'via'));
         $this->assertSame('Aziz', $conversation->title);
         $this->assertSame('uz', $conversation->locale);
         $this->assertSame(3, $conversation->message_count);
@@ -202,12 +204,12 @@ class TelegramRecordingTest extends TestCase
         $this->groupMessage(['text' => 'Group question']);
         $admin = User::factory()->create(['is_admin' => true]);
 
-        $this->actingAs($admin)->get(route('admin.chat-conversations.index', ['channel' => 'business']))
+        $this->actingAs($admin)->get(route('admin.chat-conversations.index', ['channel' => 'telegram']))
             ->assertOk()->assertSee('Aziz')->assertSee('Need &lt;b&gt;RFID&lt;/b&gt; tags', false)->assertDontSee('Group question');
 
-        $business = ChatConversation::where('channel', 'business')->sole();
+        $business = ChatConversation::where('channel', 'telegram')->sole();
         $this->actingAs($admin)->get(route('admin.chat-conversations.show', $business))
-            ->assertOk()->assertSee('Telegram Business')->assertSee('Recorded only')->assertDontSee('Message the customer in Telegram');
+            ->assertOk()->assertSee('via Premium account')->assertSee('it is sent there, on behalf of the account')->assertSee('Message the customer in Telegram');
 
         $group = ChatConversation::where('channel', 'group')->sole();
         $this->actingAs($admin)->get(route('admin.chat-conversations.show', $group))

@@ -151,7 +151,7 @@ class SalesAssistantAdminQaTest extends TestCase
             $html = $this->actingAs($admin)->get($url)->assertOk()->getContent();
             $this->assertDoesNotMatchRegularExpression('/<ul id="nav-group-sales-assistant"[^>]*x-cloak/', $html, $url);
             $this->assertMatchesRegularExpression('/<ul id="nav-group-telegram"[^>]*x-cloak/', $html, $url);
-            $this->assertMatchesRegularExpression('/Sales assistant\s*<span[^>]*>\/<\/span>\s*'.$label.'/', $html, $url);
+            $this->assertMatchesRegularExpression('/AI Sales &amp; Support Team\s*<span[^>]*>\/<\/span>\s*'.$label.'/', $html, $url);
         }
     }
 

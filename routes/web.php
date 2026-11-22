@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AiInstructionController;
 use App\Http\Controllers\Admin\AiModelController;
+use App\Http\Controllers\Admin\AiTeamController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\ArticleCategoryController;
 use App\Http\Controllers\Admin\ArticleController;
@@ -167,6 +168,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('awaiting-replies', [AwaitingReplyController::class, 'index'])->name('awaiting-replies.index');
         Route::get('telegram-chats', [ChatConversationController::class, 'index'])->name('telegram-chats.index');
         Route::post('chat-conversations/{chatConversation}/handled', [AwaitingReplyController::class, 'handled'])->name('chat-conversations.handled');
+        // AI Sales & Support Team — mock-up pages (static sample data, nothing is saved yet).
+        Route::get('ai-team/employees/{slug}', [AiTeamController::class, 'employee'])->where('slug', '[a-z]+')->name('ai-team.employee');
+        Route::get('ai-team/{page?}', [AiTeamController::class, 'show'])->whereIn('page', AiTeamController::PAGES)->name('ai-team.show');
         Route::get('sales-assistant', [SalesAssistantController::class, 'edit'])->name('sales-assistant.edit');
         Route::put('sales-assistant', [SalesAssistantController::class, 'update'])->name('sales-assistant.update');
         Route::get('sales-assistant/prompt', [SalesAssistantController::class, 'prompt'])->name('sales-assistant.prompt');

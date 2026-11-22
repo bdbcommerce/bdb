@@ -112,21 +112,31 @@ class AwaitingReplyQaTest extends TestCase
             ->get(route('admin.awaiting-replies.index'))->assertOk()->assertSee('[Voice]');
     }
 
-    public function test_two_business_connections_with_the_same_chat_id_are_separate(): void
+    public function test_two_premium_accounts_are_one_conversation_with_the_account_per_message(): void
     {
         $this->business(['text' => 'To sales 1'], conn: 'conn-1');
         $this->business(['text' => 'To sales 2'], conn: 'conn-2');
-        $this->assertSame(2, ChatConversation::awaitingReply()->count());
+        $this->assertSame(1, ChatConversation::count());
+        $this->assertSame(1, ChatConversation::awaitingReply()->count());
+        $c = ChatConversation::sole();
+        $this->assertSame(['conn-1', 'conn-2'], array_column($c->messages, 'connection'));
+        $this->assertSame('assistant', $c->via());
+        $this->assertSame('conn-2', $c->viaConnectionId());
 
         $this->business(['text' => 'Answer from sales 2'], fromOwner: true, conn: 'conn-2');
-        $this->assertSame(['conn-1'], ChatConversation::awaitingReply()->pluck('business_connection_id')->all());
+        $this->assertSame(0, ChatConversation::awaitingReply()->count());
     }
 
-    public function test_bot_and_business_chat_with_same_id_do_not_supersede_each_other(): void
+    public function test_bot_and_premium_chat_of_one_customer_are_one_conversation(): void
     {
         $this->business(['text' => 'Business question']);
         $this->bot(['text' => 'Bot question']);
-        $this->assertSame(2, ChatConversation::awaitingReply()->count());
+        $this->assertSame(1, ChatConversation::count());
+        $this->assertSame(1, ChatConversation::awaitingReply()->count());
+        $c = ChatConversation::sole();
+        $this->assertSame('telegram', $c->channel);
+        $this->assertSame(['assistant', 'bot'], array_map(fn ($m) => $c->viaOf($m), $c->messages));
+        $this->assertSame('bot', $c->via());
     }
 
     public function test_deleting_the_customer_message_clears_the_chat(): void

@@ -187,11 +187,11 @@ class SalesAssistantSilenceLogicTest extends TestCase
             $this->answer(['reply' => '', 'stage' => 'need', 'unknown_question' => ''])];
         $this->at('2026-11-23 20:00'); // outside working hours: answered at once (follow-up due 2026-12-07 20:00)
         $this->businessUpdate(1, 'Hozircha kerak emas');
-        $this->assertSame(1, ChatConversation::where('channel', 'business')->count());
+        $this->assertSame(1, ChatConversation::where('channel', 'telegram')->count());
 
         $this->at('2026-11-26 11:00'); // the owner writes himself: a new session
         $this->businessUpdate(2, 'Assalomu alaykum, katalogni yubordim', 9000);
-        $this->assertSame(2, ChatConversation::where('channel', 'business')->count());
+        $this->assertSame(2, ChatConversation::where('channel', 'telegram')->count());
 
         $this->at('2026-12-08 10:01');
         $this->artisan('sales:assistant-tick')->assertSuccessful();
@@ -200,8 +200,8 @@ class SalesAssistantSilenceLogicTest extends TestCase
         $this->at('2026-12-08 10:30');
         $this->businessUpdate(3, 'Ha, hali ham kerak');
 
-        $this->assertSame(1, ChatConversation::query()->awaitingReply()->where('channel', 'business')->count(),
+        $this->assertSame(1, ChatConversation::query()->awaitingReply()->where('channel', 'telegram')->count(),
             'the customer\'s answer must show in Waiting for reply (follow-up calls: '.$followUps.', sessions: '
-            .ChatConversation::where('channel', 'business')->get()->map(fn ($c) => $c->id.':'.implode(',', array_column($c->messages, 'role')).':awaiting='.(int) $c->awaiting_reply)->implode(' | ').')');
+            .ChatConversation::where('channel', 'telegram')->get()->map(fn ($c) => $c->id.':'.implode(',', array_column($c->messages, 'role')).':awaiting='.(int) $c->awaiting_reply)->implode(' | ').')');
     }
 }

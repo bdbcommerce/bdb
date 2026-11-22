@@ -25,7 +25,7 @@ class ChatConversation extends Model
     public const KEEP_DAYS = 90;
 
     /** Conversation types: where the chat took place. */
-    public const CHANNELS = ['web' => 'Website', 'telegram' => 'Telegram bot', 'business' => 'Telegram Business', 'group' => 'Telegram groups'];
+    public const CHANNELS = ['web' => 'Website', 'telegram' => 'Telegram', 'business' => 'Telegram Business (before merge)', 'group' => 'Telegram groups'];
 
     protected $fillable = [
         'uuid', 'channel', 'external_id', 'business_connection_id', 'locale', 'page', 'title', 'messages', 'message_count', 'unanswered_count', 'chat_lead_id', 'sales_state',
@@ -33,6 +33,62 @@ class ChatConversation extends Model
 
     /** Chats a person can answer in Telegram: the bot (staff reply from the panel) and the Premium account. */
     public const REPLY_CHANNELS = ['telegram', 'business'];
+
+    /**
+     * One Telegram customer = one conversation (channel telegram), whichever chat they write in: each message
+     * carries `via` — "bot" (the bot chat; the default when missing) or "assistant" (a Premium account's chat,
+     * with `connection` = its business_connection_id). Message IDs are numbered per chat, so a message is
+     * matched by via + message_id. Older Premium-account sessions (channel business) stay as they were.
+     */
+    public const VIA = ['bot' => 'Bot', 'assistant' => 'Assistant'];
+
+    /** The chat message $m came through: bot | assistant. */
+    public function viaOf(array $m): string
+    {
+        return in_array($m['via'] ?? null, ['bot', 'assistant'], true) ? $m['via'] : ($this->channel === 'business' ? 'assistant' : 'bot');
+    }
+
+    /** The chat the customer wrote in last (answers go there): bot | assistant. */
+    public function via(): string
+    {
+        // Nobody on the customer side wrote yet (e.g. the account owner started the chat): the chat of the last message.
+        $last = $this->lastCustomerMessage() ?? collect($this->messages ?? [])->last(fn ($m) => is_array($m) && empty($m['late_edit']));
+
+        return $this->viaOf($last ?? []);
+    }
+
+    /** The Premium account (business_connection_id) the customer last wrote to, when that was an assistant chat. */
+    public function viaConnectionId(): ?string
+    {
+        $m = $this->lastCustomerMessage();
+        if ($m && $this->viaOf($m) === 'assistant' && (is_string($m['connection'] ?? null) || $this->channel === 'business')) {
+            return is_string($m['connection'] ?? null) && $m['connection'] !== '' ? $m['connection'] : $this->business_connection_id;
+        }
+        foreach (array_reverse($this->messages ?? []) as $m) {
+            if (is_array($m) && is_string($m['connection'] ?? null) && $m['connection'] !== '') {
+                return $m['connection'];
+            }
+        }
+
+        return $this->channel === 'business' ? $this->business_connection_id : null;
+    }
+
+    /** The settings channel the customer's last chat belongs to: telegram (bot) | business (Premium account). */
+    public function modeChannel(): string
+    {
+        return $this->via() === 'assistant' ? 'business' : 'telegram';
+    }
+
+    private function lastCustomerMessage(): ?array
+    {
+        foreach (array_reverse($this->messages ?? []) as $m) {
+            if (is_array($m) && ($m['role'] ?? null) === 'user' && empty($m['deleted']) && empty($m['late_edit'])) {
+                return $m;
+            }
+        }
+
+        return null;
+    }
 
     protected function casts(): array
     {
@@ -63,20 +119,32 @@ class ChatConversation extends Model
         $relevant = collect($this->messages ?? [])->reject(fn ($m) => ! empty($m['deleted']) || ! empty($m['late_edit'])
             || ($m['role'] ?? null) === 'bot' || ! empty($m['aside']))->values();
         $last = $relevant->last();
+
+        // A customer message is answered by any later message of a person (a manager read the whole
+        // conversation), or by a later AI reply in the same chat (bot chat / that Premium account) —
+        // an AI answer in the bot chat does not answer a question sent to the Premium account.
+        $chat = fn (array $m) => $this->viaOf($m).'|'.($this->viaOf($m) === 'assistant' ? ($m['connection'] ?? $this->business_connection_id ?? '') : '');
+        $unanswered = null;
+        $answeredChats = [];
+        $personLater = false;
+        foreach ($relevant->reverse() as $m) {
+            $role = $m['role'] ?? null;
+            if ($role === 'user') {
+                if (! $personLater && ! isset($answeredChats[$chat($m)])) {
+                    $unanswered = $m; // keeps the earliest one
+                }
+            } elseif (in_array($role, ['owner', 'admin'], true)) {
+                $personLater = true;
+            } else {
+                $answeredChats[$chat($m)] = true;
+            }
+        }
         $awaiting = in_array($this->channel, self::REPLY_CHANNELS, true)
-            && ($last['role'] ?? null) === 'user'
+            && $unanswered !== null
             && $this->countedMessages() > (int) $this->handled_count;
 
         // Waiting since the first of the customer's unanswered messages; otherwise the last message.
-        $since = $last;
-        if ($awaiting) {
-            foreach ($relevant->reverse() as $m) {
-                if (($m['role'] ?? null) !== 'user' || ! empty($m['aside'])) {
-                    break;
-                }
-                $since = $m;
-            }
-        }
+        $since = $awaiting ? $unanswered : $last;
         $at = isset($since['at']) && is_string($since['at']) ? rescue(fn () => Carbon::parse($since['at']), null, false) : null;
 
         return [
@@ -97,9 +165,8 @@ class ChatConversation extends Model
         $query->where('awaiting_reply', true)
             ->whereIn('channel', self::REPLY_CHANNELS)
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('chat_conversations as newer')
-                ->whereColumn('newer.channel', 'chat_conversations.channel')
+                ->whereIn('newer.channel', self::REPLY_CHANNELS)
                 ->whereColumn('newer.external_id', 'chat_conversations.external_id')
-                ->whereRaw("coalesce(newer.business_connection_id, '') = coalesce(chat_conversations.business_connection_id, '')")
                 ->whereColumn('newer.id', '>', 'chat_conversations.id'));
     }
 
@@ -128,9 +195,17 @@ class ChatConversation extends Model
         return $this->belongsTo(TelegramUser::class, 'external_id', 'telegram_id');
     }
 
-    /** Every session of the same Telegram chat (bot, Premium-account chat or group), this one included. */
+    /**
+     * Every session of the same Telegram chat, this one included. A customer's bot and Premium-account sessions
+     * (older ones were stored apart, channel business) are one chat; groups by chat.
+     */
     public function scopeSameChatAs(Builder $query, self $conversation): void
     {
+        if (in_array($conversation->channel, self::REPLY_CHANNELS, true)) {
+            $query->whereIn('channel', self::REPLY_CHANNELS)->where('external_id', $conversation->external_id);
+
+            return;
+        }
         $query->where('channel', $conversation->channel)
             ->where('external_id', $conversation->external_id)
             ->whereRaw("coalesce(business_connection_id, '') = ?", [(string) $conversation->business_connection_id]);
@@ -176,7 +251,7 @@ class ChatConversation extends Model
 
                     continue;
                 }
-                $messages[] = $m;
+                $messages[] = in_array($session->channel, self::REPLY_CHANNELS, true) ? ['via' => $session->viaOf($m)] + $m : $m;
             }
         }
 
@@ -219,10 +294,12 @@ class ChatConversation extends Model
     /**
      * The dialogue with the assistant: text messages, without media and without "aside" entries
      * (Telegram registration steps, commands and button taps — recorded, but not questions).
+     * $via: only one chat's messages (the bot's own AI must never see the Premium-account chat).
      */
-    public function textMessages(): array
+    public function textMessages(?string $via = null): array
     {
-        return array_values(array_filter($this->messages ?? [], fn (array $m) => isset($m['content']) && empty($m['aside'])));
+        return array_values(array_filter($this->messages ?? [], fn (array $m) => isset($m['content']) && empty($m['aside'])
+            && ($via === null || $this->viaOf($m) === $via)));
     }
 
     /**
@@ -250,7 +327,7 @@ class ChatConversation extends Model
             $ours = $messageId !== null
                 ? ($m['message_id'] ?? null) === $messageId
                 : ! empty($m['aside']) && isset($m['content']) && ($m['message_id'] ?? null) === null;
-            if ($ours && ($m['role'] ?? null) === 'user') {
+            if ($ours && ($m['role'] ?? null) === 'user' && $this->viaOf($m) === 'bot') {
                 unset($messages[$i]['aside']);
                 // The dialogue keeps the question the AI saw (button emoji removed); the raw text stays alongside.
                 if ($m['content'] !== $question) {
@@ -282,7 +359,7 @@ class ChatConversation extends Model
     {
         $messages = $this->freshMessages();
         for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if (($messages[$i]['message_id'] ?? null) === $messageId && ($messages[$i]['role'] ?? null) === 'user' && isset($messages[$i]['type'])) {
+            if (($messages[$i]['message_id'] ?? null) === $messageId && ($messages[$i]['role'] ?? null) === 'user' && isset($messages[$i]['type']) && $this->viaOf($messages[$i]) === 'bot') {
                 $messages[$i] = ['content' => $text, 'transcribed' => true, 'aside' => true] + $messages[$i];
                 $this->messages = $messages;
                 $this->save();
@@ -294,12 +371,12 @@ class ChatConversation extends Model
         return false;
     }
 
-    /** The sender edited message $messageId: replace its content. Returns false when it is not stored here. */
+    /** The sender edited bot-chat message $messageId: replace its content. Returns false when it is not stored here. */
     public function applyEdit(int $messageId, array $content): bool
     {
         $messages = $this->freshMessages();
         for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if (($messages[$i]['message_id'] ?? null) === $messageId) {
+            if (($messages[$i]['message_id'] ?? null) === $messageId && $this->viaOf($messages[$i]) === 'bot') {
                 // A voice message's transcript stays when only its caption is edited.
                 $keep = array_intersect_key($messages[$i], array_flip(['role', 'sender', 'sender_id', 'message_id', 'at', 'aside',
                     ...(! empty($messages[$i]['transcribed']) && isset($content['type']) ? ['content', 'transcribed'] : [])]));

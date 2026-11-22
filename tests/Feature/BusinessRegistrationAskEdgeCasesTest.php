@@ -111,7 +111,7 @@ class BusinessRegistrationAskEdgeCasesTest extends TestCase
 
     private function business(): ChatConversation
     {
-        return ChatConversation::where('channel', 'business')->sole();
+        return ChatConversation::where('channel', 'telegram')->sole();
     }
 
     private function assertNoAi(): void

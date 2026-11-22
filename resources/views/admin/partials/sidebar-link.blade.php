@@ -1,6 +1,6 @@
 {{-- Single sidebar link. Expects $item: route, label, icon (array of path "d" strings), active (bool), badge (int|null), badge_label (string|null). --}}
 <li>
-    <a href="{{ route($item['route']) }}"
+    <a href="{{ route($item['route'], $item['params'] ?? []) }}"
        @if ($item['active']) aria-current="page" @endif
        class="group flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium border-l-2 transition-colors
               focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400

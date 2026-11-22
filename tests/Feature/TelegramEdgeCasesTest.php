@@ -361,7 +361,7 @@ class TelegramEdgeCasesTest extends TestCase
             ->assertSee('Website')->assertSee('Salom, oʻquvchi')->assertDontSee('Telegram customer');
 
         $this->actingAs($admin)->get(route('admin.chat-conversations.show', $orphan))->assertOk()
-            ->assertSee('Telegram bot')->assertSee('Sticker')
+            ->assertSee('Telegram')->assertSee('Sticker')
             ->assertSee(route('admin.telegram.media', 'CAACAgIAAxkBAAIB_st'), false)
             ->assertSee('not stored')->assertDontSee(self::TOKEN);
 

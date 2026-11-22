@@ -142,7 +142,7 @@
                         </span>
                         <span class="flex items-center gap-2">
                             <span class="text-[11px] font-medium rounded-full px-2 py-0.5 {{ $connection->is_enabled ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-500' }}">{{ $connection->is_enabled ? 'Recording' : 'Disconnected' }}</span>
-                            <a href="{{ route('admin.chat-conversations.index', ['channel' => 'business']) }}" class="text-xs font-medium text-slate-600 underline hover:text-slate-900">Chats</a>
+                            <a href="{{ route('admin.chat-conversations.index', ['channel' => 'telegram']) }}" class="text-xs font-medium text-slate-600 underline hover:text-slate-900">Chats</a>
                         </span>
                     </li>
                 @endforeach
