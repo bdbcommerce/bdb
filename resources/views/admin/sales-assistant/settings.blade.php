@@ -13,7 +13,7 @@
     <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-600 space-y-2">
         <p><b class="text-slate-900">What it does.</b> The sales assistant talks with new and returning customers step by step, in the language they start in: it understands their business and what they need, asks the questions for each product (<a href="{{ route('admin.sales-knowledge.index') }}" class="underline">Knowledge</a>), collects name, surname, phone and city, sends a summary to confirm and hands the request to a manager. It never gives prices, stock or delivery dates and never invents facts.</p>
         <p>In the <b>bot chat</b> it answers at once. In <b>Premium-account (Business) chats</b> it waits for a manager first during working hours, answers at once outside them, and stops as soon as a manager writes.</p>
-        <p class="text-amber-700">Being built: these settings, the knowledge and the prompt are ready; the conversation itself is switched on in the next step. Until then the modes below have no effect.</p>
+        <p>It answers only from <a href="{{ route('admin.sales-knowledge.index') }}" class="underline">Knowledge</a> and the website's own data (company, brands, industries, knowledge base, articles). When it does not know, it stays <b>silent</b> and the question goes to the Telegram group set as the source chat in Invoice parser → Settings. Confirmed requests go to the sales chat and Chat leads.</p>
     </div>
 
     <form method="POST" action="{{ route('admin.sales-assistant.update') }}" class="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
@@ -94,8 +94,8 @@
         </div>
     </form>
 
-    <div class="grid gap-6 sm:grid-cols-2">
-        @foreach (['Employees — never talked to' => [$employees, 'employees'], 'Testers — get the assistant in Test mode' => [$testers, 'testers']] as $title => [$list, $filter])
+    <div class="grid gap-6">
+        @foreach (['Employees — never talked to' => [$employees, 'employees']] as $title => [$list, $filter])
             <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm" data-list="{{ $filter }}">
                 <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{{ $title }}</h2>
                 @forelse ($list as $u)

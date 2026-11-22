@@ -57,6 +57,8 @@ return [
         // The bot's @username for contact links when Profile & SEO leaves it empty.
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         // false = record only: the bot saves every message but never replies, registers or calls the AI.
+        // Sales assistant (Admin → Sales assistant) when its settings were never saved: on. Tests: off (phpunit.xml).
+        'sales_assistant' => env('SALES_ASSISTANT_MODE', 'on') === 'off' ? 'off' : 'on',
         'replies' => filter_var(env('TELEGRAM_BOT_REPLIES', false), FILTER_VALIDATE_BOOLEAN), // true/false, 1/0, on/off, yes/no
         // Voice / audio from customers: 'forward' (default) = sent to the sales chat, bot silent; 'transcribe' = Groq Whisper + AI answer.
         'voice' => env('TELEGRAM_VOICE_MODE', 'forward'),

@@ -28,7 +28,7 @@ class ChatConversation extends Model
     public const CHANNELS = ['web' => 'Website', 'telegram' => 'Telegram bot', 'business' => 'Telegram Business', 'group' => 'Telegram groups'];
 
     protected $fillable = [
-        'uuid', 'channel', 'external_id', 'business_connection_id', 'locale', 'page', 'title', 'messages', 'message_count', 'unanswered_count', 'chat_lead_id',
+        'uuid', 'channel', 'external_id', 'business_connection_id', 'locale', 'page', 'title', 'messages', 'message_count', 'unanswered_count', 'chat_lead_id', 'sales_state',
     ];
 
     /** Chats a person can answer in Telegram: the bot (staff reply from the panel) and the Premium account. */
@@ -36,7 +36,8 @@ class ChatConversation extends Model
 
     protected function casts(): array
     {
-        return ['messages' => 'array', 'awaiting_reply' => 'boolean', 'last_message_at' => 'datetime'];
+        return [
+            'sales_state' => 'array', 'messages' => 'array', 'awaiting_reply' => 'boolean', 'last_message_at' => 'datetime'];
     }
 
     protected static function booted(): void

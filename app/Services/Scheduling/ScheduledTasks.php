@@ -72,6 +72,13 @@ final class ScheduledTasks
                 'command' => 'site:clear-home-cache', 'parameters' => [],
                 'cron' => '0 4 * * *', 'every' => 'Daily at 04:00',
             ],
+            'sales-assistant' => [
+                'label' => 'Sales assistant: answer waiting customers',
+                'description' => 'Answers customers no manager answered within the wait time (Premium-account chats in working hours, and bot chats where a manager was talking).',
+                'command' => 'sales:assistant-tick', 'parameters' => [],
+                'cron' => '* * * * *', 'every' => 'Every minute',
+                'overlap' => 10, 'background' => true, 'max_minutes' => 10,
+            ],
             'sales-report' => [
                 'label' => 'Weekly sales report',
                 'description' => 'Claude Opus 5.5 analyses the last 7 days of Telegram sales chats (leads, orders, results, team rating) and posts one message per conversation plus a summary to the invoice parser\'s source group.',

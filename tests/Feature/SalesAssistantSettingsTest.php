@@ -21,7 +21,7 @@ class SalesAssistantSettingsTest extends TestCase
 
     private function valid(array $override = []): array
     {
-        return $override + ['bot_mode' => 'test', 'business_mode' => 'off', 'wait_minutes' => 5, 'work_days' => [1, 2, 3, 4, 5], 'work_start' => '09:00', 'work_end' => '18:00',
+        return $override + ['bot_mode' => 'on', 'business_mode' => 'off', 'wait_minutes' => 5, 'work_days' => [1, 2, 3, 4, 5], 'work_start' => '09:00', 'work_end' => '18:00',
             'remind_after_hours' => 2, 'close_after_hours' => 24, 'follow_up_days' => 14, 'model' => 'claude-haiku-5-5', 'employee_ids' => "123456789\n@Aziz_Sales\nbad!"];
     }
 
@@ -34,7 +34,8 @@ class SalesAssistantSettingsTest extends TestCase
         $prompt = SalesAssistantSetting::current()->systemPrompt();
         $this->assertStringContainsString('Never give a price', $prompt);
         $this->assertStringContainsString('### Labels', $prompt);
-        $this->assertStringContainsString("## Asl Belgi categories\n(empty — do not state anything", $prompt);
+        $this->assertStringContainsString("## Asl Belgi categories\n(empty — never state anything", $prompt);
+        $this->assertStringContainsString('stay silent', $prompt);
         $this->assertStringContainsString('Mon, Tue, Wed, Thu, Fri 09:00–18:00', $prompt);
         $this->assertStringContainsString('5 minutes', $prompt);
     }
@@ -52,15 +53,16 @@ class SalesAssistantSettingsTest extends TestCase
 
         $this->actingAs($admin)->put(route('admin.sales-assistant.update'), $this->valid())->assertSessionHasNoErrors();
         $s = SalesAssistantSetting::current();
-        $this->assertSame(['test', [1, 2, 3, 4, 5]], [$s->bot_mode, $s->work_days]);
+        $this->assertSame(['on', 'off', [1, 2, 3, 4, 5]], [$s->bot_mode, $s->business_mode, $s->work_days]);
         $this->assertSame(['123456789', '@aziz_sales'], $s->employeeList());
 
         $this->actingAs($admin)->put(route('admin.sales-assistant.update'), $this->valid(['bot_mode' => 'x', 'work_days' => [], 'work_end' => '08:00', 'close_after_hours' => 1, 'model' => 'gpt']))
             ->assertSessionHasErrors(['bot_mode', 'work_days', 'work_end', 'close_after_hours', 'model']);
 
         $this->actingAs(User::factory()->create(['is_admin' => false]))->get(route('admin.sales-assistant.edit'))->assertStatus(302);
-        $this->actingAs(User::factory()->create(['is_admin' => false]))->put(route('admin.sales-assistant.update'), $this->valid(['bot_mode' => 'on']))->assertStatus(302);
-        $this->assertSame('test', SalesAssistantSetting::current()->bot_mode);
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->put(route('admin.sales-assistant.update'), $this->valid(['bot_mode' => 'off']))->assertStatus(302);
+        $this->assertSame('on', SalesAssistantSetting::current()->bot_mode);
+        $this->actingAs($admin)->put(route('admin.sales-assistant.update'), $this->valid(['bot_mode' => 'test']))->assertSessionHasErrors('bot_mode');
     }
 
     public function test_prompt_is_editable_and_the_built_in_text_is_kept_as_default(): void
@@ -94,25 +96,32 @@ class SalesAssistantSettingsTest extends TestCase
         $this->assertModelMissing($entry);
     }
 
-    public function test_employees_never_get_the_assistant_and_testers_get_it_in_test_mode(): void
+    public function test_on_for_every_customer_never_for_employees(): void
     {
         $s = SalesAssistantSetting::current();
-        $s->update(['bot_mode' => 'test', 'business_mode' => 'on', 'employee_ids' => "555\n@boss"]);
-        $tester = TelegramUser::create(['telegram_id' => '1', 'is_tester' => true]);
+        $s->update(['bot_mode' => 'on', 'business_mode' => 'on', 'employee_ids' => "555\n@boss"]);
         $customer = TelegramUser::create(['telegram_id' => '2']);
-        $employee = TelegramUser::create(['telegram_id' => '3', 'is_employee' => true, 'is_tester' => true]);
+        $employee = TelegramUser::create(['telegram_id' => '3', 'is_employee' => true]);
         $listed = TelegramUser::create(['telegram_id' => '555']);
         $boss = TelegramUser::create(['telegram_id' => '6', 'username' => 'Boss']);
 
-        $this->assertTrue($s->enabledFor('telegram', $tester));
-        $this->assertFalse($s->enabledFor('telegram', $customer));
+        $this->assertTrue($s->enabledFor('telegram', $customer));
         $this->assertTrue($s->enabledFor('business', $customer));
         foreach ([$employee, $listed, $boss] as $u) {
             $this->assertFalse($s->enabledFor('business', $u), $u->telegram_id);
+            $this->assertFalse($s->enabledFor('telegram', $u), $u->telegram_id);
         }
         $this->assertFalse($s->enabledFor('business', null, '555'));
         $s->update(['business_mode' => 'off']);
-        $this->assertFalse($s->enabledFor('business', $tester));
+        $this->assertFalse($s->enabledFor('business', $customer));
+        $this->assertTrue($s->enabledFor('telegram', $customer));
+    }
+
+    public function test_switched_on_when_never_saved_outside_tests(): void
+    {
+        config(['services.telegram.sales_assistant' => 'on']);
+        $s = SalesAssistantSetting::current();
+        $this->assertSame(['on', 'on'], [$s->bot_mode, $s->business_mode]);
     }
 
     public function test_working_hours_are_tashkent_weekdays(): void
@@ -128,8 +137,8 @@ class SalesAssistantSettingsTest extends TestCase
     {
         $admin = $this->admin();
         $user = TelegramUser::create(['telegram_id' => '77']);
-        $this->actingAs($admin)->put(route('admin.telegram-users.update', $user), ['is_employee' => '1', 'is_tester' => '1'])->assertSessionHasNoErrors();
-        $this->assertSame([true, false], [$user->fresh()->is_employee, $user->fresh()->is_tester], 'an employee is never a tester');
+        $this->actingAs($admin)->put(route('admin.telegram-users.update', $user), ['is_employee' => '1'])->assertSessionHasNoErrors();
+        $this->assertTrue($user->fresh()->is_employee);
         $this->actingAs($admin)->get(route('admin.telegram-users.index', ['filter' => 'employees']))->assertOk()->assertSee('Employees');
         $this->actingAs($admin)->get(route('admin.sales-assistant.edit'))->assertSee(route('admin.telegram-users.show', $user));
     }

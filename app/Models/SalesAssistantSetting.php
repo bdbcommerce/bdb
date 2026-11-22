@@ -15,7 +15,7 @@ class SalesAssistantSetting extends Model
 {
     public const TZ = 'Asia/Tashkent';
 
-    public const MODES = ['off' => 'Off', 'test' => 'Test — only users ticked as testers', 'on' => 'On — everyone'];
+    public const MODES = ['on' => 'On', 'off' => 'Off'];
 
     public const MODELS = ['claude-haiku-5-5' => 'Claude Haiku 5.5 (fast, low cost)', 'claude-sonnet-5-5' => 'Claude Sonnet 5.5', 'claude-opus-5-5' => 'Claude Opus 5.5 (best, highest cost)'];
 
@@ -36,7 +36,9 @@ class SalesAssistantSetting extends Model
     public static function current(): self
     {
         try {
-            return static::firstOrCreate(['id' => 1])->refresh();
+            $mode = config('services.telegram.sales_assistant', 'on');
+
+            return static::firstOrCreate(['id' => 1], ['bot_mode' => $mode, 'business_mode' => $mode])->refresh();
         } catch (Throwable) {
             return new static(['bot_mode' => 'off', 'business_mode' => 'off']);
         }
@@ -76,7 +78,7 @@ class SalesAssistantSetting extends Model
             return false;
         }
 
-        return $mode === 'on' || (bool) $user?->is_tester;
+        return $mode === 'on';
     }
 
     public function isEmployee(?TelegramUser $user, ?string $telegramId = null, ?string $username = null): bool

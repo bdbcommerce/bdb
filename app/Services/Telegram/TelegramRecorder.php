@@ -3,9 +3,12 @@
 namespace App\Services\Telegram;
 
 use App\Models\ChatConversation;
+use App\Models\SalesAssistantSetting;
 use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
+use App\Services\SalesAssistant\SalesAssistant;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 /**
@@ -75,7 +78,25 @@ class TelegramRecorder
         $answering = $asking && in_array($customer->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true)
             && Cache::has(self::BUSINESS_REGISTERING.$customer->telegram_id);
 
+        $sales = $customer && $connection->is_enabled && $connection->can_reply
+            && SalesAssistantSetting::current()->enabledFor('business', $customer, (string) $message['chat']['id']);
+        if ($sales && ($asking || Cache::has(self::BUSINESS_REGISTERING.$customer->telegram_id))) {
+            // The assistant collects the contacts itself: an earlier registration request is dropped.
+            $answering = false;
+            Cache::forget(self::BUSINESS_REGISTERING.$customer->telegram_id);
+            $customer->update(['ask_registration' => false] + (in_array($customer->step, [TelegramUser::STEP_NAME, TelegramUser::STEP_PHONE], true) ? ['step' => $customer->isRegistered() ? TelegramUser::STEP_DONE : TelegramUser::STEP_GUEST] : []));
+        }
         $this->store($conversation, $message, $role, $edited, $answering);
+
+        // The sales assistant answers the customer on behalf of the account (not employees; a manager gets
+        // `wait_minutes` first in working hours — see SalesAssistant::decision). It also collects the contacts.
+        if ($sales) {
+            if (RateLimiter::attempt('telegram-business-chat:'.$conversation->id, 15, fn () => true, 60)) {
+                app(SalesAssistant::class)->businessMessage($customer, $conversation->refresh());
+            }
+
+            return;
+        }
 
         if ($asking) {
             $this->askRegistration($customer, $conversation, $connection, $message);
@@ -140,7 +161,7 @@ class TelegramRecorder
     }
 
     /** Send a message in a Premium-account chat on behalf of the account, and record it as the bot's. */
-    private function sendAsAccount(ChatConversation $conversation, TelegramBusinessConnection $connection, string $text): bool
+    public function sendAsAccount(ChatConversation $conversation, TelegramBusinessConnection $connection, string $text, string $role = 'bot'): bool
     {
         $sent = $this->api->call('sendMessage', [
             'business_connection_id' => $connection->connection_id,
@@ -151,9 +172,11 @@ class TelegramRecorder
             return false;
         }
 
+        // Re-read: a customer message may have been stored while the request ran.
+        $conversation->refresh();
         $conversation->messages = [...($conversation->messages ?? []), [
-            'role' => 'bot', 'sender' => 'BDB bot', 'content' => $text,
-            'message_id' => is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null, 'at' => date('c'),
+            'role' => $role, 'sender' => 'BDB bot', 'content' => $text,
+            'message_id' => is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null, 'at' => now()->toIso8601String(),
         ]];
         $conversation->message_count = count($conversation->messages);
         $conversation->save();

@@ -158,13 +158,13 @@ class SalesAssistantAdminQaTest extends TestCase
     public function test_telegram_user_flags_and_filters(): void
     {
         $admin = $this->admin();
-        $u = TelegramUser::create(['telegram_id' => '901', 'name' => 'Tester One']);
+        $u = TelegramUser::create(['telegram_id' => '901', 'name' => 'Staff One']);
         TelegramUser::create(['telegram_id' => '902', 'name' => 'Plain Customer']);
-        $this->actingAs($admin)->put(route('admin.telegram-users.update', $u), ['is_tester' => '1'])->assertSessionHasNoErrors();
-        $this->assertTrue($u->fresh()->is_tester);
-        $this->actingAs($admin)->get(route('admin.telegram-users.index', ['filter' => 'testers']))->assertOk()->assertSee('Tester One')->assertDontSee('Plain Customer');
-        $this->actingAs($admin)->put(route('admin.telegram-users.update', $u), ['is_tester' => '0'])->assertSessionHasNoErrors();
-        $this->assertFalse($u->fresh()->is_tester);
+        $this->actingAs($admin)->put(route('admin.telegram-users.update', $u), ['is_employee' => '1'])->assertSessionHasNoErrors();
+        $this->assertTrue($u->fresh()->is_employee);
+        $this->actingAs($admin)->get(route('admin.telegram-users.index', ['filter' => 'employees']))->assertOk()->assertSee('Staff One')->assertDontSee('Plain Customer');
+        $this->actingAs($admin)->put(route('admin.telegram-users.update', $u), ['is_employee' => '0'])->assertSessionHasNoErrors();
+        $this->assertFalse($u->fresh()->is_employee);
         $this->actingAs($admin)->put(route('admin.telegram-users.update', $u), ['is_employee' => ['1']])->assertSessionHasErrors('is_employee');
         $this->actingAs($admin)->get(route('admin.telegram-users.index', ['filter' => ['employees']]))->assertOk();
     }
@@ -179,7 +179,7 @@ class SalesAssistantAdminQaTest extends TestCase
         $this->assertTrue(Schema::hasTable('telegram_users'));
 
         $migration->up();
-        $this->assertTrue(Schema::hasColumns('telegram_users', ['is_employee', 'is_tester']));
+        $this->assertTrue(Schema::hasColumn('telegram_users', 'is_employee'));
         $this->assertSame(array_sum(array_map('count', SalesKnowledge::DEFAULTS)), SalesKnowledge::count());
     }
 }

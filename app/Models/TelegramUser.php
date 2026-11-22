@@ -25,7 +25,7 @@ class TelegramUser extends Model
 
     protected $fillable = [
         'telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'company', 'notes',
-        'ask_registration', 'source', 'registered_at', 'phone_verified_at', 'is_employee', 'is_tester',
+        'ask_registration', 'source', 'registered_at', 'phone_verified_at', 'is_employee',
     ];
 
     /** Where the customer was first seen. */
@@ -35,7 +35,7 @@ class TelegramUser extends Model
 
     protected function casts(): array
     {
-        return ['registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean', 'is_employee' => 'boolean', 'is_tester' => 'boolean'];
+        return ['registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean', 'is_employee' => 'boolean'];
     }
 
     public function scopeRegistered(Builder $query): void

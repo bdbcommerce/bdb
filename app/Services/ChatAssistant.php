@@ -566,6 +566,12 @@ The customer is registered; their name is {$name}. Greet them by name in your fi
      * site only the compact basics plus the knowledge entries and articles that match the question are sent.
      * With an empty $query (prompt preview) the first entries are shown.
      */
+    /** The website data (company, brands, industries, matching knowledge entries and articles) for a question — used by the sales assistant too. */
+    public function websiteData(string $locale, string $query): string
+    {
+        return $this->knowledge($locale, $query);
+    }
+
     private function knowledge(string $locale, string $query = ''): string
     {
         $data = $this->knowledgeIndex($locale);

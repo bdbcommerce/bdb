@@ -158,11 +158,6 @@
                         <input type="checkbox" name="is_employee" value="1" @checked(old('is_employee', $user->is_employee)) class="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400">
                         <span>Employee<span class="block text-xs text-slate-400">The sales assistant never talks to this person, in the bot chat or in Premium-account chats.</span></span>
                     </label>
-                    <label class="flex items-start gap-2 text-sm text-slate-700">
-                        <input type="hidden" name="is_tester" value="0">
-                        <input type="checkbox" name="is_tester" value="1" @checked(old('is_tester', $user->is_tester)) class="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400">
-                        <span>Tester<span class="block text-xs text-slate-400">Gets the sales assistant while its mode is “Test”.</span></span>
-                    </label>
                 </div>
                 <button type="submit" class="w-full bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700 transition-colors">Save</button>
             </div>

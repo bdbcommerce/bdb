@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * What the sales assistant may use (Admin → Sales assistant → Knowledge). It never invents beyond this:
- * empty kinds (e.g. Asl Belgi categories, device specs) make it say "the manager will confirm".
+ * What the sales assistant may use (Admin → Sales assistant → Knowledge). It never invents beyond this
+ * (and the website data): what it cannot answer it leaves to the team (silent reply, note to the source group).
  */
 class SalesKnowledge extends Model
 {
@@ -81,7 +81,7 @@ class SalesKnowledge extends Model
         foreach (self::KINDS as $kind => [$label]) {
             $entries = $all->get($kind, collect());
             $out[] = "## {$label}\n".($entries->isEmpty()
-                ? '(empty — do not state anything about this; say the manager will confirm)'
+                ? '(empty — never state anything about this)'
                 : $entries->map(fn (self $e) => "### {$e->title}\n".trim($e->body))->implode("\n\n"));
         }
 

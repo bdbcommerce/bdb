@@ -5,11 +5,13 @@ namespace App\Services\Telegram;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
 use App\Models\ClientRequest;
+use App\Models\SalesAssistantSetting;
 use App\Models\TelegramUser;
 use App\Services\Ai\VoiceTranscriber;
 use App\Services\AiErrorAlerts;
 use App\Services\ChatAssistant;
 use App\Services\Invoices\InvoiceParser;
+use App\Services\SalesAssistant\SalesAssistant;
 use App\Services\TelegramNotifier;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
@@ -132,6 +134,25 @@ class TelegramBot
 
         // Every message is recorded: text as text, anything else by type and Telegram file ID.
         $messageId = is_numeric($message['message_id'] ?? null) ? (int) $message['message_id'] : null;
+
+        // The sales assistant (Admin → Sales assistant) talks with every customer except employees: it replaces
+        // registration and the Q&A answers. Voice still goes to the sales chat; the assistant is told about it.
+        $this->messageId = $messageId;
+        if (SalesAssistantSetting::current()->enabledFor('telegram', $user, (string) $chatId, is_string($from['username'] ?? null) ? $from['username'] : null)) {
+            $conversation = $this->conversation($user);
+            $conversation->appendIncoming(TelegramRecorder::describe($message) + [
+                'message_id' => $messageId,
+                'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
+            ], awaitsReply: false);
+            if (is_array($message['voice'] ?? null) || is_array($message['audio'] ?? null)) {
+                $this->forwardVoice($user, $message);
+            }
+            if (RateLimiter::attempt("telegram-chat:{$chatId}", 15, fn () => true, 60)) {
+                app(SalesAssistant::class)->botMessage($user, $conversation->refresh(), $message);
+            }
+
+            return;
+        }
         $this->conversation($user)->appendIncoming(
             TelegramRecorder::describe($message) + [
                 'message_id' => $messageId,

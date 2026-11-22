@@ -223,6 +223,8 @@ class SalesReporter
                     } elseif ($side === 'team' && $waitingSince) { // people only: the AI answers at once and has no time of its own
                         $times[$who][] = $replyTimes[$who][] = max(0, $waitingSince->diffInSeconds($at, true));
                         $waitingSince = null;
+                    } elseif ($who === 'Bot (AI)') {
+                        $waitingSince = null; // answered (by the AI assistant), not timed
                     }
                 }
             }

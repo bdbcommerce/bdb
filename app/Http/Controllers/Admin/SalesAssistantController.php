@@ -16,7 +16,6 @@ class SalesAssistantController extends Controller
         return view('admin.sales-assistant.settings', [
             'settings' => SalesAssistantSetting::current(),
             'employees' => TelegramUser::where('is_employee', true)->orderBy('name')->get(),
-            'testers' => TelegramUser::where('is_tester', true)->orderBy('name')->get(),
         ]);
     }
 

@@ -13,8 +13,8 @@ return new class extends Migration
         // Admin → Sales assistant → Settings (singleton).
         Schema::create('sales_assistant_settings', function (Blueprint $table) {
             $table->id();
-            $table->string('bot_mode', 4)->default('off'); // off | test | on — the bot chat
-            $table->string('business_mode', 4)->default('off'); // off | test | on — Premium account chats
+            $table->string('bot_mode', 4)->default('on'); // on | off — the bot chat
+            $table->string('business_mode', 4)->default('on'); // on | off — Premium account chats
             $table->unsignedSmallInteger('wait_minutes')->default(5); // Business, working hours: wait for a manager first
             $table->json('work_days')->nullable(); // ISO days 1 = Monday; null = Mon–Fri
             $table->string('work_start', 5)->default('09:00');
@@ -42,7 +42,6 @@ return new class extends Migration
 
         Schema::table('telegram_users', function (Blueprint $table) {
             $table->boolean('is_employee')->default(false); // the assistant never talks to them
-            $table->boolean('is_tester')->default(false); // gets the assistant while a mode is "test"
         });
 
         $now = now();
@@ -58,7 +57,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('telegram_users', function (Blueprint $table) {
-            $table->dropColumn(['is_employee', 'is_tester']);
+            $table->dropColumn('is_employee');
         });
         Schema::dropIfExists('sales_knowledge');
         Schema::dropIfExists('sales_assistant_settings');
