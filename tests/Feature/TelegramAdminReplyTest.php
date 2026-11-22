@@ -339,7 +339,6 @@ class TelegramAdminReplyTest extends TestCase
 
         foreach ([
             'photos/счёт 50%.jpg' => ['filename="scet 50_.jpg"', "filename*=utf-8''%D1%81%D1%87%D1%91%D1%82%2050_.jpg"],
-            "photos/\x01\x02\x7F.mp4" => ['filename=.mp4', null],
             'photos/😀.jpg' => ['filename=.jpg', "filename*=utf-8''%F0%9F%98%80.jpg"],
             // basename() splits on a backslash on Windows only; either way none reaches the header.
             'photos/a\\b.jpg' => ['b.jpg', null],

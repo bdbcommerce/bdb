@@ -57,8 +57,10 @@ class InvoiceMessageController extends Controller
     {
         $file = $telegram->downloadFile($invoiceMessage->file_id, null, ['pdf', '']);
         abort_unless($file, 404);
-        $pdf = $invoiceMessage->mime === 'application/pdf';
-        $type = $pdf || in_array($invoiceMessage->mime, ClaudeInvoiceReader::IMAGE_TYPES, true) ? $invoiceMessage->mime : 'image/jpeg';
+        // Served only when the bytes really are a picture or a PDF, with that real type (never the declared one).
+        $type = TelegramApi::sniff($file['body']);
+        abort_unless($type === 'application/pdf' || in_array($type, ClaudeInvoiceReader::IMAGE_TYPES, true), 404);
+        $pdf = $type === 'application/pdf';
 
         return response($file['body'], 200, [
             'Content-Type' => $type,

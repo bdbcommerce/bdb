@@ -178,18 +178,22 @@ class SecurityInvoiceParserTest extends TestCase
         app(InvoiceParser::class)->capture(['message_id' => 40, 'chat' => ['id' => (int) self::SOURCE],
             'document' => ['file_id' => 'html', 'mime_type' => 'image/png', 'file_name' => 'Счет.png']]);
         $doc = InvoiceMessage::sole();
+        // HTML is never served, whatever type was declared or stored.
+        $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc))->assertNotFound();
+        $doc->update(['mime' => 'text/html']);
+        $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc))->assertNotFound();
+
+        // A real picture is served with its real type (not the stored one), sandboxed.
+        $this->fileBody = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');
         $r = $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc))->assertOk();
         $r->assertHeader('Content-Type', 'image/png');
         $r->assertHeader('X-Content-Type-Options', 'nosniff');
         $this->assertStringContainsString('sandbox', $r->headers->get('Content-Security-Policy'));
 
-        // A stored type outside the whitelist falls back to image/jpeg.
-        $doc->update(['mime' => 'text/html']);
-        $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc))->assertHeader('Content-Type', 'image/jpeg');
-
         // PDF: sandboxed too.
-        $doc->update(['mime' => 'application/pdf']);
-        $r = $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc));
+        $this->fileBody = '%PDF-1.4 test';
+        $r = $this->actingAs($admin)->get(route('admin.invoice-messages.image', $doc))->assertOk();
+        $r->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringContainsString('sandbox', $r->headers->get('Content-Security-Policy'));
 
         // SVG / HTML documents are not captured at all.

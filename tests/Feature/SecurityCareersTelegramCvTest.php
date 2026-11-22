@@ -43,7 +43,7 @@ class SecurityCareersTelegramCvTest extends TestCase
         Http::fake([
             'api.telegram.org/bot*/sendDocument' => Http::response(['ok' => true, 'result' => ['message_id' => 7, 'document' => ['file_id' => 'FILEID1']]]),
             'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => 'documents/file_1.pdf']]),
-            'api.telegram.org/file/bot*' => Http::response('<html><script>alert(1)</script></html>', 200, ['Content-Type' => 'text/html']),
+            'api.telegram.org/file/bot*' => Http::response('%PDF-1.4 <html><script>alert(1)</script></html>', 200, ['Content-Type' => 'text/html']),
             '*' => Http::response(['ok' => true, 'result' => []]),
         ]);
     }

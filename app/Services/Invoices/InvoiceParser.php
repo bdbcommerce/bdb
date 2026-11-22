@@ -120,6 +120,12 @@ class InvoiceParser
             $invoice->update(['status' => 'processing', 'attempts' => $invoice->attempts + 1, 'error' => null]);
 
             $file = $this->telegram->downloadFile($invoice->file_id, null, ['pdf', '']); // photos and "Счет…" PDFs only
+            if (! $file && $this->telegram->refused) {
+                // Never downloaded or dropped (an app, archive… named like an invoice): nothing to retry.
+                $invoice->update(['status' => 'skipped', 'result' => ['status' => 'skipped', 'reason' => 'unsupported file type'], 'processed_at' => now()]);
+
+                return;
+            }
             if (! $file) {
                 $this->fail($invoice, 'Could not download the photo from Telegram.');
 

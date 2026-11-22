@@ -242,14 +242,10 @@ class TelegramAdminTest extends TestCase
             'api.telegram.org/file/*' => Http::response('JPEG', 200, ['Content-Type' => 'image/jpeg']),
         ]);
 
-        $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertOk();
-        $disposition = $response->headers->get('Content-Disposition');
-
-        $this->assertStringStartsWith('inline; filename=', $disposition);
-        $this->assertStringNotContainsString("\r", $disposition);
-        $this->assertStringNotContainsString("\n", $disposition);
-        $this->assertStringContainsString("filename*=utf-8''", $disposition);
+        // A path with line breaks is refused before any download, so nothing can reach a header.
+        $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertNotFound();
         $this->assertNull($response->headers->get('X-Evil'));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '/file/'));
     }
 
     public function test_missing_media_returns_404(): void
