@@ -40,6 +40,7 @@
 
         $label = match (true) {
             $role === 'admin' => 'BDB team · '.($m['author'] ?? 'Admin'),
+            $role === 'assistant' && filled($m['employee'] ?? null) => 'AI · '.$m['employee'].(filled($m['approved_by'] ?? null) ? ' (sent by '.$m['approved_by'].')' : ''),
             $role === 'owner' => 'Account owner'.(isset($m['sender']) ? ' · '.$m['sender'] : ''),
             isset($m['sender']) => $m['sender'],
             default => null,

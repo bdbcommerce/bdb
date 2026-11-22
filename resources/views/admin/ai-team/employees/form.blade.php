@@ -33,7 +33,7 @@
                         <label class="block text-sm"><span class="text-slate-600">Status</span>
                             <select name="status" class="mt-1 w-full rounded-lg border-slate-300 text-sm">
                                 @foreach (AiEmployee::STATUSES as $k => $label)
-                                    <option value="{{ $k }}" @selected(old('status', $e->status) === $k)>{{ $label }}{{ $k === 'live' ? ' — answers customers' : ' — not used with customers' }}</option>
+                                    <option value="{{ $k }}" @selected(old('status', $e->status) === $k)>{{ $label }}{{ ['live' => ' — answers customers', 'shadow' => ' — drafts replies, a manager sends them', 'draft' => ' — not used with customers'][$k] ?? '' }}</option>
                                 @endforeach
                             </select></label>
                         <label class="block text-sm sm:col-span-2"><span class="text-slate-600">Who they talk to</span>
@@ -47,7 +47,7 @@
                             @endforeach
                         </div>
                     </fieldset>
-                    <p class="text-xs text-slate-500">Only the sales consultant can be Live today (the bot and Premium-account chats it answers are set in Settings). Other roles stay drafts until chats are routed to them.</p>
+                    <p class="text-xs text-slate-500">A chat starts with the sales consultant, who hands it to technical support or the service desk when the question is theirs. One employee per role can be in Shadow or Live. Shadow: every reply waits for a manager (AI team → Shadow replies). The bot and Premium-account chats themselves are switched on in Settings.</p>
                 </section>
 
                 <section class="bg-white border border-slate-200 rounded-xl p-5 space-y-5" aria-labelledby="temper-h">
@@ -138,6 +138,16 @@
                         @endforeach
                     </ol>
                 </section>
+
+                @php $shadow = \App\Models\AiShadowDraft::stats($e->id); @endphp
+                @if ($shadow['decided'] || $e->isShadow())
+                    <section class="bg-white border border-slate-200 rounded-xl p-5" aria-labelledby="shadow-h">
+                        <h2 id="shadow-h" class="text-sm font-semibold text-slate-900">Shadow replies</h2>
+                        <p class="mt-2 text-2xl font-semibold text-slate-900">{{ $shadow['rate'] !== null ? $shadow['rate'].'%' : '—' }}</p>
+                        <p class="text-xs text-slate-500">sent unchanged · {{ $shadow['decided'] }} decided ({{ $shadow['edited'] }} edited, {{ $shadow['discarded'] }} discarded)</p>
+                        <a href="{{ route('admin.ai-team.shadow') }}" class="mt-2 inline-block text-xs underline text-slate-600">Shadow replies</a>
+                    </section>
+                @endif
 
                 @unless ($e->isLive())
                     <form method="POST" action="{{ route('admin.ai-employees.destroy', $e) }}" onsubmit="return confirm(@js('Delete '.$e->name.' and all prompt versions?'))">

@@ -120,7 +120,7 @@ class SalesAssistantSetting extends Model
 
         // The live sales consultant's card (platform rules, name, temperament, role prompt) comes first; the owner's
         // sales playbook follows. Without a live sales consultant: the playbook alone, as before.
-        $employee = $as ?? rescue(fn () => AiEmployee::live('sales'), null, false);
+        $employee = $as ?? rescue(fn () => AiEmployee::active('sales'), null, false);
         $head = match (true) {
             ! $employee => trim($this->promptText()),
             $employee->kind === 'sales' => $employee->promptLayers($rolePrompt)."\n\n# SALES PLAYBOOK (the owner's rules for the sales conversation)\n".trim($this->promptText()),

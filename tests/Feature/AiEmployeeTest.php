@@ -100,7 +100,7 @@ class AiEmployeeTest extends TestCase
 
         // Only a sales consultant with a published prompt can be live, and one at a time.
         $j = AiEmployee::where('name', 'Javohir')->sole();
-        $this->actingAs($admin)->put(route('admin.ai-employees.update', $j), $this->card($j, ['status' => 'live']))->assertSessionHasErrors('status');
+        $this->actingAs($admin)->put(route('admin.ai-employees.update', $j), $this->card($j, ['kind' => 'account', 'status' => 'live']))->assertSessionHasErrors('status');
         $this->actingAs($admin)->put(route('admin.ai-employees.update', $j), $this->card($j, ['kind' => 'sales', 'status' => 'live']))->assertSessionHasErrors('status');
         $this->actingAs($admin)->put(route('admin.ai-employees.update', $m), $this->card($m, ['name' => 'Mal<script>']))->assertSessionHasErrors('name');
 

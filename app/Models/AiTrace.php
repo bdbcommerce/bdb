@@ -18,7 +18,7 @@ class AiTrace extends Model
 
     public const KEEP_DAYS = 14;
 
-    public const STATUSES = ['sent' => 'Sent', 'silent' => 'Silent', 'dropped' => 'Dropped', 'failed' => 'Failed', 'limit' => 'Limit reached', 'sandbox' => 'Sandbox'];
+    public const STATUSES = ['sent' => 'Sent', 'silent' => 'Silent', 'dropped' => 'Dropped', 'failed' => 'Failed', 'limit' => 'Limit reached', 'shadow' => 'Shadow draft'];
 
     public const POINTS = ['customer' => 'Customer', 'laravel' => 'Laravel backend', 'claude' => 'Claude API', 'telegram' => 'Telegram'];
 

@@ -101,7 +101,7 @@ class AiEmployeeQaTest extends TestCase
     public function test_live_employee_cannot_change_to_a_non_runnable_kind(): void
     {
         $m = $this->malika();
-        $this->actingAs($this->admin)->put(route('admin.ai-employees.update', $m), $this->card($m, ['kind' => 'support']))->assertSessionHasErrors('status');
+        $this->actingAs($this->admin)->put(route('admin.ai-employees.update', $m), $this->card($m, ['kind' => 'account']))->assertSessionHasErrors('status');
         $this->assertSame('sales', $m->fresh()->kind);
     }
 

@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * An AI employee: the name customers see, a role, a temperament (how they talk) and versioned role prompts.
  * Their prompt = platform rules → this card (who, how they talk, handover) → the published role prompt; for the
  * sales consultant the engine then adds the sales playbook, working hours and knowledge (SalesAssistantSetting).
- * Only the live sales consultant answers customers today; the other roles are drafts until routing exists.
+ * Routing: a chat starts with the sales consultant; an employee hands the customer to a colleague (hand_to in the
+ * answer) and the colleague answers at once. Live employees send their replies; shadow employees only draft them
+ * for a manager to send, edit or discard (AiShadowDraft).
  */
 class AiEmployee extends Model
 {
@@ -22,10 +24,13 @@ class AiEmployee extends Model
         'head' => 'Head of sales (internal reviews)',
     ];
 
-    /** Roles the engine can already run with customers. */
-    public const RUNNABLE_KINDS = ['sales'];
+    /** Roles that can talk to customers (and be handed a chat). */
+    public const RUNNABLE_KINDS = ['sales', 'support', 'service'];
 
-    public const STATUSES = ['draft' => 'Draft', 'live' => 'Live'];
+    public const STATUSES = ['draft' => 'Draft', 'shadow' => 'Shadow', 'live' => 'Live'];
+
+    /** Statuses in which the employee takes part in customer chats. */
+    public const ACTIVE = ['live', 'shadow'];
 
     public const CHANNELS = ['bot' => 'Bot chat', 'business' => 'Premium account'];
 
@@ -64,11 +69,30 @@ class AiEmployee extends Model
         return $this->status === 'live';
     }
 
+    public function isShadow(): bool
+    {
+        return $this->status === 'shadow';
+    }
+
     /** The live employee of this role who answers customers (with a published prompt), if any. */
     public static function live(string $kind): ?self
     {
         return static::where('kind', $kind)->where('status', 'live')->orderBy('sort')->orderBy('id')->get()
             ->first(fn (self $e) => $e->publishedPrompt() !== null);
+    }
+
+    /** The employee of this role taking part in customer chats — live or shadow, with a published prompt. */
+    public static function active(string $kind): ?self
+    {
+        return static::where('kind', $kind)->whereIn('status', self::ACTIVE)->orderBy('sort')->orderBy('id')->get()
+            ->first(fn (self $e) => $e->publishedPrompt() !== null);
+    }
+
+    /** Colleagues this employee may hand a customer to: the other active roles. */
+    public function colleagues(): array
+    {
+        return collect(self::RUNNABLE_KINDS)->reject(fn ($k) => $k === $this->kind)
+            ->map(fn ($k) => self::active($k))->filter()->values()->all();
     }
 
     public static function platformRules(): string
@@ -100,6 +124,8 @@ class AiEmployee extends Model
                 .($this->say ? "\nSay it like this (tone example): \"{$this->say}\"" : '')
                 .($this->avoid ? "\nNever like this: \"{$this->avoid}\"" : ''),
             $this->handover ? "# WHEN TO HAND OVER\n{$this->handover}" : null,
+            ($colleagues = $this->colleagues()) ? "# YOUR COLLEAGUES (hand the customer over with hand_to when the need is theirs)\n"
+                .collect($colleagues)->map(fn (self $c) => "- {$c->name}, ".mb_strtolower($c->role)." — hand_to: {$c->kind}".($c->audience ? ". Takes: {$c->audience}" : ''))->implode("\n") : null,
             trim($prompt) !== '' ? "# YOUR ROLE\n".trim($prompt) : null,
         ]);
 

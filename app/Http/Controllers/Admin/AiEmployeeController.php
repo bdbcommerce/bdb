@@ -165,14 +165,14 @@ class AiEmployeeController extends Controller
         $data['traits'] = array_values(array_filter(array_map('trim', explode(',', (string) ($data['traits'] ?? ''))), fn ($t) => $t !== ''));
         $data['channels'] = array_values($data['channels'] ?? []);
 
-        if ($data['status'] === 'live') {
+        if (in_array($data['status'], AiEmployee::ACTIVE, true)) {
             $errors = [];
             if (! in_array($data['kind'], AiEmployee::RUNNABLE_KINDS, true)) {
-                $errors[] = 'Only the sales consultant can answer customers yet — the other roles stay drafts until chats are routed to them.';
+                $errors[] = 'This role cannot talk to customers yet — it stays a draft.';
             } elseif (! $employee?->publishedPrompt()) {
-                $errors[] = 'Publish a prompt version before switching this employee to Live.';
-            } elseif (AiEmployee::where('kind', $data['kind'])->where('status', 'live')->when($employee, fn ($q) => $q->whereKeyNot($employee->id))->exists()) {
-                $errors[] = 'Another '.mb_strtolower(AiEmployee::KINDS[$data['kind']]).' is live already: switch it to Draft first.';
+                $errors[] = 'Publish a prompt version before switching this employee to Shadow or Live.';
+            } elseif (AiEmployee::where('kind', $data['kind'])->whereIn('status', AiEmployee::ACTIVE)->when($employee, fn ($q) => $q->whereKeyNot($employee->id))->exists()) {
+                $errors[] = 'Another '.mb_strtolower(AiEmployee::KINDS[$data['kind']]).' is in shadow or live already: switch it to Draft first.';
             }
             if ($errors) {
                 throw ValidationException::withMessages(['status' => $errors]);

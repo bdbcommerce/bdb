@@ -10,7 +10,8 @@
             <span class="font-medium text-slate-800">platform rules</span> (the same for everyone, below) →
             <span class="font-medium text-slate-800">the employee's card and published prompt</span> →
             for the sales consultant, your <a href="{{ route('admin.sales-assistant.prompt') }}" class="underline">sales playbook</a>, working hours and knowledge.
-            Only a <span class="font-medium text-slate-800">live sales consultant</span> answers customers today; the other roles are drafts until chats are routed to them.
+            A chat starts with the sales consultant, who hands it to <span class="font-medium text-slate-800">technical support</span> or the <span class="font-medium text-slate-800">service desk</span> when the question is theirs.
+            <span class="font-medium text-slate-800">Live</span> employees answer; <span class="font-medium text-slate-800">Shadow</span> employees only draft replies for a manager to send.
         </p>
         <div class="flex flex-wrap gap-2">
             @foreach ($templates as $key => $t)

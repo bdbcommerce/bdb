@@ -76,6 +76,13 @@
         </div>
 
         {{-- Composer --}}
+        @if($shadowDrafts->isNotEmpty())
+            <div class="shrink-0 border-t border-slate-200 bg-slate-50 px-3 sm:px-4 py-2.5 space-y-2" aria-label="AI replies waiting for you">
+                @foreach($shadowDrafts as $draft)
+                    @include('admin.ai-team._shadow-draft', ['draft' => $draft])
+                @endforeach
+            </div>
+        @endif
         @if($canReply)
             <form method="POST" action="{{ route('admin.chat-conversations.reply', $latest) }}"
                   class="shrink-0 bg-slate-50 border-t border-slate-200 px-3 sm:px-4 py-2.5"

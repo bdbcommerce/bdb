@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
+use App\Models\AiShadowDraft;
 use App\Models\ChatConversation;
 use App\Models\TelegramBusinessConnection;
 use App\Services\ChatAssistant;
@@ -86,6 +87,8 @@ class ChatConversationController extends Controller
             'days' => $days,
             'latest' => $chatConversation->latestSession(),
             'maxDays' => self::MAX_DAYS,
+            'shadowDrafts' => AiShadowDraft::where('status', 'pending')
+                ->whereIn('chat_conversation_id', ChatConversation::query()->sameChatAs($chatConversation)->select('id'))->with('employee')->latest('id')->get(),
         ]);
     }
 

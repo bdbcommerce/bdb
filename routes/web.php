@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AiEmployeeController;
 use App\Http\Controllers\Admin\AiInstructionController;
 use App\Http\Controllers\Admin\AiModelController;
+use App\Http\Controllers\Admin\AiShadowDraftController;
 use App\Http\Controllers\Admin\AiTeamController;
 use App\Http\Controllers\Admin\AiTraceController;
 use App\Http\Controllers\Admin\AnalyticsController;
@@ -179,6 +180,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('ai-team/sandbox', [AiTraceController::class, 'sandbox'])->name('ai-team.sandbox');
         Route::post('ai-team/sandbox', [AiTraceController::class, 'start'])->name('ai-team.sandbox.start');
         Route::post('ai-team/sandbox/{chat}/message', [AiTraceController::class, 'message'])->middleware('throttle:10,1')->name('ai-team.sandbox.message');
+        Route::get('ai-team/shadow', [AiShadowDraftController::class, 'index'])->name('ai-team.shadow');
+        Route::post('ai-team/shadow/{draft}/send', [AiShadowDraftController::class, 'send'])->middleware('throttle:30,1')->name('ai-team.shadow.send');
+        Route::post('ai-team/shadow/{draft}/discard', [AiShadowDraftController::class, 'discard'])->name('ai-team.shadow.discard');
         Route::get('ai-team/traces', [AiTraceController::class, 'index'])->name('ai-team.traces');
         Route::put('ai-team/traces/dev-mode', [AiTraceController::class, 'devMode'])->name('ai-team.dev-mode');
         Route::get('ai-team/traces/{trace}', [AiTraceController::class, 'show'])->name('ai-team.trace');

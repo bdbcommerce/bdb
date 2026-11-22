@@ -4,6 +4,7 @@ namespace App\Services\SalesAssistant;
 
 use App\Models\AiEmployee;
 use App\Models\AiSandboxChat;
+use App\Models\AiShadowDraft;
 use App\Models\AiTrace;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
@@ -74,6 +75,7 @@ class SalesAssistant
 - confirmed: true only in the turn where the customer confirms your summary is correct — the request then goes to the manager.
 - unknown_question: the customer's question you could not answer from KNOWLEDGE / WEBSITE DATA (English), else empty.
 - cancelled: true when the customer said they do not need it any more. follow_up_agreed: true when they agreed that we may send an offer later.
+- hand_to: only when YOUR COLLEAGUES lists a colleague whose work the customer's need is: their hand_to value, and the reply is one short sentence saying that this colleague (by name) will help now — the colleague answers right after. Otherwise an empty string.
 TXT;
 
     public function __construct(
@@ -91,7 +93,7 @@ TXT;
         $bool = ['type' => 'boolean'];
 
         return ['type' => 'object', 'additionalProperties' => false,
-            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'cancelled', 'follow_up_agreed'],
+            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'cancelled', 'follow_up_agreed', 'hand_to'],
             'properties' => [
                 'reply' => $str,
                 'language' => ['type' => 'string', 'enum' => ['uz', 'ru', 'en']],
@@ -103,6 +105,7 @@ TXT;
                 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['product', 'details'],
                     'properties' => ['product' => $str, 'details' => $str]]],
                 'summary' => $str, 'confirmed' => $bool, 'unknown_question' => $str, 'cancelled' => $bool, 'follow_up_agreed' => $bool,
+                'hand_to' => ['type' => 'string', 'enum' => ['', ...AiEmployee::RUNNABLE_KINDS]],
             ]];
     }
 
@@ -204,10 +207,19 @@ TXT;
                     break;
                 }
                 $count = count($conversation->messages ?? []);
+                $kind = (string) (($conversation->sales_state ?? [])['kind'] ?? 'sales');
                 $sent = $this->turn($conversation, $settings, $user) || $sent;
                 $conversation->refresh();
                 $conversation->sales_state = ['handled' => $count] + (array) ($conversation->sales_state ?? []);
                 $conversation->save();
+                $from = ($conversation->sales_state ?? [])['handed_from'] ?? null;
+                if ((($conversation->sales_state ?? [])['kind'] ?? 'sales') !== $kind && $this->mayWrite($conversation, $settings, $user)) {
+                    $count = count($conversation->messages ?? []);
+                    $sent = $this->turn($conversation, $settings, $user, 'Your colleague'.($from ? ' '.$from : '').' has just handed this customer to you. Greet them in one short sentence with your name and answer their last message.', 'handover') || $sent;
+                    $conversation->refresh();
+                    $conversation->sales_state = ['handled' => $count] + (array) ($conversation->sales_state ?? []);
+                    $conversation->save();
+                }
                 $newer = array_slice($conversation->messages ?? [], $count);
                 if (! collect($newer)->contains(fn ($m) => ($m['role'] ?? null) === 'user')) {
                     break;
@@ -255,7 +267,7 @@ TXT;
 
     private function runTurn(ChatConversation $conversation, SalesAssistantSetting $settings, ?TelegramUser $user, ?string $task): bool
     {
-        $employee = rescue(fn () => AiEmployee::live('sales'), null, false);
+        $employee = self::answerer($conversation);
         $published = $employee?->publishedPrompt();
         if ($this->trace) {
             $incoming = $this->incoming($conversation);
@@ -300,7 +312,7 @@ TXT;
             $conversation->save();
         }
         $locale = $conversation->sales_state['language'] ?? $user?->locale ?? 'ru';
-        $system = $settings->systemPrompt()
+        $system = $settings->systemPrompt($employee)
             ."\n\n# WEBSITE DATA (the company's own database — use only this and KNOWLEDGE)\n".app(ChatAssistant::class)->websiteData(in_array($locale, ['uz', 'ru', 'en'], true) ? $locale : 'ru', $query)
             .self::CONTRACT;
 
@@ -327,7 +339,18 @@ TXT;
             return false;
         }
 
-        return $this->apply($conversation, $user, $json, $seen);
+        return $this->apply($conversation, $user, $json, $seen, $employee);
+    }
+
+    /**
+     * Who answers this conversation: the active employee of the role it was handed to (sales_state.kind), else the
+     * active sales consultant; null = none (the sales playbook alone).
+     */
+    public static function answerer(ChatConversation $conversation): ?AiEmployee
+    {
+        $kind = (string) (($conversation->sales_state ?? [])['kind'] ?? 'sales');
+
+        return rescue(fn () => ($kind !== 'sales' ? AiEmployee::active($kind) : null) ?? AiEmployee::active('sales'), null, false);
     }
 
     /** @return list<array{at: string, chat: string, text: string}> the customer messages this turn answers (after the last turn) */
@@ -504,6 +527,8 @@ TXT;
         $would = array_values(array_filter([
             $unknown !== '' ? 'Would post the unknown question to the source group and Client requests' : null,
             ! empty($json['confirmed']) && $state['summary'] !== '' ? (TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? '')) ? 'Would post the request to the sales chat' : 'Confirmed, but no phone yet — no request would be posted') : null,
+            is_string($json['hand_to'] ?? null) && $json['hand_to'] !== '' && ($to = AiEmployee::active($json['hand_to'])) ? "Would hand the customer to {$to->name} — start a sandbox chat with {$to->name} to try their answer" : null,
+            $employee?->isShadow() ? 'Shadow mode: a manager would get this reply to send, edit or discard' : null,
             ! empty($json['cancelled']) ? 'Would cancel the request'.(! empty($json['follow_up_agreed']) ? ' and plan an offer follow-up in '.$settings->follow_up_days.' days' : '') : null,
             array_filter($state['customer'] ?? []) ? 'Would save on the customer card (when empty there): '.implode(', ', array_keys(array_filter($state['customer']))) : null,
         ]));
@@ -519,7 +544,7 @@ TXT;
         return $trace->save();
     }
 
-    private function apply(ChatConversation $conversation, ?TelegramUser $user, array $json, int $seen): bool
+    private function apply(ChatConversation $conversation, ?TelegramUser $user, array $json, int $seen, ?AiEmployee $employee = null): bool
     {
         $s = fn ($v, int $max = 200) => is_scalar($v) ? mb_substr(trim((string) $v), 0, $max) : '';
         $actions = [];
@@ -593,6 +618,15 @@ TXT;
             }
         }
 
+        // Routing: the customer's need is a colleague's work — the colleague takes the chat (and answers next).
+        $handTo = is_string($json['hand_to'] ?? null) ? $json['hand_to'] : '';
+        $current = (string) ($state['kind'] ?? 'sales');
+        if ($handTo !== '' && $handTo !== $current && in_array($handTo, AiEmployee::RUNNABLE_KINDS, true) && ($colleague = AiEmployee::active($handTo))) {
+            $state['kind'] = $handTo;
+            $state['handed_from'] = $employee?->name;
+            $actions[] = "Handed to {$colleague->name} (".mb_strtolower($colleague->role).')';
+        }
+
         $conversation->sales_state = $state;
         $conversation->save();
 
@@ -616,7 +650,15 @@ TXT;
             return false;
         }
 
-        $sent = $this->send($conversation, $text, $language, ! empty($json['ask_phone_button']));
+        if ($employee?->isShadow()) {
+            $this->shadowDraft($conversation, $user, $employee, $text);
+            $this->trace?->step('laravel', 'Shadow mode: the reply waits for a manager (nothing sent)', ['employee' => $employee->name, 'draft' => $text]);
+            $this->trace && $this->trace->status = 'shadow';
+
+            return false;
+        }
+
+        $sent = $this->send($conversation, $text, $language, ! empty($json['ask_phone_button']), $employee?->name);
         $this->trace?->step('telegram', $sent ? 'Laravel → Telegram → customer: sent' : 'Telegram did not deliver the message', [
             'chat' => $conversation->via() === 'assistant' ? 'Premium-account chat (on behalf of the account)' : 'bot chat', 'text' => $text]);
         $this->trace && $this->trace->status = $sent ? 'sent' : 'failed';
@@ -624,12 +666,13 @@ TXT;
         return $sent;
     }
 
-    private function send(ChatConversation $conversation, string $text, string $language, bool $phoneButton): bool
+    private function send(ChatConversation $conversation, string $text, string $language, bool $phoneButton, ?string $employee = null, array $extra = []): bool
     {
+        $extra += $employee ? ['employee' => $employee] : [];
         if ($conversation->via() === 'assistant') {
             $connection = TelegramBusinessConnection::where('connection_id', $conversation->viaConnectionId())->first();
 
-            return $connection && $this->recorder->sendAsAccount($conversation->refresh(), $connection, $text, 'assistant');
+            return $connection && $this->recorder->sendAsAccount($conversation->refresh(), $connection, $text, 'assistant', $extra);
         }
 
         $markup = $phoneButton
@@ -640,7 +683,7 @@ TXT;
             return false;
         }
         $conversation->refresh();
-        $conversation->messages = [...($conversation->messages ?? []), ['role' => 'assistant', 'content' => $text,
+        $conversation->messages = [...($conversation->messages ?? []), $extra + ['role' => 'assistant', 'content' => $text,
             'message_id' => is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null, 'at' => now()->toIso8601String(), 'sales' => true]];
         $conversation->message_count = count($conversation->messages);
         $conversation->save();
@@ -884,6 +927,37 @@ TXT;
         $this->notifier->send(implode("\n", [...$lines, '', ...$bullets, ...$more, ...$tail]));
 
         return $lead;
+    }
+
+    /** Shadow mode: the reply is kept for a manager (older waiting drafts of the chat are out of date) and the sales chat is told. */
+    private function shadowDraft(ChatConversation $conversation, ?TelegramUser $user, AiEmployee $employee, string $text): AiShadowDraft
+    {
+        AiShadowDraft::where('chat_conversation_id', $conversation->id)->where('status', 'pending')->update(['status' => 'stale']);
+        $draft = AiShadowDraft::create(['chat_conversation_id' => $conversation->id, 'ai_employee_id' => $employee->id,
+            'prompt_version' => $employee->publishedPrompt()?->version, 'draft' => $text]);
+        $who = $user?->displayName() ?? 'Telegram '.$conversation->external_id;
+        $this->notifier->send('🕶 <b>Shadow reply — '.e($employee->name).', '.e(mb_strtolower($employee->role)).'</b>'
+            ."\n<b>Customer:</b> ".e($who).($user?->username ? ' (@'.e($user->username).')' : '')
+            ."\n\n".e(mb_strimwidth($text, 0, 1500, '…'))
+            ."\n\n<a href=\"".e(SeoFiles::publicUrl(route('admin.chat-conversations.show', $conversation))).'">Send, edit or discard</a>');
+
+        return $draft;
+    }
+
+    /**
+     * A manager sends a shadow draft (as written or edited) through the chat the customer wrote in last.
+     * Returns false when Telegram did not deliver it.
+     */
+    public function sendDraft(AiShadowDraft $draft, string $text, string $by): bool
+    {
+        $conversation = $draft->conversation->latestSession();
+        $language = ($conversation->sales_state ?? [])['language'] ?? 'ru';
+        if (! $this->send($conversation, $text, $language, false, $draft->employee?->name, ['approved_by' => mb_substr($by, 0, 100)])) {
+            return false;
+        }
+        $draft->update(['final' => $text, 'status' => trim($text) === trim($draft->draft) ? 'sent' : 'edited', 'decided_by' => mb_substr($by, 0, 100), 'decided_at' => now()]);
+
+        return true;
     }
 
     /** A question the assistant could not answer: the customer gets nothing, the source group gets the question. */
