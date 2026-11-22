@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ChatConversation;
 use App\Models\TelegramUser;
 use App\Models\User;
+use App\Services\Telegram\TelegramApi;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -212,29 +213,39 @@ class TelegramAdminTest extends TestCase
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/getFile') && $r['file_id'] === 'AgACAgIAAxkBAAIB_photo');
     }
 
-    public function test_non_media_files_are_downloaded_not_rendered(): void
+    public function test_documents_apps_and_archives_are_never_downloaded(): void
     {
-        Http::fake([
-            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => 'documents/page.html']]),
-            'api.telegram.org/file/*' => Http::response('<script>alert(1)</script>', 200, ['Content-Type' => 'text/html']),
-        ]);
+        $path = null;
+        Http::fake(function (Request $r) use (&$path) {
+            return str_ends_with($r->url(), '/getFile')
+                ? Http::response(['ok' => true, 'result' => ['file_path' => $path]])
+                : Http::response('PK..', 200, ['Content-Type' => 'application/octet-stream']);
+        });
+        foreach (['documents/app.apk', 'documents/Счет.pdf', 'documents/setup.exe', 'documents/a.zip', 'documents/page.html', 'documents/report.docx',
+            'music/song.apk', 'videos/v.exe', 'photos/../x.jpg', 'documents/fake.jpg', 'other/file.jpg'] as $path) {
+            $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertNotFound();
+        }
+        $downloads = Http::recorded(fn ($r) => str_contains($r->url(), '/file/bot'))->count();
+        $this->assertSame(1, $downloads, 'only documents/fake.jpg was fetched (a picture name), then dropped: its bytes are not a picture');
 
-        $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertOk();
-
-        $this->assertStringStartsWith('attachment', $response->headers->get('Content-Disposition'));
+        $this->assertTrue(TelegramApi::mayDownload('photos/file_1.jpg'));
+        $this->assertTrue(TelegramApi::mayDownload('voice/file_2.oga'));
+        $this->assertFalse(TelegramApi::mayDownload('documents/Счет.pdf'));
+        $this->assertTrue(TelegramApi::mayDownload('documents/Счет.pdf', ['pdf']));
+        $this->assertFalse(TelegramApi::mayDownload('documents/app.apk', ['apk']), 'never, even when a caller asks');
     }
 
     public function test_file_names_are_safe_in_the_download_header(): void
     {
         Http::fake([
-            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => "documents/счёт \"O'zbek\"\r\nX-Evil: 1.pdf"]]),
-            'api.telegram.org/file/*' => Http::response('%PDF', 200, ['Content-Type' => 'application/pdf']),
+            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => "photos/счёт \"O'zbek\"\r\nX-Evil: 1.jpg"]]),
+            'api.telegram.org/file/*' => Http::response('JPEG', 200, ['Content-Type' => 'image/jpeg']),
         ]);
 
         $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertOk();
         $disposition = $response->headers->get('Content-Disposition');
 
-        $this->assertStringStartsWith('attachment; filename=', $disposition);
+        $this->assertStringStartsWith('inline; filename=', $disposition);
         $this->assertStringNotContainsString("\r", $disposition);
         $this->assertStringNotContainsString("\n", $disposition);
         $this->assertStringContainsString("filename*=utf-8''", $disposition);

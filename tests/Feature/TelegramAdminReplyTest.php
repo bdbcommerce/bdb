@@ -338,11 +338,11 @@ class TelegramAdminReplyTest extends TestCase
         });
 
         foreach ([
-            'documents/счёт 50%.pdf' => ['filename="scet 50_.pdf"', "filename*=utf-8''%D1%81%D1%87%D1%91%D1%82%2050_.pdf"],
-            "documents/\x01\x02\x7F" => ['filename=file', null],
-            'documents/😀' => ['filename=file', "filename*=utf-8''%F0%9F%98%80"],
+            'photos/счёт 50%.jpg' => ['filename="scet 50_.jpg"', "filename*=utf-8''%D1%81%D1%87%D1%91%D1%82%2050_.jpg"],
+            "photos/\x01\x02\x7F.mp4" => ['filename=.mp4', null],
+            'photos/😀.jpg' => ['filename=.jpg', "filename*=utf-8''%F0%9F%98%80.jpg"],
             // basename() splits on a backslash on Windows only; either way none reaches the header.
-            'documents/a\\b.pdf' => ['b.pdf', null],
+            'photos/a\\b.jpg' => ['b.jpg', null],
         ] as $path => [$fallback, $utf8]) {
             $current = $path;
 

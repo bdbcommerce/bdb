@@ -79,7 +79,9 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"/>
                     </svg>
                     <span class="font-medium">{{ str_replace('_', ' ', ucfirst($type)) }}</span>
-                    @if($url)
+                    @if($url && $type === 'document')
+                        <span class="text-xs text-slate-500">not downloaded (safety) — open it in Telegram</span>
+                    @elseif($url)
                         @if($player)
                             <button type="button" x-show="! shown" @click="shown = true"
                                     class="text-xs font-medium text-slate-600 underline hover:text-slate-900">Load</button>

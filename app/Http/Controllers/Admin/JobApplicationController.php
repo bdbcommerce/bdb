@@ -72,7 +72,7 @@ class JobApplicationController extends Controller
         ];
 
         if ($jobApplication->cv_file_id) {
-            $file = $api->downloadFile($jobApplication->cv_file_id);
+            $file = $api->downloadFile($jobApplication->cv_file_id, null, ['pdf', 'doc', 'docx', 'rtf', 'odt']); // our own upload of a checked CV
             abort_if($file === null, 404, 'Telegram could not provide this CV.');
 
             return response()->streamDownload(fn () => print ($file['body']), $jobApplication->cv_name,

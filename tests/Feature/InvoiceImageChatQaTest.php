@@ -158,7 +158,7 @@ class InvoiceImageChatQaTest extends TestCase
         $sent = [];
         Http::fake(function (Request $request) use (&$sent) {
             if (str_contains($request->url(), '/getFile')) {
-                return Http::response(['ok' => true, 'result' => ['file_path' => 'p.png']]);
+                return Http::response(['ok' => true, 'result' => ['file_path' => 'photos/p.png']]);
             }
             if (str_contains($request->url(), '/file/')) {
                 return Http::response($this->png());

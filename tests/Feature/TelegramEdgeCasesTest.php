@@ -9,6 +9,7 @@ use App\Services\ChatAssistant;
 use App\Services\Telegram\TelegramBot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -409,27 +410,33 @@ class TelegramEdgeCasesTest extends TestCase
     public function test_proxy_escapes_quotes_in_the_file_name(): void
     {
         Http::fake([
-            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => 'documents/a"b.pdf']]),
-            'api.telegram.org/file/*' => Http::response('%PDF', 200, ['Content-Type' => 'application/octet-stream']),
+            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => 'music/a"b.mp3']]),
+            'api.telegram.org/file/*' => Http::response('ID3', 200, ['Content-Type' => 'application/octet-stream']),
         ]);
 
         $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'BQACAgIAAxkBAAIB_doc'))->assertOk()
-            ->assertHeader('Content-Type', 'application/pdf');
+            ->assertHeader('Content-Type', 'audio/mpeg');
 
-        $this->assertSame('attachment; filename="a\"b.pdf"', $response->headers->get('Content-Disposition'));
+        $this->assertSame('inline; filename="a\"b.mp3"', $response->headers->get('Content-Disposition'));
         $this->assertStringNotContainsString(self::TOKEN, json_encode($response->headers->all()));
     }
 
-    public function test_proxy_serves_svg_inline_only_inside_a_sandbox(): void
+    public function test_proxy_never_downloads_svg_and_sandboxes_what_it_serves(): void
     {
         Http::fake([
             'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => 'stickers/x.svg']]),
             'api.telegram.org/file/*' => Http::response('<svg onload="alert(1)"/>', 200, ['Content-Type' => 'image/svg+xml']),
         ]);
+        $this->actingAs($this->admin())->get(route('admin.telegram.media', 'CAACAgIAAxkBAAIB_svg'))->assertNotFound();
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '/file/bot'));
 
+        Http::swap(new Factory);
+        Http::fake([
+            'api.telegram.org/bot*/getFile' => Http::response(['ok' => true, 'result' => ['file_path' => 'stickers/x.webp']]),
+            'api.telegram.org/file/*' => Http::response('RIFF', 200, ['Content-Type' => 'image/webp']),
+        ]);
         $response = $this->actingAs($this->admin())->get(route('admin.telegram.media', 'CAACAgIAAxkBAAIB_svg'))->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff');
-
         $this->assertStringContainsString('sandbox', $response->headers->get('Content-Security-Policy'));
         $this->assertStringContainsString("default-src 'none'", $response->headers->get('Content-Security-Policy'));
     }

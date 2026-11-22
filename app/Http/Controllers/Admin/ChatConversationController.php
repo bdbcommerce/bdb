@@ -136,8 +136,9 @@ class ChatConversationController extends Controller
     /** Shows a file a Telegram customer sent, fetched from Telegram on demand. */
     public function media(string $fileId, TelegramApi $api)
     {
+        // Photos, voice, audio, video and stickers only: documents (apps such as .apk, archives, PDFs…) are never downloaded.
         $file = $api->downloadFile($fileId);
-        abort_if($file === null, 404, 'Telegram could not provide this file (it may be larger than 20 MB or expired).');
+        abort_if($file === null, 404, 'Not available: files, apps (.apk), archives and documents are never downloaded from Telegram — open them in the Telegram app. Photos, voice and video may also be over 20 MB or expired.');
 
         // Telegram often answers with application/octet-stream; guess from the extension for inline display.
         $type = $file['type'] && $file['type'] !== 'application/octet-stream'

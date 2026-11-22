@@ -73,7 +73,7 @@ class InvoiceSellerErrorJsonQaTest extends TestCase
         Http::fake(function (Request $request) {
             $url = $request->url();
             if (str_contains($url, '/getFile')) {
-                return Http::response(['ok' => true, 'result' => ['file_path' => 'p/1.jpg']]);
+                return Http::response(['ok' => true, 'result' => ['file_path' => 'photos/1.jpg']]);
             }
             if (str_contains($url, '/file/')) {
                 return Http::response($this->jpeg);

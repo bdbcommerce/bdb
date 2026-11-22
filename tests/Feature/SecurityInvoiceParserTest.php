@@ -58,7 +58,7 @@ class SecurityInvoiceParserTest extends TestCase
 
         $this->fileBody = base64_decode(self::PNG);
         Http::fake([
-            'api.telegram.org/bot*/getFile*' => Http::response(['ok' => true, 'result' => ['file_path' => 'documents/file_1.bin']]),
+            'api.telegram.org/bot*/getFile*' => Http::response(['ok' => true, 'result' => ['file_path' => 'documents/file_1.pdf']]),
             'api.telegram.org/file/*' => fn () => Http::response($this->fileBody, 200, ['Content-Type' => 'application/octet-stream']),
             'api.telegram.org/bot*/sendMessage' => Http::response(['ok' => true, 'result' => ['message_id' => 77]]),
             '*' => Http::response(['ok' => true, 'result' => []]),

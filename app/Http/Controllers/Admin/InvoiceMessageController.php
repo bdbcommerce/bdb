@@ -55,7 +55,7 @@ class InvoiceMessageController extends Controller
     /** The photo, proxied from Telegram (its file URL contains the bot token). */
     public function image(InvoiceMessage $invoiceMessage, TelegramApi $telegram)
     {
-        $file = $telegram->downloadFile($invoiceMessage->file_id);
+        $file = $telegram->downloadFile($invoiceMessage->file_id, null, ['pdf', '']);
         abort_unless($file, 404);
         $pdf = $invoiceMessage->mime === 'application/pdf';
         $type = $pdf || in_array($invoiceMessage->mime, ClaudeInvoiceReader::IMAGE_TYPES, true) ? $invoiceMessage->mime : 'image/jpeg';

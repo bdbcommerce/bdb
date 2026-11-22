@@ -46,7 +46,7 @@ class InvoiceCostTest extends TestCase
             }
         });
         Http::fake([
-            'api.telegram.org/bot*/getFile*' => Http::response(['ok' => true, 'result' => ['file_path' => 'p/1.png']]),
+            'api.telegram.org/bot*/getFile*' => Http::response(['ok' => true, 'result' => ['file_path' => 'photos/1.png']]),
             'api.telegram.org/file/*' => Http::response(base64_decode(self::PNG)),
             '*' => Http::response(['ok' => true, 'result' => ['message_id' => 9]]),
         ]);

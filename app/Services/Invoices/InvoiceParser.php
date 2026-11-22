@@ -119,7 +119,7 @@ class InvoiceParser
 
             $invoice->update(['status' => 'processing', 'attempts' => $invoice->attempts + 1, 'error' => null]);
 
-            $file = $this->telegram->downloadFile($invoice->file_id);
+            $file = $this->telegram->downloadFile($invoice->file_id, null, ['pdf', '']); // photos and "Счет…" PDFs only
             if (! $file) {
                 $this->fail($invoice, 'Could not download the photo from Telegram.');
 
@@ -209,7 +209,7 @@ class InvoiceParser
         // The photo first (turned upright), then the summary as a reply to it.
         if ($chat !== '' && ! $ids['image_message_id']) {
             if ($body === null) { // a retry: the file is fetched again (the read is not paid again)
-                $body = $this->telegram->downloadFile($invoice->file_id)['body'] ?? null;
+                $body = $this->telegram->downloadFile($invoice->file_id, null, ['pdf', ''])['body'] ?? null;
             }
             $id = $body === null ? null : $this->sendImage($invoice, $chat, $data, $body);
             if ($id !== null) {
