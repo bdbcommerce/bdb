@@ -25,7 +25,7 @@ class ClientRequest extends Model
 
     protected $fillable = [
         'chat_conversation_id', 'channel', 'external_id', 'locale', 'question', 'ai_reply',
-        'status', 'topic', 'category', 'knowledge_entry_id', 'resolved_at', 'notified_at',
+        'status', 'topic', 'category', 'knowledge_kind', 'knowledge_entry_id', 'sales_knowledge_id', 'resolved_at', 'notified_at',
     ];
 
     protected function casts(): array
@@ -86,6 +86,7 @@ class ClientRequest extends Model
             'status' => $result['answered'] ? 'answered' : 'open',
             'topic' => self::normalizeTopic($result['topic'] ?? null),
             'category' => $category ? mb_substr($category, 0, 32) : null,
+            'knowledge_kind' => isset(SalesKnowledge::KINDS[$result['knowledge_kind'] ?? '']) ? $result['knowledge_kind'] : null,
             'knowledge_entry_id' => $entryId,
         ]);
     }

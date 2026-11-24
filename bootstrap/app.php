@@ -26,16 +26,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // Public, anonymous, rate-limited JSON endpoints. Without this, a chat tab left
         // open past the session lifetime fails with 419 and the visitor's lead is lost.
         // The Telegram webhook is authenticated by its own secret header instead.
-        $middleware->validateCsrfTokens(except: ['chat/*', 'telegram/webhook', 'mcp']);
+        // The catalog push (1C) is authenticated by its Bearer token.
+        $middleware->validateCsrfTokens(except: ['chat/*', 'telegram/webhook', 'mcp', 'api/catalog']);
 
         // Telegram updates are handled exactly as Telegram sent them.
-        $isTelegramWebhook = fn (Request $request) => $request->is('telegram/webhook');
+        // The catalog push too: its body (up to 20 MB) is read once, by the controller, after the token check.
+        $isTelegramWebhook = fn (Request $request) => $request->is('telegram/webhook', 'api/catalog');
         $middleware->trimStrings(except: [$isTelegramWebhook]);
         $middleware->convertEmptyStringsToNull(except: [$isTelegramWebhook]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // API keys typed into admin forms must never be flashed into the session (stored in the DB).
-        $exceptions->dontFlash(['api_key']);
+        $exceptions->dontFlash(['api_key', 'pull_password']);
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*', 'chat/*', 'telegram/*'),
         );

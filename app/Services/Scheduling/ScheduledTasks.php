@@ -4,6 +4,7 @@ namespace App\Services\Scheduling;
 
 use App\Models\AiSandboxChat;
 use App\Models\AiTrace;
+use App\Models\CatalogLoad;
 use App\Models\ChatConversation;
 use App\Models\JobApplication;
 use App\Models\LinkClick;
@@ -104,12 +105,20 @@ final class ScheduledTasks
                 'overlap' => 120, 'background' => true, 'exclusive' => true, 'max_minutes' => 120,
                 'manual_parameters' => ['--manual' => true],
             ],
+            'catalog' => [
+                'label' => 'Product catalog: load from 1C',
+                'description' => 'In pull mode, loads the product catalog from the 1C HTTP service. In both modes, fails when the catalog is older than its max age (the AI then quotes no prices or stock).',
+                'command' => 'catalog:pull', 'parameters' => [],
+                'cron' => '15 * * * *', 'every' => 'Every hour',
+                'overlap' => 10, 'max_minutes' => 10,
+                'manual_parameters' => ['--manual' => true],
+            ],
             'prune' => [
                 'label' => 'Delete old records',
-                'description' => 'Deletes conversations after 90 days, CVs and sales reports after 365 days, analytics after 400 days, task runs after '.ScheduledTaskRun::KEEP_DAYS.' days and AI traces / sandbox chats after '.AiTrace::KEEP_DAYS.' days.',
+                'description' => 'Deletes conversations after 90 days, CVs and sales reports after 365 days, analytics after 400 days, catalog loads after '.CatalogLoad::KEEP_DAYS.' days, task runs after '.ScheduledTaskRun::KEEP_DAYS.' days and AI traces / sandbox chats after '.AiTrace::KEEP_DAYS.' days.',
                 'command' => 'model:prune',
                 'parameters' => ['--model' => [ChatConversation::class, JobApplication::class, PageView::class, LinkClick::class, ScheduledTaskRun::class, SalesReport::class,
-                    AiTrace::class, AiSandboxChat::class]],
+                    AiTrace::class, AiSandboxChat::class, CatalogLoad::class]],
                 'cron' => '0 0 * * *', 'every' => 'Daily at 00:00', 'max_minutes' => 30,
             ],
             'webhook-connect' => [

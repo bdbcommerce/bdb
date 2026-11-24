@@ -14,6 +14,7 @@ use App\Models\ClientRequest;
 use App\Models\CompanyInfo;
 use App\Models\InvoiceParserSetting;
 use App\Models\SalesAssistantSetting;
+use App\Models\SalesKnowledge;
 use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
 use App\Services\Ai\AiClient;
@@ -80,6 +81,8 @@ class SalesAssistant
 - summary: the request for the manager in 1–3 short sentences (English), also when not finished.
 - confirmed: true only in the turn where the customer confirms your summary is correct — the request then goes to the manager.
 - unknown_question: the customer's question you could not answer from KNOWLEDGE / WEBSITE DATA (English), else empty.
+- unknown_topic: when unknown_question is set, a short generic topic for it in English, 3–6 words, lowercase, without names or numbers of this customer (e.g. "scale compatibility with 1c"), so the same question from different customers gets the same topic; else empty.
+- unknown_kind: when unknown_question is set, the KNOWLEDGE section its answer belongs in (product | business | marking | software | device | glossary | reply); else empty.
 - cancelled: true when the customer said they do not need it any more. follow_up_agreed: true when they agreed that we may send an offer later.
 - context_unknown: true when the CONVERSATION clearly continues an earlier talk you cannot see — it starts in the middle, or the customer refers to an order, price, file, promise or person that is not in it. Then reply must be empty: a manager takes the chat.
 - hand_to: only when YOUR COLLEAGUES lists a colleague whose work the customer's need is: their hand_to value, and the reply is one short sentence saying that this colleague (by name) will help now — the colleague answers right after. Otherwise an empty string.
@@ -100,7 +103,7 @@ TXT;
         $bool = ['type' => 'boolean'];
 
         return ['type' => 'object', 'additionalProperties' => false,
-            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown'],
+            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown'],
             'properties' => [
                 'reply' => $str,
                 'context_unknown' => $bool,
@@ -113,6 +116,7 @@ TXT;
                 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['product', 'details'],
                     'properties' => ['product' => $str, 'details' => $str]]],
                 'summary' => $str, 'confirmed' => $bool, 'unknown_question' => $str, 'cancelled' => $bool, 'follow_up_agreed' => $bool,
+                'unknown_topic' => $str, 'unknown_kind' => ['type' => 'string', 'enum' => ['', ...array_keys(SalesKnowledge::KINDS)]],
                 'hand_to' => ['type' => 'string', 'enum' => ['', ...AiEmployee::RUNNABLE_KINDS]],
             ]];
     }
@@ -874,6 +878,7 @@ TXT;
             }
             if (! $user->phone && ($phone = TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? '')))) {
                 $update['phone'] = $phone; // typed: not verified
+                $update['phone_verified_at'] = null; // never let an older verification vouch for this phone (catalog prices)
             }
             if (! $user->company && filled($state['customer']['company'] ?? null)) {
                 $update['company'] = $state['customer']['company'];
@@ -897,7 +902,9 @@ TXT;
         if ($unknown !== '' && ! in_array(md5(mb_strtolower($unknown)), (array) ($state['unknown'] ?? []), true)) {
             $state['unknown'] = array_slice([...(array) ($state['unknown'] ?? []), md5(mb_strtolower($unknown))], -30);
             $this->unknown($conversation, $user, $unknown);
-            ClientRequest::record($conversation, $unknown, ['reply' => '', 'answered' => false, 'topic' => mb_substr($unknown, 0, 60), 'category' => 'product']);
+            $topic = $s($json['unknown_topic'] ?? '', 120);
+            ClientRequest::record($conversation, $unknown, ['reply' => '', 'answered' => false, 'topic' => $topic !== '' ? $topic : mb_substr($unknown, 0, 60),
+                'category' => 'product', 'knowledge_kind' => $s($json['unknown_kind'] ?? '', 16)]);
             $actions[] = 'Unknown question posted to the source group and Client requests';
         }
 

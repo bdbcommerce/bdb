@@ -37,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Own counter per public endpoint (a plain throttle:N,M shares one key per IP across routes).
         RateLimiter::for('chat-message', fn (Request $r) => Limit::perMinute(20)->by('chat-message|'.$r->ip()));
+        RateLimiter::for('catalog-push', fn (Request $r) => Limit::perMinute(20)->by('catalog-push|'.$r->ip()));
         RateLimiter::for('chat-lead', fn (Request $r) => Limit::perMinute(5)->by('chat-lead|'.$r->ip()));
         RateLimiter::for('careers', fn (Request $r) => [
             Limit::perMinutes(10, 5)->by('careers|'.$r->ip()),

@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\AwaitingReplyController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\BrandController;
+use App\Http\Controllers\Admin\CatalogController;
 use App\Http\Controllers\Admin\ChatConversationController;
 use App\Http\Controllers\Admin\ChatLeadController;
 use App\Http\Controllers\Admin\ClientController;
@@ -38,6 +39,7 @@ use App\Http\Controllers\Admin\TelegramSettingsController;
 use App\Http\Controllers\Admin\TelegramUserController;
 use App\Http\Controllers\Admin\UploadController;
 use App\Http\Controllers\Admin\VacancyController;
+use App\Http\Controllers\CatalogPushController;
 use App\Http\Controllers\McpController;
 use App\Http\Controllers\Site\AboutController;
 use App\Http\Controllers\Site\BrandLinkController;
@@ -74,6 +76,9 @@ Route::get('/{key}.txt', [SeoController::class, 'indexNowKey'])->where('key', '[
 
 // MCP server for Claude and other AI clients (Admin → AI Assistant → MCP server; CSRF-exempt, own auth)
 Route::match(['get', 'post', 'delete'], '/mcp', McpController::class)->name('mcp');
+
+// Product catalog pushed by 1C (Bearer token, push mode; CSRF-exempt). docs/1c-catalog-http-service.md
+Route::post('/api/catalog', CatalogPushController::class)->middleware('throttle:catalog-push')->name('api.catalog');
 
 // Outbound brand links (website / shop): counted for Site analytics, then redirected
 Route::get('/go/brand/{brand}/{target}', BrandLinkController::class)->where('target', 'website|shop')
@@ -119,6 +124,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('upload/image', [UploadController::class, 'image'])->name('upload.image');
 
         Route::resource('banners', BannerController::class)->except(['show']);
+
+        Route::get('catalog', [CatalogController::class, 'index'])->name('catalog.index');
+        Route::put('catalog', [CatalogController::class, 'update'])->name('catalog.update');
+        Route::post('catalog/token', [CatalogController::class, 'token'])->middleware('throttle:10,1')->name('catalog.token');
+        Route::post('catalog/pull', [CatalogController::class, 'pull'])->middleware('throttle:10,1')->name('catalog.pull');
 
         Route::get('mcp', [McpSettingController::class, 'edit'])->name('mcp.edit');
         Route::put('mcp', [McpSettingController::class, 'update'])->name('mcp.update');
