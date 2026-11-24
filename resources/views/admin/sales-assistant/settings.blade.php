@@ -12,7 +12,7 @@
 <div class="w-full space-y-6">
     <div class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-600 space-y-2">
         <p><b class="text-slate-900">What it does.</b> The sales assistant talks with new and returning customers step by step, in the language they start in: it understands their business and what they need, asks the questions for each product (<a href="{{ route('admin.sales-knowledge.index') }}" class="underline">Knowledge</a>), collects name, surname, phone and city, sends a summary to confirm and hands the request to a manager. It never gives prices, stock or delivery dates and never invents facts.</p>
-        <p>In the <b>bot chat</b> it answers at once. In <b>Premium-account (Business) chats</b> it waits for a manager first during working hours, answers at once outside them, and stops as soon as a manager writes.</p>
+        <p>In the <b>bot chat</b> it answers at once. In <b>Premium-account (Business) chats</b> it waits for a manager first during working hours and stops as soon as a manager writes. Outside working hours it follows the setting below (by default: the working hours once, then silence).</p>
         <p>It answers only from <a href="{{ route('admin.sales-knowledge.index') }}" class="underline">Knowledge</a> and the website's own data (company, brands, industries, knowledge base, articles). When it does not know, it stays <b>silent</b> and the question goes to the Telegram group set as the source chat in Invoice parser → Settings. Confirmed requests go to the sales chat and Chat leads.</p>
     </div>
 
@@ -52,6 +52,16 @@
             </div>
             @error('work_start')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
             @error('work_end')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+            <div class="max-w-xl">
+                <label for="off_hours_mode" class="block text-sm font-medium text-slate-700 mb-1">Outside working hours</label>
+                <select id="off_hours_mode" name="off_hours_mode" class="{{ $input }}">
+                    @foreach (\App\Models\SalesAssistantSetting::OFF_HOURS_MODES as $value => $name)
+                        <option value="{{ $value }}" @selected(old('off_hours_mode', $settings->offHoursMode()) === $value)>{{ $name }}</option>
+                    @endforeach
+                </select>
+                <p class="text-xs text-slate-400 mt-1">The note goes once per closed period, in the customer's language — e.g. “{{ $settings->offHoursNote('en') }}” Later messages get no reply; they stay in Waiting for reply for the managers.</p>
+                @error('off_hours_mode')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
         </fieldset>
 
         <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -84,10 +94,47 @@
             <div>
                 <label for="employee_ids" class="block text-sm font-medium text-slate-700 mb-1">More employees (Telegram IDs or @usernames)</label>
                 <textarea id="employee_ids" name="employee_ids" rows="3" maxlength="3000" class="{{ $input }} font-mono" placeholder="123456789&#10;@aziz_sales">{{ old('employee_ids', $settings->employee_ids) }}</textarea>
-                <p class="text-xs text-slate-400 mt-1">For staff who never wrote to the bot. Others: tick “Employee” on their page in Telegram → Users.</p>
+                <p class="text-xs text-slate-400 mt-1">For staff who never wrote to the bot. Others: set the type “Employee” on their page in Telegram → Users.</p>
                 @error('employee_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
         </div>
+
+        <fieldset class="border-t border-slate-100 pt-6 space-y-4">
+            <legend class="text-sm font-semibold text-slate-900">Assignment &amp; greeting</legend>
+            <input type="hidden" name="greeting_section" value="1">
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label for="require_assignment" class="block text-sm font-medium text-slate-700 mb-1">Talk only with assigned clients</label>
+                    <select id="require_assignment" name="require_assignment" class="{{ $input }}">
+                        <option value="1" @selected((string) old('require_assignment', (int) $settings->requiresAssignment()) === '1')>On — others get the greeting once, then silence</option>
+                        <option value="0" @selected((string) old('require_assignment', (int) $settings->requiresAssignment()) === '0')>Off — talk with everyone except employees</option>
+                    </select>
+                    <p class="text-xs text-slate-400 mt-1">Set the type on the contact's page (Telegram → Users → Not assigned). The sales chat is asked once for every new contact.</p>
+                </div>
+                <fieldset>
+                    <legend class="block text-sm font-medium text-slate-700 mb-1">Greet new contacts in</legend>
+                    @php $greetIn = (array) old('greeting_channels', $settings->greetingChannels()); @endphp
+                    @foreach (\App\Models\SalesAssistantSetting::GREETING_CHANNELS as $value => $label)
+                        <label class="flex items-center gap-2 text-sm text-slate-700 py-0.5">
+                            <input type="checkbox" name="greeting_channels[]" value="{{ $value }}" @checked(in_array($value, $greetIn, true)) class="rounded border-slate-300"> {{ $label }}
+                        </label>
+                    @endforeach
+                    <p class="text-xs text-slate-400 mt-1">Premium-account chats include your personal contacts: untick it if the account is also used privately.</p>
+                </fieldset>
+            </div>
+            <div>
+                <label for="greeting_prompt" class="block text-sm font-medium text-slate-700 mb-1">Greeting prompt</label>
+                <textarea id="greeting_prompt" name="greeting_prompt" rows="9" maxlength="8000" class="{{ $input }} font-mono text-xs">{{ old('greeting_prompt', $settings->greetingPromptText()) }}</textarea>
+                <p class="text-xs text-slate-400 mt-1">How the AI greets a contact who is not assigned yet (and suppliers): one message in their language that presents the company. Empty = the default text. If the message continues an earlier talk the AI cannot see, it stays silent.</p>
+                @error('greeting_prompt')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <div class="max-w-md">
+                <label for="employee_roles" class="block text-sm font-medium text-slate-700 mb-1">Employee roles (one per line)</label>
+                <textarea id="employee_roles" name="employee_roles" rows="6" maxlength="2000" class="{{ $input }}">{{ old('employee_roles', implode("\n", $settings->employeeRoles())) }}</textarea>
+                <p class="text-xs text-slate-400 mt-1">Offered on an employee's page (Sales, Support, Finance, CEO…).</p>
+                @error('employee_roles')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+        </fieldset>
 
         <div class="flex justify-end">
             <button type="submit" class="bg-slate-900 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-slate-700 transition-colors">Save settings</button>

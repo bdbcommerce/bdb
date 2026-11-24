@@ -146,7 +146,7 @@ class ChatConversation extends Model
                 }
             } elseif (in_array($role, ['owner', 'admin'], true)) {
                 $personLater = true;
-            } elseif (empty($m['handoff'])) {
+            } elseif (empty($m['handoff']) && ! self::isCourtesy($m)) { // the hand-off line, the off-hours note and the greeting answer nothing
                 $answeredChats[$chat($m)] = true;
             }
         }
@@ -232,6 +232,12 @@ class ChatConversation extends Model
      * Every session of the same Telegram chat, this one included. A customer's bot and Premium-account sessions
      * (older ones were stored apart, channel business) are one chat; groups by chat.
      */
+    /** The assistant's off-hours note or greeting: sent, but not an answer and not a conversation turn. */
+    public static function isCourtesy(mixed $m): bool
+    {
+        return is_array($m) && (! empty($m['off_hours']) || ! empty($m['greeting']));
+    }
+
     public function scopeSameChatAs(Builder $query, self $conversation): void
     {
         if (in_array($conversation->channel, self::REPLY_CHANNELS, true)) {
@@ -457,10 +463,11 @@ class ChatConversation extends Model
     }
 
     /** A message a BDB staff member sent to the customer from the admin panel (Telegram only). */
-    public function appendAdminMessage(string $text, string $author): void
+    public function appendAdminMessage(string $text, string $author, ?int $messageId = null): void
     {
         $messages = $this->messages ?? [];
-        $messages[] = ['role' => 'admin', 'content' => $text, 'author' => $author, 'at' => date('c')];
+        // The Telegram message ID lets a customer's reply to it count as a reply to a known message.
+        $messages[] = ['role' => 'admin', 'content' => $text, 'author' => $author, 'at' => date('c')] + ($messageId ? ['message_id' => $messageId] : []);
 
         $this->messages = $messages;
         $this->message_count = count($messages);

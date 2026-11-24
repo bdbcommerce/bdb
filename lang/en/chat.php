@@ -69,4 +69,13 @@ return [
     'tg_voice_too_long' => '🎙 I can listen to voice messages up to :seconds seconds. Please send a shorter one or type your question ✍️',
     'tg_voice_limit' => '🎙 I can\'t listen to more voice messages right now. Please type your question ✍️',
     'tg_voice_failed' => '🎙 Sorry, I couldn\'t make out the voice message. Please say it again or type your question ✍️',
+
+    // Sales assistant outside working hours (sent once per closed period).
+    'sales_off_hours' => 'Thank you for your message! 🙏 Our office is closed right now. Working hours: :hours (Tashkent time). Your message is saved — a manager will reply :when from :time.',
+    'sales_greeting' => 'Hello! 👋 Thank you for writing to :company — barcode scanners, label printers, labels and ribbons, data terminals and marking in Uzbekistan. A manager will contact you shortly and help with your question.',
+    'sales_greeting_hours' => 'Our working hours: :hours (Tashkent time).',
+    'sales_today' => 'today',
+    'sales_tomorrow' => 'tomorrow',
+    'sales_on_day' => [1 => 'on Monday', 2 => 'on Tuesday', 3 => 'on Wednesday', 4 => 'on Thursday', 5 => 'on Friday', 6 => 'on Saturday', 7 => 'on Sunday'],
+    'sales_days_short' => [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun'],
 ];

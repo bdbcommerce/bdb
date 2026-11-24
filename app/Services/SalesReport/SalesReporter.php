@@ -236,7 +236,7 @@ class SalesReporter
                 } elseif ($side === 'team' && $waitingSince) { // people only: the AI answers at once and has no time of its own
                     $times[$who][] = $replyTimes[$who][] = max(0, $waitingSince->diffInSeconds($at, true));
                     $waitingSince = null;
-                } elseif ($who === 'Bot (AI)') {
+                } elseif ($who === 'Bot (AI)' && ! ChatConversation::isCourtesy($m)) { // the off-hours note / greeting answers nothing
                     $waitingSince = null; // answered (by the AI assistant), not timed
                 }
             }

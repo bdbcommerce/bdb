@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiEmployee;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\SalesAssistantSetting;
 use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
 use Illuminate\Http\Request;
@@ -19,7 +21,7 @@ class TelegramUserController extends Controller
     /** Conversations rendered on a user page (newest first); older ones are linked from Conversations. */
     public const SHOWN = 30;
 
-    public const FILTERS = ['all' => 'All', 'registered' => 'Registered', 'pending' => 'Not finished registration', 'employees' => 'Employees'];
+    public const FILTERS = ['all' => 'All', 'unassigned' => 'Not assigned', 'clients' => 'Clients', 'suppliers' => 'Suppliers', 'employees' => 'Employees', 'registered' => 'Registered', 'pending' => 'Not finished registration'];
 
     public function index(Request $request)
     {
@@ -31,7 +33,10 @@ class TelegramUserController extends Controller
             ->withMax('conversations as last_message_at', 'updated_at')
             ->when($filter === 'registered', fn ($q) => $q->registered())
             ->when($filter === 'pending', fn ($q) => $q->whereNull('registered_at'))
-            ->when($filter === 'employees', fn ($q) => $q->where('is_employee', true))
+            ->when($filter === 'employees', fn ($q) => $q->where(fn ($w) => $w->where('is_employee', true)->orWhere('contact_type', TelegramUser::TYPE_EMPLOYEE)))
+            ->when($filter === 'unassigned', fn ($q) => $q->unassigned())
+            ->when($filter === 'clients', fn ($q) => $q->where('contact_type', TelegramUser::TYPE_CLIENT))
+            ->when($filter === 'suppliers', fn ($q) => $q->where('contact_type', TelegramUser::TYPE_SUPPLIER))
             ->when($search !== '', function ($query) use ($search) {
                 // "!" escapes LIKE wildcards the same way on SQLite and MySQL (a backslash does not).
                 $like = fn (string $s) => '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $s).'%';
@@ -65,7 +70,10 @@ class TelegramUserController extends Controller
                 'all' => TelegramUser::count(),
                 'registered' => TelegramUser::registered()->count(),
                 'pending' => TelegramUser::whereNull('registered_at')->count(),
-                'employees' => TelegramUser::where('is_employee', true)->count(),
+                'employees' => TelegramUser::where(fn ($w) => $w->where('is_employee', true)->orWhere('contact_type', TelegramUser::TYPE_EMPLOYEE))->count(),
+                'unassigned' => TelegramUser::unassigned()->count(),
+                'clients' => TelegramUser::where('contact_type', TelegramUser::TYPE_CLIENT)->count(),
+                'suppliers' => TelegramUser::where('contact_type', TelegramUser::TYPE_SUPPLIER)->count(),
             ],
         ]);
     }
@@ -112,6 +120,9 @@ class TelegramUserController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
             'ask_registration' => ['sometimes', 'boolean'],
             'is_employee' => ['sometimes', 'boolean'],
+            'contact_type' => ['sometimes', 'nullable', Rule::in(array_keys(TelegramUser::TYPES))],
+            'employee_role' => ['sometimes', 'nullable', 'string', 'max:60'],
+            'ai_employee_id' => ['sometimes', 'nullable', 'integer', Rule::exists('ai_employees', 'id')->where(fn ($q) => $q->whereIn('kind', AiEmployee::RUNNABLE_KINDS))],
             'locale' => ['nullable', Rule::in(['uz', 'ru', 'en'])],
         ], ['phone.regex' => 'Enter the phone with the country code, e.g. +998901234567 (or 9 digits like 90 123 45 67 for Uzbekistan).']);
 
@@ -119,7 +130,32 @@ class TelegramUserController extends Controller
             $data['phone'] = '+'.$data['phone'];
         }
         $data['ask_registration'] = $request->boolean('ask_registration') && ! $telegramUser->isRegistered();
-        $data['is_employee'] = $request->boolean('is_employee');
+        // Who the contact is: the type select (the older "Employee" tick alone still works).
+        if ($request->has('contact_type')) {
+            $data['contact_type'] = $data['contact_type'] ?? null;
+            $data['is_employee'] = $data['contact_type'] === TelegramUser::TYPE_EMPLOYEE;
+        } else {
+            $data['is_employee'] = $request->boolean('is_employee');
+            if ($data['is_employee']) {
+                $data['contact_type'] = TelegramUser::TYPE_EMPLOYEE;
+            } elseif ($telegramUser->contact_type === TelegramUser::TYPE_EMPLOYEE) {
+                $data['contact_type'] = TelegramUser::TYPE_CLIENT;
+            }
+        }
+        if (array_key_exists('contact_type', $data)) {
+            if ($data['contact_type'] !== $telegramUser->contact_type) {
+                $data['assigned_at'] = $data['contact_type'] ? now() : null;
+            }
+            if ($data['contact_type'] !== TelegramUser::TYPE_EMPLOYEE) {
+                $data['employee_role'] = null;
+            }
+            if ($data['contact_type'] !== TelegramUser::TYPE_CLIENT) {
+                $data['ai_employee_id'] = null;
+            }
+        }
+        if (isset($data['employee_role']) && ! in_array($data['employee_role'], SalesAssistantSetting::current()->employeeRoles(), true)) {
+            return back()->withInput()->withErrors(['employee_role' => 'Pick a role from the list (Sales assistant → Settings → Employee roles).']);
+        }
         // Ticking or unticking starts the questions over: a step left from an abandoned attempt must
         // not turn the customer's next message into their name.
         if (! config('services.telegram.replies') && $data['ask_registration'] !== $telegramUser->ask_registration && ! $telegramUser->isRegistered()) {

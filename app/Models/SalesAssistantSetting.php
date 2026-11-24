@@ -23,14 +23,28 @@ class SalesAssistantSetting extends Model
 
     public const DEFAULT_DAYS = [1, 2, 3, 4, 5];
 
+    /** What the assistant does when a customer writes outside working hours. */
+    public const OFF_HOURS_MODES = [
+        'note' => 'Send the working hours once, then stay silent until the office opens',
+        'ai' => 'Answer as in working hours',
+        'silent' => 'Send nothing (managers answer when the office opens)',
+    ];
+
     protected $fillable = [
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
         'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
+        'off_hours_mode', 'require_assignment', 'greeting_prompt', 'greeting_channels', 'employee_roles',
     ];
+
+    /** Employee roles offered on the Telegram user page (editable in Settings, one per line). */
+    public const DEFAULT_EMPLOYEE_ROLES = ['Sales', 'Support', 'Service', 'Finance', 'Accountant', 'Warehouse', 'Marketing', 'CEO'];
+
+    /** Chats where a not-assigned contact gets the greeting. */
+    public const GREETING_CHANNELS = ['bot' => 'Bot chat', 'business' => 'Premium-account chats'];
 
     protected function casts(): array
     {
-        return ['work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean'];
+        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean'];
     }
 
     public static function current(): self
@@ -70,6 +84,115 @@ class SalesAssistantSetting extends Model
         return in_array($at->isoWeekday(), $this->workDays(), true) && $time >= (string) $this->work_start && $time < (string) $this->work_end;
     }
 
+    /** The AI team talks only with assigned clients; others get the greeting (null = config, on). */
+    public function requiresAssignment(): bool
+    {
+        return $this->require_assignment ?? (bool) config('services.telegram.sales_require_assignment', true);
+    }
+
+    /**
+     * What the AI does with this contact: talk (an assigned client, or assignment not required), greet (the greeting
+     * once, then silence: not assigned yet, or a supplier) or silent (an employee — enabledFor already says no).
+     */
+    public function gate(?TelegramUser $user): string
+    {
+        if ($user?->contact_type === TelegramUser::TYPE_EMPLOYEE) {
+            return 'silent';
+        }
+        if (! $this->requiresAssignment()) {
+            return 'talk';
+        }
+
+        return match ($user?->contact_type) {
+            TelegramUser::TYPE_CLIENT => 'talk',
+            default => 'greet', // supplier, or not assigned yet
+        };
+    }
+
+    /** @return list<string> */
+    public function greetingChannels(): array
+    {
+        return $this->greeting_channels === null
+            ? array_keys(self::GREETING_CHANNELS)
+            : array_values(array_intersect(array_keys(self::GREETING_CHANNELS), (array) $this->greeting_channels));
+    }
+
+    public static function defaultGreetingPrompt(): string
+    {
+        return (string) file_get_contents(resource_path('prompts/sales-greeting.md'));
+    }
+
+    public function greetingPromptText(): string
+    {
+        return filled($this->greeting_prompt) ? (string) $this->greeting_prompt : self::defaultGreetingPrompt();
+    }
+
+    /** @return list<string> */
+    public function employeeRoles(): array
+    {
+        $roles = collect(preg_split('/\R/u', (string) $this->employee_roles))->map(fn ($r) => trim(mb_substr((string) $r, 0, 60)))->filter()->unique()->values()->all();
+
+        return $roles ?: self::DEFAULT_EMPLOYEE_ROLES;
+    }
+
+    public function offHoursMode(): string
+    {
+        // Not chosen yet: the config default (note; the test suite uses ai, the earlier behaviour).
+        $mode = (string) ($this->off_hours_mode ?? config('services.telegram.sales_off_hours', 'note'));
+
+        return array_key_exists($mode, self::OFF_HOURS_MODES) ? $mode : 'note';
+    }
+
+    /** The start of the next working period after $at (Tashkent time). */
+    public function nextOpening(?Carbon $at = null): Carbon
+    {
+        $at = ($at ?? now())->copy()->setTimezone(self::TZ);
+        for ($i = 0; $i <= 7; $i++) {
+            $day = $at->copy()->startOfDay()->addDays($i);
+            $open = $day->copy()->setTimeFromTimeString((string) ($this->work_start ?: '09:00'));
+            if (in_array($day->isoWeekday(), $this->workDays(), true) && $open->gt($at)) {
+                return $open;
+            }
+        }
+
+        return $at->copy()->addDay();
+    }
+
+    /** "Mon–Fri 09:00–18:00" in the customer's language (chat.sales_days_short). */
+    public function hoursText(string $locale): string
+    {
+        $names = (array) __('chat.sales_days_short', [], $locale);
+        $groups = [];
+        foreach ($this->workDays() as $d) {
+            $last = array_key_last($groups);
+            if ($last !== null && end($groups[$last]) === $d - 1) {
+                $groups[$last][] = $d;
+            } else {
+                $groups[] = [$d];
+            }
+        }
+        $name = fn (int $d) => (string) ($names[$d] ?? self::DAYS[$d]);
+        $text = implode(', ', array_map(fn ($g) => count($g) > 2 ? $name($g[0]).'–'.$name(end($g)) : implode(', ', array_map($name, $g)), $groups));
+
+        return $text.' '.$this->work_start.'–'.$this->work_end;
+    }
+
+    /** The polite note sent once outside working hours, in the customer's language. */
+    public function offHoursNote(string $locale, ?Carbon $now = null): string
+    {
+        $locale = in_array($locale, ['uz', 'ru', 'en'], true) ? $locale : 'ru';
+        $now = ($now ?? now())->copy()->setTimezone(self::TZ);
+        $open = $this->nextOpening($now);
+        $days = (int) $now->copy()->startOfDay()->diffInDays($open->copy()->startOfDay());
+        $when = match ($days) {
+            0 => __('chat.sales_today', [], $locale),
+            1 => __('chat.sales_tomorrow', [], $locale),
+            default => (string) (((array) __('chat.sales_on_day', [], $locale))[$open->isoWeekday()] ?? ''),
+        };
+
+        return __('chat.sales_off_hours', ['hours' => $this->hoursText($locale), 'when' => $when, 'time' => $open->format('H:i')], $locale);
+    }
+
     /** Whether the assistant talks to this customer in this channel (telegram | business). Employees never. */
     public function enabledFor(string $channel, ?TelegramUser $user, ?string $telegramId = null, ?string $username = null): bool
     {
@@ -83,8 +206,12 @@ class SalesAssistantSetting extends Model
 
     public function isEmployee(?TelegramUser $user, ?string $telegramId = null, ?string $username = null): bool
     {
-        if ($user?->is_employee) {
+        if ($user?->is_employee || $user?->contact_type === TelegramUser::TYPE_EMPLOYEE) {
             return true;
+        }
+        // A type an admin chose (client / supplier) wins over the extra employee list below.
+        if ($user?->contact_type !== null && $user?->contact_type !== '') {
+            return false;
         }
         $ids = $this->employeeList();
         $id = trim((string) ($telegramId ?? $user?->telegram_id));
@@ -128,7 +255,7 @@ class SalesAssistantSetting extends Model
         };
 
         return $head
-            ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours you answer at once."
+            ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours ".($this->offHoursMode() === 'ai' ? 'you answer at once.' : 'customers get a fixed note with these hours; the managers answer them when the office opens.')
             ."\n\n# KNOWLEDGE (use only this; never add facts)\n".SalesKnowledge::forPrompt();
     }
 }

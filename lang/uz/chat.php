@@ -69,4 +69,13 @@ return [
     'tg_voice_too_long' => '🎙 Men :seconds soniyagacha boʻlgan ovozli xabarlarni tinglay olaman. Qisqaroq yuboring yoki savolingizni yozing ✍️',
     'tg_voice_limit' => '🎙 Hozir boshqa ovozli xabarlarni tinglay olmayman. Iltimos, savolingizni yozing ✍️',
     'tg_voice_failed' => '🎙 Kechirasiz, ovozli xabarni tushuna olmadim. Qaytadan ayting yoki savolingizni yozing ✍️',
+
+    // Ish vaqtidan tashqari savdo yordamchisi (yopiq davrda bir marta yuboriladi).
+    'sales_off_hours' => 'Xabaringiz uchun rahmat! 🙏 Hozir ofis ishlamaydi. Ish vaqti: :hours (Toshkent vaqti). Xabaringiz saqlandi — menejer :when soat :time dan javob beradi.',
+    'sales_greeting' => 'Assalomu alaykum! 👋 :company ga yozganingiz uchun rahmat — Oʻzbekistonda shtrix-kod skanerlari, yorliq printerlari, yorliqlar va ribbonlar, maʼlumot yigʻish terminallari va markirovka. Menejer tez orada siz bilan bogʻlanadi va savolingizga yordam beradi.',
+    'sales_greeting_hours' => 'Ish vaqtimiz: :hours (Toshkent vaqti).',
+    'sales_today' => 'bugun',
+    'sales_tomorrow' => 'ertaga',
+    'sales_on_day' => [1 => 'dushanba kuni', 2 => 'seshanba kuni', 3 => 'chorshanba kuni', 4 => 'payshanba kuni', 5 => 'juma kuni', 6 => 'shanba kuni', 7 => 'yakshanba kuni'],
+    'sales_days_short' => [1 => 'Du', 2 => 'Se', 3 => 'Ch', 4 => 'Pa', 5 => 'Ju', 6 => 'Sh', 7 => 'Ya'],
 ];

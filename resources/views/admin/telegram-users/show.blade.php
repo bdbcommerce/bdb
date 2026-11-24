@@ -151,13 +151,53 @@
                         </span>
                     </label>
                 @endunless
-                <div class="border-t border-slate-100 pt-3 space-y-2">
-                    <p class="text-xs font-medium text-slate-600">Sales assistant</p>
-                    <label class="flex items-start gap-2 text-sm text-slate-700">
-                        <input type="hidden" name="is_employee" value="0">
-                        <input type="checkbox" name="is_employee" value="1" @checked(old('is_employee', $user->is_employee)) class="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400">
-                        <span>Employee<span class="block text-xs text-slate-400">The sales assistant never talks to this person, in the bot chat or in Premium-account chats.</span></span>
-                    </label>
+                @php
+                    $aiSettings = \App\Models\SalesAssistantSetting::current();
+                    $suggested = $user->contact_type === null ? $user->suggestedType() : null;
+                    $type = (string) old('contact_type', $user->contact_type ?? '');
+                    $agents = \App\Models\AiEmployee::whereIn('kind', \App\Models\AiEmployee::RUNNABLE_KINDS)->orderBy('sort')->orderBy('name')->get();
+                @endphp
+                <div id="assign" class="border-t border-slate-100 pt-3 space-y-3 scroll-mt-4" x-data="{ type: @js($type) }">
+                    <p class="text-xs font-medium text-slate-600">Assignment — who this contact is</p>
+                    @if ($user->contact_type === null)
+                        <p class="text-xs rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2">
+                            Not assigned yet: the AI {{ $aiSettings->requiresAssignment() ? 'only greets them once and waits' : 'talks to them (assignment is not required in the settings)' }}.
+                            @if ($suggested)<br><b>Suggested:</b> {{ \App\Models\TelegramUser::TYPES[$suggested[0]] }} — {{ $suggested[1] }}. <button type="button" @click="type = @js($suggested[0])" class="underline font-medium">Use it</button>, then Save.@endif
+                        </p>
+                    @endif
+                    <div>
+                        <label for="tg-type" class="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                        <select id="tg-type" name="contact_type" x-model="type" class="{{ $input }}">
+                            <option value="">Not assigned</option>
+                            @foreach (\App\Models\TelegramUser::TYPES as $value => $label)
+                                <option value="{{ $value }}" @selected($type === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">Client: the AI team talks with them. Supplier: greeting only. Employee: the AI never writes to them.</p>
+                        @error('contact_type')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div x-show="type === 'employee'" x-cloak>
+                        <label for="tg-role" class="block text-xs font-medium text-slate-600 mb-1">Employee role</label>
+                        <select id="tg-role" name="employee_role" class="{{ $input }}">
+                            <option value="">—</option>
+                            @foreach ($aiSettings->employeeRoles() as $role)
+                                <option value="{{ $role }}" @selected(old('employee_role', $user->employee_role) === $role)>{{ $role }}</option>
+                            @endforeach
+                        </select>
+                        @error('employee_role')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div x-show="type === 'client'" x-cloak>
+                        <label for="tg-agent" class="block text-xs font-medium text-slate-600 mb-1">AI agent</label>
+                        <select id="tg-agent" name="ai_employee_id" class="{{ $input }}">
+                            <option value="">Automatic (by role)</option>
+                            @foreach ($agents as $agent)
+                                <option value="{{ $agent->id }}" @selected((string) old('ai_employee_id', $user->ai_employee_id) === (string) $agent->id)>{{ $agent->name }} — {{ $agent->role }} ({{ \App\Models\AiEmployee::STATUSES[$agent->status] ?? $agent->status }})</option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">Answers this client while the chat is with that agent's role; a draft agent never answers.</p>
+                        @error('ai_employee_id')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    @if ($user->greeted_at)<p class="text-xs text-slate-400">Greeted {{ $user->greeted_at->setTimezone('Asia/Tashkent')->format('d.m.Y H:i') }}.</p>@endif
                 </div>
                 <button type="submit" class="w-full bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700 transition-colors">Save</button>
             </div>

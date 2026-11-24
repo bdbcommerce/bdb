@@ -140,7 +140,7 @@ class TelegramBot
         $this->messageId = $messageId;
         if (SalesAssistantSetting::current()->enabledFor('telegram', $user, (string) $chatId, is_string($from['username'] ?? null) ? $from['username'] : null)) {
             $conversation = $this->conversation($user);
-            $conversation->appendIncoming(TelegramRecorder::describe($message) + [
+            $conversation->appendIncoming(TelegramRecorder::describe($message) + TelegramRecorder::replyTo($message) + [
                 'message_id' => $messageId,
                 'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
             ], awaitsReply: false);

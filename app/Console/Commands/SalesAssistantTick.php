@@ -33,8 +33,10 @@ class SalesAssistantTick extends Command
             ->groupBy(fn (ChatConversation $c) => $c->external_id ?? 'id:'.$c->id)
             ->each(function ($sessions) use ($assistant, $settings, &$answered, &$reminded, &$closed) {
                 $latest = ChatConversation::newestOf($sessions);
-                if (SalesAssistant::decision($latest, $settings) === 'now' && $assistant->respond($latest)) {
-                    $answered++;
+                $decision = SalesAssistant::decision($latest, $settings);
+                if (in_array($decision, ['now', 'closed'], true)) {
+                    // A turn, the greeting, or the off-hours note (e.g. a Premium-account wait that ran past closing time).
+                    $assistant->handle($latest) === 'answered' && $answered++;
                 } elseif (SalesAssistant::nudgeDue($latest, $settings) !== null) {
                     match ($assistant->nudge($latest)) {
                         'reminded' => $reminded++,

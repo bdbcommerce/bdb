@@ -39,6 +39,8 @@
         <env name="TELEGRAM_ALERT_CHAT_ID" value="" force="true"/>
         <env name="TELEGRAM_BOT_REPLIES" value="true" force="true"/>
         <env name="SALES_ASSISTANT_MODE" value="off" force="true"/>
+        <env name="SALES_OFF_HOURS" value="ai" force="true"/>
+        <env name="SALES_REQUIRE_ASSIGNMENT" value="false" force="true"/>
         <env name="GEMINI_API_KEY" value="" force="true"/>
         <env name="GROQ_API_KEY" value="" force="true"/>
         <env name="ANTHROPIC_API_KEY" value="" force="true"/>

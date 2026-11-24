@@ -246,8 +246,14 @@ class TelegramApi
         return (array) $response->json('result');
     }
 
+    /** Telegram's ID of the message the last sendMessage delivered (null when it failed). */
+    public ?int $lastMessageId = null;
+
     public function sendMessage(int|string $chatId, string $text, array $extra = [], int $timeout = 10): bool
     {
-        return $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text] + $extra, $timeout) !== null;
+        $sent = $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text] + $extra, $timeout);
+        $this->lastMessageId = is_numeric($sent['message_id'] ?? null) ? (int) $sent['message_id'] : null;
+
+        return $sent !== null;
     }
 }

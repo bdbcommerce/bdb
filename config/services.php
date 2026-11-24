@@ -59,6 +59,10 @@ return [
         // false = record only: the bot saves every message but never replies, registers or calls the AI.
         // Sales assistant (Admin → Sales assistant) when its settings were never saved: on. Tests: off (phpunit.xml).
         'sales_assistant' => env('SALES_ASSISTANT_MODE', 'on') === 'off' ? 'off' : 'on',
+        // Outside working hours when the admin has not chosen (Sales assistant → Settings): note | ai | silent.
+        'sales_off_hours' => in_array(env('SALES_OFF_HOURS', 'note'), ['note', 'ai', 'silent'], true) ? env('SALES_OFF_HOURS', 'note') : 'note',
+        // Only assigned clients get the AI team; others the greeting once (Sales assistant → Settings). Tests: off.
+        'sales_require_assignment' => filter_var(env('SALES_REQUIRE_ASSIGNMENT', true), FILTER_VALIDATE_BOOLEAN),
         'replies' => filter_var(env('TELEGRAM_BOT_REPLIES', false), FILTER_VALIDATE_BOOLEAN), // true/false, 1/0, on/off, yes/no
         // Voice / audio from customers: 'forward' (default) = sent to the sales chat, bot silent; 'transcribe' = Groq Whisper + AI answer.
         'voice' => env('TELEGRAM_VOICE_MODE', 'forward'),

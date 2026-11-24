@@ -30,6 +30,12 @@ class SalesAssistantController extends Controller
             'work_days.*' => ['integer', Rule::in(array_keys(SalesAssistantSetting::DAYS))],
             'work_start' => $time,
             'work_end' => [...$time, Rule::when(is_string($request->input('work_start')), 'after:work_start')],
+            'off_hours_mode' => ['sometimes', 'required', Rule::in(array_keys(SalesAssistantSetting::OFF_HOURS_MODES))],
+            'require_assignment' => ['sometimes', 'boolean'],
+            'greeting_channels' => ['sometimes', 'array'],
+            'greeting_channels.*' => [Rule::in(array_keys(SalesAssistantSetting::GREETING_CHANNELS))],
+            'greeting_prompt' => ['sometimes', 'nullable', 'string', 'max:8000'],
+            'employee_roles' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'remind_after_hours' => ['required', 'integer', 'min:1', 'max:48'],
             'close_after_hours' => ['required', 'integer', 'min:1', 'max:168', 'gt:remind_after_hours'],
             'follow_up_days' => ['required', 'integer', 'min:1', 'max:90'],
@@ -40,6 +46,17 @@ class SalesAssistantController extends Controller
             'work_end.after' => 'The end of the working day must be after its start.',
             'close_after_hours.gt' => 'Close incomplete requests later than the reminder.',
         ]);
+        if ($request->has('greeting_section')) { // unticking every chat sends no array at all
+            $data['greeting_channels'] = array_values(array_unique((array) ($data['greeting_channels'] ?? [])));
+        }
+        if (array_key_exists('greeting_prompt', $data)) {
+            $prompt = trim(str_replace("\r\n", "\n", (string) $data['greeting_prompt']));
+            $data['greeting_prompt'] = $prompt === '' || $prompt === trim(SalesAssistantSetting::defaultGreetingPrompt()) ? null : $prompt;
+        }
+        if (array_key_exists('employee_roles', $data)) {
+            $roles = collect(preg_split('/\R/u', (string) $data['employee_roles']))->map(fn ($r) => trim(mb_substr($r, 0, 60)))->filter()->unique()->values();
+            $data['employee_roles'] = $roles->isEmpty() || $roles->all() === SalesAssistantSetting::DEFAULT_EMPLOYEE_ROLES ? null : $roles->implode("\n");
+        }
         $data['work_days'] = array_values(array_unique(array_map('intval', $data['work_days'])));
         sort($data['work_days']);
 

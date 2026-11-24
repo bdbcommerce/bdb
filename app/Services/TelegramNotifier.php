@@ -48,6 +48,37 @@ class TelegramNotifier
     }
 
     /**
+     * A new Telegram contact the AI team may not talk to yet: the sales chat is asked (once per person) to set
+     * them as a client, supplier or employee. Until then the AI only greets them once.
+     */
+    public function assignmentNeeded(TelegramUser $user, string $firstText, bool $premium, bool $greeted = false): bool
+    {
+        $e = fn (?string $s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $suggestion = $user->suggestedType();
+        $lines = [
+            '🆕 <b>New contact — please assign</b> ('.($premium ? 'Premium-account chat' : 'Telegram bot').')',
+            '',
+            '<b>Name:</b> '.$e($user->displayName() ?? $user->telegram_id),
+        ];
+        if ($user->username) {
+            $lines[] = '<b>Telegram:</b> @'.$e($user->username);
+        }
+        if ($user->phone) {
+            $lines[] = '<b>Phone:</b> '.$e($user->phone);
+        }
+        if (trim($firstText) !== '') {
+            $lines[] = '<b>Wrote:</b> '.$e(mb_substr(trim($firstText), 0, 300));
+        }
+        if ($suggestion) {
+            $lines[] = '<b>Suggested:</b> '.$e(TelegramUser::TYPES[$suggestion[0]].' — '.$suggestion[1]);
+        }
+        $lines[] = '';
+        $lines[] = ($greeted ? 'The AI greeted them once and waits.' : 'The AI has not written to them.').' <a href="'.$e(SeoFiles::publicUrl(route('admin.telegram-users.show', $user)).'#assign').'">Assign in admin</a>';
+
+        return $this->send(implode("\n", $lines));
+    }
+
+    /**
      * A customer sent a voice message (or audio file) to the bot: it is forwarded to the sales chat with
      * who sent it, so staff can listen and reply from the admin panel. Returns false when not sent.
      */

@@ -101,7 +101,7 @@ class ClientRequestResolver
             // Show it in the customer's latest conversation, like any staff message.
             ChatConversation::where('channel', 'telegram')->where('external_id', $chatId)
                 ->latest('updated_at')->first()
-                ?->appendAdminMessage($text, $author);
+                ?->appendAdminMessage($text, $author, $this->telegram->lastMessageId);
         }
 
         return compact('sent', 'failed');

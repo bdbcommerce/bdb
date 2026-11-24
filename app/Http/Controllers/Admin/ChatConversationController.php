@@ -121,7 +121,7 @@ class ChatConversationController extends Controller
                 return back()->withInput()->with('telegram_error',
                     'Telegram did not deliver the message. The customer may have blocked the bot — see storage/logs/laravel.log.');
             }
-            $target->appendAdminMessage($text, $request->user()->name);
+            $target->appendAdminMessage($text, $request->user()->name, $api->lastMessageId);
         }
 
         return redirect()->route('admin.chat-conversations.show', $target)->with('success', 'Message sent to the customer.');

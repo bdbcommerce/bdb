@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -26,7 +27,55 @@ class TelegramUser extends Model
     protected $fillable = [
         'telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'company', 'notes',
         'ask_registration', 'source', 'registered_at', 'phone_verified_at', 'is_employee',
+        'contact_type', 'employee_role', 'ai_employee_id', 'assigned_at', 'greeted_at', 'assignment_requested_at',
     ];
+
+    public const TYPE_CLIENT = 'client';
+
+    public const TYPE_SUPPLIER = 'supplier';
+
+    public const TYPE_EMPLOYEE = 'employee';
+
+    /**
+     * Who the contact is (null = not assigned yet: the AI greets once and waits). Clients get the AI team, suppliers
+     * only the greeting, employees nothing.
+     */
+    public const TYPES = [self::TYPE_CLIENT => 'Client', self::TYPE_SUPPLIER => 'Supplier', self::TYPE_EMPLOYEE => 'Employee'];
+
+    public function aiEmployee(): BelongsTo
+    {
+        return $this->belongsTo(AiEmployee::class);
+    }
+
+    public function scopeUnassigned(Builder $query): void
+    {
+        $query->whereNull('contact_type');
+    }
+
+    /**
+     * A guess from what we already know, for the admin to confirm: [type, reason] or null.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public function suggestedType(): ?array
+    {
+        if (rescue(fn () => SalesAssistantSetting::current()->isEmployee(null, (string) $this->telegram_id, $this->username), false, false)) {
+            return [self::TYPE_EMPLOYEE, 'in the employee list of the sales assistant settings'];
+        }
+        $person = rescue(fn () => ClientPerson::current($this), null, false);
+        if ($person) {
+            return [self::TYPE_CLIENT, 'has a client portrait'.($person->client ? ' at '.$person->client->name : '')];
+        }
+        $leads = $this->exists ? $this->conversations()->whereNotNull('chat_lead_id')->count() : 0;
+        if ($leads > 0) {
+            return [self::TYPE_CLIENT, "left {$leads} request(s) before"];
+        }
+        if ($this->phone && (ChatLead::where('phone', $this->phone)->exists())) {
+            return [self::TYPE_CLIENT, 'a request with the same phone exists'];
+        }
+
+        return null;
+    }
 
     /** Where the customer was first seen. */
     public const SOURCES = ['bot' => 'Bot', 'business' => 'Premium account'];
@@ -35,7 +84,7 @@ class TelegramUser extends Model
 
     protected function casts(): array
     {
-        return ['registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean', 'is_employee' => 'boolean'];
+        return ['assigned_at' => 'datetime', 'greeted_at' => 'datetime', 'assignment_requested_at' => 'datetime', 'registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean', 'is_employee' => 'boolean'];
     }
 
     public function scopeRegistered(Builder $query): void

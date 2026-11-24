@@ -82,7 +82,9 @@ class TelegramRecorder
             && Cache::has(self::BUSINESS_REGISTERING.$customer->telegram_id);
 
         $sales = $customer && $connection->is_enabled && $connection->can_reply
-            && SalesAssistantSetting::current()->enabledFor('business', $customer, (string) $message['chat']['id']);
+            && SalesAssistantSetting::current()->enabledFor('business', $customer, (string) $message['chat']['id'])
+            // An admin asked for the details of a contact the assistant will only greet: the registration questions run.
+            && ! ($asking && SalesAssistantSetting::current()->gate($customer) !== 'talk');
         if ($sales && ($asking || Cache::has(self::BUSINESS_REGISTERING.$customer->telegram_id))) {
             // The assistant collects the contacts itself: an earlier registration request is dropped.
             $answering = false;
@@ -99,6 +101,12 @@ class TelegramRecorder
             }
 
             return;
+        }
+
+        // The assistant may not write in this account (disabled, or no "reply" permission): the sales chat is still
+        // asked once to assign a new contact.
+        if ($customer && ! $edited && $customer->contact_type === null && SalesAssistantSetting::current()->enabledFor('business', $customer, (string) $message['chat']['id'])) {
+            app(SalesAssistant::class)->requestAssignment($customer, $conversation->refresh());
         }
 
         if ($asking) {
@@ -291,7 +299,15 @@ class TelegramRecorder
             'at' => date('c', is_numeric($message['date'] ?? null) ? (int) $message['date'] : time()),
         ];
 
-        return $entry + self::describe($message);
+        return $entry + self::describe($message) + self::replyTo($message);
+    }
+
+    /** The message this one replies to (its ID in the same chat): the assistant stays silent on a reply to a message it never saw. */
+    public static function replyTo(array $message): array
+    {
+        $id = $message['reply_to_message']['message_id'] ?? null;
+
+        return is_numeric($id) ? ['reply_to' => (int) $id] : [];
     }
 
     /**
