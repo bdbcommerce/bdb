@@ -181,6 +181,12 @@ class CatalogImporter
     /** A valid product row for the table, or null with $error. */
     private function product(array $p, ?string &$error): ?array
     {
+        // Text from 1C goes into the AI prompt: no line breaks or other control characters.
+        array_walk_recursive($p, function (&$v) {
+            if (is_string($v)) {
+                $v = preg_replace('/[\p{Cc}\x{2028}\x{2029}]+/u', ' ', $v) ?? $v;
+            }
+        });
         $str = fn ($v, int $max) => is_string($v) && trim($v) !== '' && mb_strlen(trim($v)) <= $max ? trim($v) : null;
         $int = fn ($v) => is_int($v) || (is_float($v) && floor($v) === $v && abs($v) < PHP_INT_MAX) ? (int) $v : null;
         $fail = function (string $message) use (&$error) {

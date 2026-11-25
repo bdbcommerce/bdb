@@ -19,6 +19,7 @@ use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
 use App\Services\Ai\AiClient;
 use App\Services\AiErrorAlerts;
+use App\Services\Catalog\CatalogPrompt;
 use App\Services\ChatAssistant;
 use App\Services\Seo\SeoFiles;
 use App\Services\Telegram\TelegramApi;
@@ -572,7 +573,8 @@ TXT;
             'working_hours' => $settings->isWorkingTime(), 'turns_today_in_this_chat' => (int) Cache::get($chatKey, 0),
         ]);
         [$data, $images, $query, $photoIds] = $this->data($conversation, $settings, $user, $task);
-        $this->trace?->step('laravel', 'Laravel: context built', ['knowledge_search_words' => $query, 'photos_sent' => count($images),
+        $catalog = self::catalog($user, $query, (array) ($conversation->sales_state ?? []));
+        $this->trace?->step('laravel', 'Laravel: context built', ['knowledge_search_words' => $query, 'photos_sent' => count($images), 'product_catalog' => $catalog['info'],
             'conversation_lines' => preg_match_all('/^\{"at"/m', $data)]);
         if ($photoIds) { // a picture is sent to Claude once, also when that turn stays silent
             $conversation->sales_state = ['seen_photos' => array_slice([...(array) (($conversation->sales_state ?? [])['seen_photos'] ?? []), ...$photoIds], -50)] + (array) ($conversation->sales_state ?? []);
@@ -581,6 +583,7 @@ TXT;
         $locale = $conversation->sales_state['language'] ?? $user?->locale ?? 'ru';
         $system = $settings->systemPrompt($employee)
             ."\n\n# WEBSITE DATA (the company's own database — use only this and KNOWLEDGE)\n".app(ChatAssistant::class)->websiteData(in_array($locale, ['uz', 'ru', 'en'], true) ? $locale : 'ru', $query)
+            .$catalog['text']
             .self::CONTRACT;
 
         $this->trace?->step('claude', 'Laravel → Claude API: request', ['model' => $settings->model, 'system_prompt' => $system, 'user_message' => $data,
@@ -723,6 +726,19 @@ TXT;
         return ["# CONVERSATION CONTEXT\n".implode("\n", $profile)."\n\n# CONVERSATION\n".implode("\n", $lines).($task ? "\n\n# TASK NOW\n{$task}" : '')."\n\nWrite your next turn as JSON.", $images, trim($query), $photos];
     }
 
+    /**
+     * The PRODUCT CATALOG section for this turn: products matching what the customer wrote and the items collected so
+     * far, with the prices of the customer's group only. A broken catalog never stops the turn.
+     *
+     * @return array{text: string, info: array}
+     */
+    public static function catalog(?TelegramUser $user, string $query, array $state): array
+    {
+        $items = implode(' ', array_map(fn ($i) => is_array($i) ? ((string) ($i['product'] ?? '')).' '.((string) ($i['details'] ?? '')) : '', (array) ($state['items'] ?? [])));
+
+        return rescue(fn () => CatalogPrompt::section($user, mb_substr($items, 0, 500).' '.$query), ['text' => '', 'info' => ['catalog' => 'failed — left out']]);
+    }
+
     /** The conversation state after Claude's answer (stage, customer, items, summary…), without any side effect. */
     private static function merged(array $state, array $json): array
     {
@@ -823,10 +839,12 @@ TXT;
                 'model' => $settings->model, 'answers_in' => $premium ? 'Premium-account chat' : 'bot chat', 'working_hours' => $settings->isWorkingTime(),
             ]);
             [$data, $images, $query] = $this->data($conversation, $settings, null);
-            $trace?->step('laravel', 'Laravel: context built', ['knowledge_search_words' => $query, 'photos_sent' => count($images), 'conversation_lines' => preg_match_all('/^\{"at"/m', $data)]);
+            $catalog = self::catalog(null, $query, $state); // the sandbox and test cases: an end user
+            $trace?->step('laravel', 'Laravel: context built', ['knowledge_search_words' => $query, 'photos_sent' => count($images), 'product_catalog' => $catalog['info'], 'conversation_lines' => preg_match_all('/^\{"at"/m', $data)]);
             $locale = $state['language'] ?? 'ru';
             $system = $settings->systemPrompt($employee, $prompt?->prompt)
                 ."\n\n# WEBSITE DATA (the company's own database — use only this and KNOWLEDGE)\n".app(ChatAssistant::class)->websiteData(in_array($locale, ['uz', 'ru', 'en'], true) ? $locale : 'ru', $query)
+                .$catalog['text']
                 .self::CONTRACT;
             $trace?->step('claude', 'Laravel → Claude API: request', ['model' => $settings->model, 'system_prompt' => $system, 'user_message' => $data,
                 'images' => count($images), 'answer_format' => 'JSON schema: '.implode(', ', array_keys(self::schema()['properties']))]);
