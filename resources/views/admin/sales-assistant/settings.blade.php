@@ -70,10 +70,12 @@
                 $num('remind_after_hours', 'Reminder after (hours)', 'One friendly reminder when the customer stops answering mid-way (working hours only).', 1, 48),
                 $num('close_after_hours', 'Close incomplete after (hours)', 'The request closes as incomplete; the manager still gets what was collected.', 1, 168),
                 $num('follow_up_days', 'Offer again after (days)', 'When a customer cancelled but agreed to hear from us later.', 1, 90),
+                $num('expert_remind_minutes', 'Expert reminder after (minutes)', 'An expert who has not answered the AI\'s question gets one reminder (working time only).', 5, 480) + ['value' => $settings->expertRemindMinutes()],
+                $num('expert_escalate_minutes', 'To the main admin after (minutes)', 'Still no answer: the question goes to the main admin (working time only).', 10, 960) + ['value' => $settings->expertEscalateMinutes()],
             ] as $f)
                 <div>
                     <label for="{{ $f['name'] }}" class="block text-sm font-medium text-slate-700 mb-1">{{ $f['label'] }}</label>
-                    <input id="{{ $f['name'] }}" type="number" name="{{ $f['name'] }}" min="{{ $f['min'] }}" max="{{ $f['max'] }}" value="{{ old($f['name'], $settings->{$f['name']}) }}" class="{{ $input }}">
+                    <input id="{{ $f['name'] }}" type="number" name="{{ $f['name'] }}" min="{{ $f['min'] }}" max="{{ $f['max'] }}" value="{{ old($f['name'], $f['value'] ?? $settings->{$f['name']}) }}" class="{{ $input }}">
                     <p class="text-xs text-slate-400 mt-1">{{ $f['hint'] }}</p>
                     @error($f['name'])<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>

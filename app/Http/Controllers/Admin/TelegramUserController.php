@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AiEmployee;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\ExpertQuestion;
 use App\Models\SalesAssistantSetting;
 use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
@@ -122,6 +123,8 @@ class TelegramUserController extends Controller
             'is_employee' => ['sometimes', 'boolean'],
             'contact_type' => ['sometimes', 'nullable', Rule::in(array_keys(TelegramUser::TYPES))],
             'employee_role' => ['sometimes', 'nullable', 'string', 'max:60'],
+            'answers_questions' => ['sometimes', 'boolean'],
+            'is_main_admin' => ['sometimes', 'boolean'],
             'ai_employee_id' => ['sometimes', 'nullable', 'integer', Rule::exists('ai_employees', 'id')->where(fn ($q) => $q->whereIn('kind', AiEmployee::RUNNABLE_KINDS))],
             'locale' => ['nullable', Rule::in(['uz', 'ru', 'en'])],
         ], ['phone.regex' => 'Enter the phone with the country code, e.g. +998901234567 (or 9 digits like 90 123 45 67 for Uzbekistan).']);
@@ -153,6 +156,14 @@ class TelegramUserController extends Controller
                 $data['ai_employee_id'] = null;
             }
         }
+        // Answering the AI's questions (and being the main admin) is for employees only; there is one main admin.
+        if ($request->has('contact_type') || $request->has('is_employee')) {
+            $employee = ($data['contact_type'] ?? $telegramUser->contact_type) === TelegramUser::TYPE_EMPLOYEE;
+            $data['answers_questions'] = $employee && $request->boolean('answers_questions');
+            $data['is_main_admin'] = $employee && $request->boolean('is_main_admin');
+        } else {
+            unset($data['answers_questions'], $data['is_main_admin']); // only the assignment form sets them
+        }
         if (isset($data['employee_role']) && ! in_array($data['employee_role'], SalesAssistantSetting::current()->employeeRoles(), true)) {
             return back()->withInput()->withErrors(['employee_role' => 'Pick a role from the list (Sales assistant → Settings → Employee roles).']);
         }
@@ -168,6 +179,15 @@ class TelegramUserController extends Controller
         }
 
         $telegramUser->update($data);
+        if ($telegramUser->is_main_admin) {
+            TelegramUser::where('is_main_admin', true)->whereKeyNot($telegramUser->id)->update(['is_main_admin' => false]);
+        }
+        // No longer an expert (also a main admin replaced just now): their open questions go back to the queue.
+        foreach (ExpertQuestion::where('status', 'asked')->with('expert')->get() as $held) {
+            if (! $held->expert?->isExpert()) {
+                $held->update(['status' => 'queued', 'expert_id' => null, 'pending' => null, 'asked_at' => null]);
+            }
+        }
 
         return redirect()->route('admin.telegram-users.show', $telegramUser)->with('success', $data['ask_registration']
             ? 'Saved. The bot will ask for this customer\'s details the next time they write (bot chat or Premium-account chat).'

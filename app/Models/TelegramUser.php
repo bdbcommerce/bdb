@@ -28,7 +28,14 @@ class TelegramUser extends Model
         'telegram_id', 'username', 'locale', 'step', 'name', 'profile_name', 'phone', 'company', 'notes',
         'ask_registration', 'source', 'registered_at', 'phone_verified_at', 'is_employee',
         'contact_type', 'employee_role', 'ai_employee_id', 'assigned_at', 'greeted_at', 'assignment_requested_at',
+        'answers_questions', 'is_main_admin', 'bot_chat_at',
     ];
+
+    /** An employee who gets the AI's questions in the bot chat (ExpertDesk), or the main admin. */
+    public function isExpert(): bool
+    {
+        return ($this->answers_questions || $this->is_main_admin) && ($this->is_employee || $this->contact_type === self::TYPE_EMPLOYEE);
+    }
 
     public const TYPE_CLIENT = 'client';
 
@@ -84,7 +91,8 @@ class TelegramUser extends Model
 
     protected function casts(): array
     {
-        return ['assigned_at' => 'datetime', 'greeted_at' => 'datetime', 'assignment_requested_at' => 'datetime', 'registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean', 'is_employee' => 'boolean'];
+        return ['assigned_at' => 'datetime', 'greeted_at' => 'datetime', 'assignment_requested_at' => 'datetime', 'registered_at' => 'datetime', 'phone_verified_at' => 'datetime', 'ask_registration' => 'boolean', 'is_employee' => 'boolean',
+            'answers_questions' => 'boolean', 'is_main_admin' => 'boolean', 'bot_chat_at' => 'datetime'];
     }
 
     public function scopeRegistered(Builder $query): void

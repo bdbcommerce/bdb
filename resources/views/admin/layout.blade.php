@@ -19,7 +19,7 @@
      * Each item: route (link target), match (route patterns that mark it active), label, icon (Heroicons outline path "d" values).
      * Badge counts must stay cheap (single indexed count query).
      */
-    $newLeadsCount = $openRequestsCount = $awaitingCount = $newApplicationsCount = $failedInvoicesCount = $failedTasksCount = $shadowCount = 0;
+    $newLeadsCount = $openRequestsCount = $awaitingCount = $newApplicationsCount = $failedInvoicesCount = $failedTasksCount = $shadowCount = $expertReviewCount = 0;
     try {
         $failedTasksCount = \App\Services\Scheduling\ScheduledTasks::failedCount();
     } catch (\Throwable $e) {
@@ -31,6 +31,7 @@
         $newApplicationsCount = \App\Models\JobApplication::where('status', 'new')->count();
         $failedInvoicesCount = \App\Models\InvoiceMessage::where('status', 'failed')->count();
         $shadowCount = \App\Models\AiShadowDraft::where('status', 'pending')->count();
+        $expertReviewCount = \App\Models\ExpertQuestion::whereNull('parent_id')->where('status', 'answered')->whereHas('knowledge', fn ($k) => $k->where('is_active', false))->count();
     } catch (\Throwable $e) {
         // Table may not exist yet (e.g. migrations pending) — never break the admin shell.
     }
@@ -102,6 +103,9 @@
                 ['route' => 'admin.ai-team.shadow', 'match' => ['admin.ai-team.shadow*'], 'label' => 'Shadow replies',
                  'badge' => $shadowCount, 'badge_label' => 'AI replies waiting for a manager',
                  'icon' => ['M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z']],
+                ['route' => 'admin.expert-questions.index', 'match' => ['admin.expert-questions.*'], 'label' => 'Expert questions',
+                 'badge' => $expertReviewCount, 'badge_label' => 'expert answers to approve as knowledge',
+                 'icon' => ['M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z']],
                 ['route' => 'admin.ai-team.sandbox', 'match' => ['admin.ai-team.sandbox*'], 'label' => 'Sandbox',
                  'icon' => ['M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155']],
                 ['route' => 'admin.ai-team.traces', 'match' => ['admin.ai-team.traces', 'admin.ai-team.trace', 'admin.ai-team.dev-mode'], 'label' => 'Traces (dev mode)',

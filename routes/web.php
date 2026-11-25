@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\ColorThemeController;
 use App\Http\Controllers\Admin\CompanyInfoController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ExpertQuestionController;
 use App\Http\Controllers\Admin\IndustryController;
 use App\Http\Controllers\Admin\InvoiceMessageController;
 use App\Http\Controllers\Admin\InvoiceParserSettingController;
@@ -202,6 +203,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('ai-team/shadow', [AiShadowDraftController::class, 'index'])->name('ai-team.shadow');
         Route::post('ai-team/shadow/{draft}/send', [AiShadowDraftController::class, 'send'])->middleware('throttle:30,1')->name('ai-team.shadow.send');
         Route::post('ai-team/shadow/{draft}/discard', [AiShadowDraftController::class, 'discard'])->name('ai-team.shadow.discard');
+        Route::get('ai-team/expert-questions', [ExpertQuestionController::class, 'index'])->name('expert-questions.index');
+        Route::put('ai-team/expert-questions/{question}/approve', [ExpertQuestionController::class, 'approve'])->name('expert-questions.approve');
+        Route::post('ai-team/expert-questions/{question}/cancel', [ExpertQuestionController::class, 'cancel'])->name('expert-questions.cancel');
         Route::get('ai-team/traces', [AiTraceController::class, 'index'])->name('ai-team.traces');
         Route::put('ai-team/traces/dev-mode', [AiTraceController::class, 'devMode'])->name('ai-team.dev-mode');
         Route::get('ai-team/traces/{trace}', [AiTraceController::class, 'show'])->name('ai-team.trace');

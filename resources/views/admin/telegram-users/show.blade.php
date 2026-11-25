@@ -117,6 +117,14 @@
                     <label for="tg-phone" class="block text-xs font-medium text-slate-600 mb-1">Mobile phone</label>
                     <input id="tg-phone" name="phone" type="tel" inputmode="tel" maxlength="20" value="{{ old('phone', $user->phone) }}" placeholder="+998 90 123 45 67" class="{{ $input }}">
                     @error('phone')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                    @php $priceGroup = rescue(fn () => \App\Models\CatalogClient::priceGroupFor($user), 'end_user', false); @endphp
+                    @if ($priceGroup !== 'end_user')
+                        <p class="text-xs mt-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2">
+                            Catalog prices: <b>{{ $priceGroup === 'partner' ? 'Partner' : 'Dealer' }}</b> — this phone is in the 1C list, so the AI quotes {{ $priceGroup }} prices to this contact. Changing the phone here changes that.
+                        </p>
+                    @else
+                        <p class="text-xs text-slate-400 mt-1">Catalog prices: end user{{ $user->phone && ! $user->hasVerifiedPhone() ? ' (the phone is not verified, so dealer/partner prices never apply)' : '' }}. A phone you enter here is trusted.</p>
+                    @endif
                 </div>
                 <div>
                     <label for="tg-company" class="block text-xs font-medium text-slate-600 mb-1">Company</label>
@@ -185,6 +193,21 @@
                             @endforeach
                         </select>
                         @error('employee_role')<p class="text-xs text-red-700 mt-1">{{ $message }}</p>@enderror
+                        <label class="flex items-start gap-2 mt-3 text-sm text-slate-700">
+                            <input type="hidden" name="answers_questions" value="0">
+                            <input type="checkbox" name="answers_questions" value="1" class="mt-0.5 rounded border-slate-300" @checked(old('answers_questions', $user->answers_questions))>
+                            <span>Answers AI questions <span class="block text-xs text-slate-400">The AI sends questions of this role (department) here, one at a time, in the bot chat.</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 mt-2 text-sm text-slate-700">
+                            <input type="hidden" name="is_main_admin" value="0">
+                            <input type="checkbox" name="is_main_admin" value="1" class="mt-0.5 rounded border-slate-300" @checked(old('is_main_admin', $user->is_main_admin))>
+                            <span>Main admin <span class="block text-xs text-slate-400">Gets questions nobody answered in time, transferred 3 times, or with no department. Only one person.</span></span>
+                        </label>
+                        @if ($user->answers_questions || $user->is_main_admin)
+                            <p class="text-xs mt-2 {{ $user->bot_chat_at ? 'text-slate-500' : 'rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2' }}">
+                                {{ $user->bot_chat_at ? 'Bot chat started '.$user->bot_chat_at->setTimezone('Asia/Tashkent')->format('d.m.Y') : 'Has not written to the bot yet: ask them to open the bot and press /start, or questions cannot reach them.' }}
+                            </p>
+                        @endif
                     </div>
                     <div x-show="type === 'client'" x-cloak>
                         <label for="tg-agent" class="block text-xs font-medium text-slate-600 mb-1">AI agent</label>

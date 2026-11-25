@@ -12,6 +12,7 @@ use App\Models\ChatLead;
 use App\Models\ClientPerson;
 use App\Models\ClientRequest;
 use App\Models\CompanyInfo;
+use App\Models\ExpertQuestion;
 use App\Models\InvoiceParserSetting;
 use App\Models\SalesAssistantSetting;
 use App\Models\SalesKnowledge;
@@ -81,7 +82,10 @@ class SalesAssistant
 - items: every product the customer needs, with the details collected so far (product + details).
 - summary: the request for the manager in 1–3 short sentences (English), also when not finished.
 - confirmed: true only in the turn where the customer confirms your summary is correct — the request then goes to the manager.
-- unknown_question: the customer's question you could not answer from KNOWLEDGE / WEBSITE DATA (English), else empty.
+- unknown_question: the customer's question you could not answer from KNOWLEDGE / WEBSITE DATA / PRODUCT CATALOG — or could answer only with a guess you are not sure of — (English), else empty. Never for a question already listed under "Questions with our specialists" or answered under "Answers from our specialists".
+- expert_draft: when unknown_question is set and you have an idea of the answer, that idea for our specialist to confirm or fix (in the customer's language); never send this guess to the customer. Else empty.
+- expert_department: when unknown_question is set and CONVERSATION CONTEXT lists specialists' departments, the one best placed to answer (exactly as listed); else empty.
+- When CONVERSATION CONTEXT says "Specialists: available": this replaces the rule to stay silent on unknown questions — set unknown_question, and in the reply tell the customer ONCE, in one short sentence, that you will check this with our specialist and come back with the answer; then keep helping with everything else (never guess the answer meanwhile). Outside working hours also say when the specialists work (from CONVERSATION CONTEXT) and invite the customer to write all their requirements now, so the work starts first thing.
 - unknown_topic: when unknown_question is set, a short generic topic for it in English, 3–6 words, lowercase, without names or numbers of this customer (e.g. "scale compatibility with 1c"), so the same question from different customers gets the same topic; else empty.
 - unknown_kind: when unknown_question is set, the KNOWLEDGE section its answer belongs in (product | business | marking | software | device | glossary | reply); else empty.
 - cancelled: true when the customer said they do not need it any more. follow_up_agreed: true when they agreed that we may send an offer later.
@@ -104,7 +108,7 @@ TXT;
         $bool = ['type' => 'boolean'];
 
         return ['type' => 'object', 'additionalProperties' => false,
-            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown'],
+            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'expert_draft', 'expert_department', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown'],
             'properties' => [
                 'reply' => $str,
                 'context_unknown' => $bool,
@@ -117,7 +121,7 @@ TXT;
                 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['product', 'details'],
                     'properties' => ['product' => $str, 'details' => $str]]],
                 'summary' => $str, 'confirmed' => $bool, 'unknown_question' => $str, 'cancelled' => $bool, 'follow_up_agreed' => $bool,
-                'unknown_topic' => $str, 'unknown_kind' => ['type' => 'string', 'enum' => ['', ...array_keys(SalesKnowledge::KINDS)]],
+                'unknown_topic' => $str, 'expert_draft' => $str, 'expert_department' => $str, 'unknown_kind' => ['type' => 'string', 'enum' => ['', ...array_keys(SalesKnowledge::KINDS)]],
                 'hand_to' => ['type' => 'string', 'enum' => ['', ...AiEmployee::RUNNABLE_KINDS]],
             ]];
     }
@@ -722,8 +726,99 @@ TXT;
         if ($open) {
             $profile[] = 'Earlier request still with the manager: '.($open->sales_state['handed_over'] ?? '');
         }
+        // Also in the sandbox and test cases (an unsaved chat has no questions, only whether specialists exist).
+        array_push($profile, ...self::expertContext($conversation, $settings));
 
         return ["# CONVERSATION CONTEXT\n".implode("\n", $profile)."\n\n# CONVERSATION\n".implode("\n", $lines).($task ? "\n\n# TASK NOW\n{$task}" : '')."\n\nWrite your next turn as JSON.", $images, trim($query), $photos];
+    }
+
+    /**
+     * What the AI knows about our specialists for this chat: whether anyone takes questions (and their departments),
+     * the questions of this customer still with them, and their answers of the last week (one JSON line each, so an
+     * answer cannot pose as a new section).
+     *
+     * @return list<string>
+     */
+    public static function expertContext(ChatConversation $conversation, SalesAssistantSetting $settings): array
+    {
+        return rescue(function () use ($conversation, $settings) {
+            if (! ExpertDesk::available()) {
+                return [];
+            }
+            $departments = ExpertQuestion::departments();
+            $lines = ['Specialists: available'.($departments ? ' — departments: '.implode(', ', $departments) : '')
+                .($settings->isWorkingTime() ? '' : '; they answer in working hours, next from '.$settings->nextOpening()->format('D d.m H:i').' Tashkent')];
+            $chat = ChatConversation::query()->sameChatAs($conversation)->pluck('id');
+            $questions = ExpertQuestion::whereIn('chat_conversation_id', $chat)->where('created_at', '>=', now()->subDays(7))->latest('id')->limit(10)->get();
+            $json = fn (array $a) => json_encode($a, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+            foreach ($questions->filter(fn ($q) => in_array($q->status, [...ExpertQuestion::OPEN, 'grouped'], true))->take(5) as $q) {
+                $lines[] = 'Questions with our specialists (the answer is coming — never guess it): '.$json(['question' => mb_strimwidth($q->question, 0, 300, '…')]);
+            }
+            foreach ($questions->where('status', 'answered')->take(5) as $q) {
+                $lines[] = 'Answers from our specialists (true facts; pass on any the customer has not got yet): '.$json(['question' => mb_strimwidth($q->question, 0, 300, '…'), 'answer' => mb_strimwidth((string) $q->answer, 0, 1500, '…')]);
+            }
+            foreach ($questions->where('status', 'unknown')->take(3) as $q) {
+                $lines[] = 'Our specialists could not answer (a manager will contact the customer about it): '.$json(['question' => mb_strimwidth($q->question, 0, 300, '…')]);
+            }
+
+            return $lines;
+        }, [], false);
+    }
+
+    /**
+     * An expert's answer reaches the customer: one turn in which the agent passes it on in its own words (shadow mode:
+     * a draft for a manager). Returns sent | shadow | next_turn (the customer wrote meanwhile: the next turn has the
+     * answer in its context) | manager (the AI may not write here: the managers are asked) | busy (a turn is running).
+     */
+    public function expertAnswer(ExpertQuestion $q): string
+    {
+        $conversation = $q->conversation?->latestSession();
+        if (! $conversation) {
+            return 'manager';
+        }
+        $lock = Cache::lock('sales-assistant:'.$conversation->id, 150);
+        if (! $lock->get()) {
+            return 'busy';
+        }
+        try {
+            $conversation->refresh();
+            $settings = SalesAssistantSetting::current();
+            $user = TelegramUser::where('telegram_id', $conversation->external_id)->first();
+            if (! $this->mayWrite($conversation, $settings, $user) || $settings->gate($user) !== 'talk' || self::unknownBeginning($conversation)) {
+                return 'manager';
+            }
+            // A manager has written since the question, or pressed Mark answered: the chat is theirs — they get the answer.
+            $messages = $conversation->messages ?? [];
+            $managerSince = collect($messages)->contains(fn ($m) => is_array($m) && in_array($m['role'] ?? null, ['owner', 'admin'], true) && empty($m['deleted'])
+                && isset($m['at']) && rescue(fn () => Carbon::parse($m['at'])->gte($q->created_at), true, false));
+            if ($managerSince || (int) $conversation->handled_count >= self::counted($messages)) {
+                return 'manager';
+            }
+            // Customer messages waiting for a manager's turn (Business wait), or the office is closed: try again later.
+            if (in_array(self::decision($conversation, $settings), ['wait', 'closed'], true)) {
+                return 'busy';
+            }
+            $started = now();
+            $count = count($conversation->messages ?? []);
+            $task = "Our specialist has answered the customer's question.\nQuestion: ".json_encode(mb_strimwidth($q->question, 0, 500, '…'), JSON_UNESCAPED_UNICODE)
+                ."\nSpecialist's answer: ".json_encode(mb_strimwidth((string) $q->answer, 0, 2000, '…'), JSON_UNESCAPED_UNICODE)
+                ."\nPass this answer on to the customer now, in their language and in your own words, keeping every fact, number and condition exactly as the specialist gave it; add no facts of your own. Then go on with the conversation (e.g. the next question you need). unknown_question must be empty unless the customer asked something new.";
+            $sent = $this->turn($conversation, $settings, $user, $task, 'expert-answer');
+            $conversation->refresh();
+            $state = (array) ($conversation->sales_state ?? []);
+            $newer = array_slice($conversation->messages ?? [], $count);
+            self::saveState($conversation, ['handled' => max((int) ($state['handled'] ?? 0), $count)] + $state);
+            if ($sent) {
+                return 'sent';
+            }
+            if (AiShadowDraft::where('chat_conversation_id', $conversation->id)->where('status', 'pending')->where('created_at', '>=', $started->copy()->subSecond())->exists()) {
+                return 'shadow';
+            }
+
+            return collect($newer)->contains(fn ($m) => is_array($m) && ($m['role'] ?? null) === 'user') ? 'next_turn' : 'manager';
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
@@ -788,7 +883,7 @@ TXT;
         $unknown = is_scalar($json['unknown_question'] ?? null) ? mb_substr(trim((string) $json['unknown_question']), 0, 500) : '';
         $would = array_values(array_filter([
             ! empty($json['context_unknown']) ? 'Silent: the AI thinks this continues a talk it cannot see — the rest of the chat would be left to the managers' : null,
-            $unknown !== '' ? 'Would post the unknown question to the source group and Client requests' : null,
+            $unknown !== '' ? (ExpertDesk::available() ? 'Would ask an expert in the bot chat'.(filled($json['expert_draft'] ?? null) ? ' (with the AI\'s idea: '.mb_strimwidth((string) $json['expert_draft'], 0, 200, '…').')' : '') : 'Would post the unknown question to the source group and Client requests') : null,
             ! empty($json['confirmed']) && $state['summary'] !== '' ? (TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? '')) ? 'Would post the request to the sales chat' : 'Confirmed, but no phone yet — no request would be posted') : null,
             is_string($json['hand_to'] ?? null) && $json['hand_to'] !== '' && ($to = AiEmployee::active($json['hand_to'])) ? "Would hand the customer to {$to->name} — start a sandbox chat with {$to->name} to try their answer" : null,
             $employee?->isShadow() ? 'Shadow mode: a manager would get this reply to send, edit or discard' : null,
@@ -919,11 +1014,22 @@ TXT;
         $unknown = $s($json['unknown_question'] ?? '', 500);
         if ($unknown !== '' && ! in_array(md5(mb_strtolower($unknown)), (array) ($state['unknown'] ?? []), true)) {
             $state['unknown'] = array_slice([...(array) ($state['unknown'] ?? []), md5(mb_strtolower($unknown))], -30);
-            $this->unknown($conversation, $user, $unknown);
             $topic = $s($json['unknown_topic'] ?? '', 120);
-            ClientRequest::record($conversation, $unknown, ['reply' => '', 'answered' => false, 'topic' => $topic !== '' ? $topic : mb_substr($unknown, 0, 60),
+            $request = ClientRequest::record($conversation, $unknown, ['reply' => '', 'answered' => false, 'topic' => $topic !== '' ? $topic : mb_substr($unknown, 0, 60),
                 'category' => 'product', 'knowledge_kind' => $s($json['unknown_kind'] ?? '', 16)]);
-            $actions[] = 'Unknown question posted to the source group and Client requests';
+            // An employee who answers AI questions gets it in the bot chat; without one, the source group as before.
+            $said = collect($this->incoming($conversation))->pluck('text')->implode("\n");
+            // false = the desk failed (the group gets it); null = this chat's limit of expert questions (Client requests only).
+            $asked = ExpertDesk::available() ? rescue(fn () => app(ExpertDesk::class)->ask($conversation, $user, $unknown, $s($json['expert_draft'] ?? '', 2000), $topic,
+                $s($json['unknown_kind'] ?? '', 16), $s($json['expert_department'] ?? '', 60), mb_substr($said, -1000), $request, $language), false) : false;
+            if ($asked) {
+                $actions[] = "Question #{$asked->id} passed to the experts".($asked->parent_id ? " (grouped with #{$asked->parent_id})" : '').($asked->ai_draft ? ', with the AI\'s idea' : '');
+            } elseif ($asked === null) {
+                $actions[] = 'Not passed to the experts: this chat already has '.ExpertDesk::PER_CHAT_OPEN.' open (or '.ExpertDesk::PER_CHAT_DAILY.' today) — left in Client requests';
+            } else {
+                $this->unknown($conversation, $user, $unknown);
+                $actions[] = 'Unknown question posted to the source group and Client requests';
+            }
         }
 
         $phone = $user?->phone ?: TelegramUser::normalizePhone((string) ($state['customer']['phone'] ?? ''));
@@ -1059,8 +1165,9 @@ TXT;
         $now ??= now();
         $state = (array) ($conversation->sales_state ?? []);
         if (! in_array($state['stage'] ?? null, self::OPEN_STAGES, true) || ! empty($state['closed_at'])
-            || ($conversation->exists && AiShadowDraft::where('chat_conversation_id', $conversation->id)->where('status', 'pending')->exists())) {
-            return null; // (a shadow reply waiting for a manager: the customer is waiting for us, not silent)
+            || ($conversation->exists && AiShadowDraft::where('chat_conversation_id', $conversation->id)->where('status', 'pending')->exists())
+            || ($conversation->exists && ExpertQuestion::where('chat_conversation_id', $conversation->id)->whereIn('status', [...ExpertQuestion::OPEN, 'grouped'])->exists())) {
+            return null; // (a shadow reply waiting for a manager, or a question with our experts: the customer is waiting for us, not silent)
         }
         $raw = $conversation->messages ?? [];
         $visible = array_values(array_filter($raw, fn ($m) => is_array($m) && empty($m['deleted']) && empty($m['late_edit'])));

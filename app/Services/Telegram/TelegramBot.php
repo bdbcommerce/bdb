@@ -11,6 +11,7 @@ use App\Services\Ai\VoiceTranscriber;
 use App\Services\AiErrorAlerts;
 use App\Services\ChatAssistant;
 use App\Services\Invoices\InvoiceParser;
+use App\Services\SalesAssistant\ExpertDesk;
 use App\Services\SalesAssistant\SalesAssistant;
 use App\Services\TelegramNotifier;
 use Illuminate\Support\Facades\Cache;
@@ -99,6 +100,13 @@ class TelegramBot
             }
         }
 
+        // Buttons under the AI's questions to experts (ExpertDesk); other buttons are not used by the bot.
+        if (is_array($update['callback_query'] ?? null)) {
+            app(ExpertDesk::class)->callback($update['callback_query']);
+
+            return;
+        }
+
         if ($this->record($update)) {
             return;
         }
@@ -126,6 +134,13 @@ class TelegramBot
 
         // The customer is created from their chat info; the private chat ID is their user ID.
         $user = TelegramUser::fromTelegram(['id' => $chatId] + $from, 'bot');
+        // The bot may write to them (experts and the main admin need this: /start once).
+        $user->bot_chat_at || $user->forceFill(['bot_chat_at' => now()])->save();
+
+        // An employee who answers the AI's questions: their answer, transfer note or /start (not recorded as a chat).
+        if ($user->isExpert() && app(ExpertDesk::class)->message($user, $message)) {
+            return;
+        }
 
         $locale = $user->locale ?? 'ru';
         $replies = (bool) config('services.telegram.replies');

@@ -71,7 +71,7 @@ return [
     'tg_voice_failed' => '🎙 Kechirasiz, ovozli xabarni tushuna olmadim. Qaytadan ayting yoki savolingizni yozing ✍️',
 
     // Ish vaqtidan tashqari savdo yordamchisi (yopiq davrda bir marta yuboriladi).
-    'sales_off_hours' => 'Xabaringiz uchun rahmat! 🙏 Hozir ofis ishlamaydi. Ish vaqti: :hours (Toshkent vaqti). Xabaringiz saqlandi — menejer :when soat :time dan javob beradi.',
+    'sales_off_hours' => 'Xabaringiz uchun rahmat! 🙏 Hozir ofis ishlamaydi. Ish vaqti: :hours (Toshkent vaqti). Xabaringiz saqlandi — menejer :when soat :time dan javob beradi. Barcha talablaringizni hozir yozib qoldirishingiz mumkin — ish vaqtida birinchi navbatda ko‘rib chiqamiz.',
     'sales_greeting' => 'Assalomu alaykum! 👋 :company ga yozganingiz uchun rahmat — Oʻzbekistonda shtrix-kod skanerlari, yorliq printerlari, yorliqlar va ribbonlar, maʼlumot yigʻish terminallari va markirovka. Menejer tez orada siz bilan bogʻlanadi va savolingizga yordam beradi.',
     'sales_greeting_hours' => 'Ish vaqtimiz: :hours (Toshkent vaqti).',
     'sales_today' => 'bugun',

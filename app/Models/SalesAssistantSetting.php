@@ -34,6 +34,7 @@ class SalesAssistantSetting extends Model
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
         'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
         'off_hours_mode', 'require_assignment', 'greeting_prompt', 'greeting_channels', 'employee_roles',
+        'expert_remind_minutes', 'expert_escalate_minutes',
     ];
 
     /** Employee roles offered on the Telegram user page (editable in Settings, one per line). */
@@ -44,7 +45,7 @@ class SalesAssistantSetting extends Model
 
     protected function casts(): array
     {
-        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean'];
+        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer'];
     }
 
     public static function current(): self
@@ -141,6 +142,43 @@ class SalesAssistantSetting extends Model
         $mode = (string) ($this->off_hours_mode ?? config('services.telegram.sales_off_hours', 'note'));
 
         return array_key_exists($mode, self::OFF_HOURS_MODES) ? $mode : 'note';
+    }
+
+    /** Expert questions: a reminder to the expert after this many working minutes, then the main admin. */
+    public const EXPERT_REMIND_MINUTES = 30;
+
+    public const EXPERT_ESCALATE_MINUTES = 60;
+
+    public function expertRemindMinutes(): int
+    {
+        return max(1, (int) ($this->expert_remind_minutes ?? self::EXPERT_REMIND_MINUTES));
+    }
+
+    public function expertEscalateMinutes(): int
+    {
+        return max($this->expertRemindMinutes() + 1, (int) ($this->expert_escalate_minutes ?? self::EXPERT_ESCALATE_MINUTES));
+    }
+
+    /** Minutes of working time between two moments (Tashkent working days and hours). */
+    public function workingMinutesBetween(Carbon $from, Carbon $to): int
+    {
+        $from = $from->copy()->setTimezone(self::TZ);
+        $to = $to->copy()->setTimezone(self::TZ);
+        $minutes = 0;
+        for ($day = $from->copy()->startOfDay(), $i = 0; $day->lte($to) && $i < 400; $day->addDay(), $i++) {
+            if (! in_array($day->isoWeekday(), $this->workDays(), true)) {
+                continue;
+            }
+            $open = $day->copy()->setTimeFromTimeString((string) ($this->work_start ?: '09:00'));
+            $close = $day->copy()->setTimeFromTimeString((string) ($this->work_end ?: '18:00'));
+            $start = $from->gt($open) ? $from : $open;
+            $end = $to->lt($close) ? $to : $close;
+            if ($end->gt($start)) {
+                $minutes += intdiv((int) $start->diffInSeconds($end, true), 60);
+            }
+        }
+
+        return $minutes;
     }
 
     /** The start of the next working period after $at (Tashkent time). */

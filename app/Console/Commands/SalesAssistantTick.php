@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ChatConversation;
 use App\Models\SalesAssistantSetting;
+use App\Services\SalesAssistant\ExpertDesk;
 use App\Services\SalesAssistant\SalesAssistant;
 use Illuminate\Console\Command;
 
@@ -19,8 +20,11 @@ class SalesAssistantTick extends Command
 
     protected $description = 'Sales assistant: answer customers no manager answered in time';
 
-    public function handle(SalesAssistant $assistant): int
+    public function handle(SalesAssistant $assistant, ExpertDesk $desk): int
     {
+        // Questions to experts: send the next ones, remind, pass to the main admin, deliver answers.
+        $experts = rescue(fn () => $desk->tick(), null);
+        $experts && $this->info("Experts: sent {$experts['sent']}, reminded {$experts['reminded']}, to the main admin {$experts['escalated']}, answers delivered {$experts['delivered']}.");
         $settings = SalesAssistantSetting::current();
         if ($settings->bot_mode !== 'on' && $settings->business_mode !== 'on') {
             return self::SUCCESS;

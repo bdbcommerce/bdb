@@ -14,6 +14,7 @@ class TelegramWebhook
     public const UPDATES = [
         'message', 'edited_message',
         'business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages',
+        'callback_query', // buttons under the AI's questions to experts
     ];
 
     public function __construct(private TelegramApi $api) {}

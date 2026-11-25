@@ -71,7 +71,7 @@ return [
     'tg_voice_failed' => '🎙 Sorry, I couldn\'t make out the voice message. Please say it again or type your question ✍️',
 
     // Sales assistant outside working hours (sent once per closed period).
-    'sales_off_hours' => 'Thank you for your message! 🙏 Our office is closed right now. Working hours: :hours (Tashkent time). Your message is saved — a manager will reply :when from :time.',
+    'sales_off_hours' => 'Thank you for your message! 🙏 Our office is closed right now. Working hours: :hours (Tashkent time). Your message is saved — a manager will reply :when from :time. You can write all your requirements now, so we start on them first thing.',
     'sales_greeting' => 'Hello! 👋 Thank you for writing to :company — barcode scanners, label printers, labels and ribbons, data terminals and marking in Uzbekistan. A manager will contact you shortly and help with your question.',
     'sales_greeting_hours' => 'Our working hours: :hours (Tashkent time).',
     'sales_today' => 'today',
