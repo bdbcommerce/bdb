@@ -46,7 +46,7 @@ class QaSidebarAndRetickTest extends TestCase
 
     private function openGroups(string $html): array
     {
-        preg_match_all('/<ul id="nav-group-([a-z]+)"([^>]*)>/', $html, $m, PREG_SET_ORDER);
+        preg_match_all('/<ul id="nav-group-([a-z-]+)"([^>]*)>/', $html, $m, PREG_SET_ORDER);
 
         return collect($m)->reject(fn ($x) => str_contains($x[2], 'x-cloak'))->map(fn ($x) => $x[1])->values()->all();
     }
@@ -62,23 +62,23 @@ class QaSidebarAndRetickTest extends TestCase
             'admin.customers.index' => ['catalog'],
             'admin.articles.index' => ['content'],
             'admin.article-categories.index' => ['content'],
-            'admin.client-requests.index' => ['assistant'],
-            'admin.chat-leads.index' => ['assistant'],
-            'admin.ai-models.index' => ['assistant'],
-            'admin.awaiting-replies.index' => ['telegram'],
-            'admin.telegram-users.index' => ['telegram'],
-            'admin.telegram.edit' => ['telegram'],
+            'admin.client-requests.index' => ['inbox'],
+            'admin.chat-leads.index' => ['inbox'],
+            'admin.ai-models.index' => ['settings'],
+            'admin.awaiting-replies.index' => ['inbox'],
+            'admin.telegram-users.index' => ['conversations'],
+            'admin.telegram.edit' => ['settings'],
             'admin.vacancies.index' => ['careers'],
             'admin.job-applications.index' => ['careers'],
-            'admin.invoice-messages.index' => ['invoices'],
-            'admin.invoice-parser.edit' => ['invoices'],
+            'admin.invoice-messages.index' => ['reports'],
+            'admin.invoice-parser.edit' => ['settings'],
         ];
         foreach ($pages as $route => $open) {
             $html = $this->actingAs($admin)->get(route($route))->assertOk()->getContent();
             $this->assertSame($open, $this->openGroups($html), $route);
             // Server-rendered aria-expanded matches.
-            preg_match_all('/aria-expanded="(true|false)"\s+aria-controls="nav-group-([a-z]+)"/', $html, $a, PREG_SET_ORDER);
-            $this->assertCount(7, $a, $route);
+            preg_match_all('/aria-expanded="(true|false)"\s+aria-controls="nav-group-([a-z-]+)"/', $html, $a, PREG_SET_ORDER);
+            $this->assertCount(9, $a, $route);
             foreach ($a as [$all, $state, $key]) {
                 $this->assertSame(in_array($key, $open, true) ? 'true' : 'false', $state, "$route $key");
             }
@@ -91,9 +91,9 @@ class QaSidebarAndRetickTest extends TestCase
         ChatLead::create(['name' => 'Ali', 'phone' => '+998901112233', 'is_handled' => false, 'channel' => 'web', 'locale' => 'ru']);
         $html = $this->actingAs($this->admin())->get(route('admin.dashboard'))->assertOk()->getContent();
 
-        // Group "AI Assistant" collapsed and its header carries the badge (shown while closed).
-        $this->assertNotContains('assistant', $this->openGroups($html));
-        $this->assertMatchesRegularExpression('/AI Assistant<\/span>\s*<span x-show="! open" x-cloak[^>]*>\s*1\s*<span class="sr-only">new<\/span>/', $html);
+        // Group "Inbox" collapsed and its header carries the badge (shown while closed).
+        $this->assertNotContains('inbox', $this->openGroups($html));
+        $this->assertMatchesRegularExpression('/Inbox<\/span>\s*<span x-show="! open" x-cloak[^>]*>\s*1\s*<span class="sr-only">new<\/span>/', $html);
     }
 
     public function test_mobile_drawer_markup_still_present(): void

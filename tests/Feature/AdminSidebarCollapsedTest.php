@@ -17,14 +17,15 @@ class AdminSidebarCollapsedTest extends TestCase
 
         $html = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->getContent();
         $this->assertDoesNotMatchRegularExpression('/aria-expanded="true"\s+aria-controls="nav-group-/', $html);
-        $this->assertSame(8, preg_match_all('/aria-expanded="false"\s+aria-controls="nav-group-/', $html));
-        foreach (['company', 'catalog', 'careers', 'invoices', 'content', 'assistant', 'telegram'] as $key) {
+        $this->assertSame(9, preg_match_all('/aria-expanded="false"\s+aria-controls="nav-group-/', $html));
+        foreach (['inbox', 'conversations', 'ai-team', 'reports', 'company', 'catalog', 'content', 'careers', 'settings'] as $key) {
             $this->assertMatchesRegularExpression('/<ul id="nav-group-'.$key.'"[^>]*x-cloak/', $html, $key);
         }
 
         $html = $this->actingAs($admin)->get(route('admin.telegram-users.index'))->assertOk()->getContent();
-        $this->assertDoesNotMatchRegularExpression('/<ul id="nav-group-telegram"[^>]*x-cloak/', $html);
-        $this->assertMatchesRegularExpression('/<ul id="nav-group-assistant"[^>]*x-cloak/', $html);
-        $this->assertStringContainsString('bdb.admin.nav.v2.telegram', $html);
+        $this->assertDoesNotMatchRegularExpression('/<ul id="nav-group-conversations"[^>]*x-cloak/', $html);
+        $this->assertMatchesRegularExpression('/<ul id="nav-group-inbox"[^>]*x-cloak/', $html);
+        $this->assertStringContainsString("openGroup: 'conversations'", $html); // accordion: only this group open
+        $this->assertStringNotContainsString('bdb.admin.nav.', $html); // no remembered open groups
     }
 }

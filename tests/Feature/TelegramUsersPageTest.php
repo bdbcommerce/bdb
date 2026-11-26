@@ -45,7 +45,7 @@ class TelegramUsersPageTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.telegram-users.index'))
             ->assertOk()
-            ->assertSee('Telegram')->assertSee('Users')->assertSee('Bot settings')
+            ->assertSee('Conversations')->assertSee('Contacts')->assertSee('Telegram bot')
             ->assertSee('Aziz Karimov')->assertSee('Dilnoza')->assertSee('No name yet')
             ->assertSee('1 chat');
 

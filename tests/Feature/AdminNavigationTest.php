@@ -29,8 +29,8 @@ class AdminNavigationTest extends TestCase
             'customers' => ['admin.customers.index', 'Customers'],
             'articles' => ['admin.articles.index', 'Articles'],
             'categories' => ['admin.article-categories.index', 'Categories'],
-            'chat leads' => ['admin.chat-leads.index', 'Chat leads'],
-            'knowledge' => ['admin.knowledge.index', 'Knowledge base'],
+            'chat leads' => ['admin.chat-leads.index', 'Leads'],
+            'knowledge' => ['admin.knowledge.index', 'Website knowledge'],
             'conversations' => ['admin.chat-conversations.index', 'Conversations'],
             'telegram' => ['admin.telegram.edit', 'Telegram bot'],
         ];
@@ -57,7 +57,7 @@ class AdminNavigationTest extends TestCase
         $this->actingAs($this->admin())
             ->get(route('admin.dashboard'))
             ->assertOk()
-            ->assertSeeInOrder(['Chat leads', '2', 'new leads'], false);
+            ->assertSeeInOrder(['Leads', '2', 'new leads'], false);
     }
 
     public function test_dashboard_shows_ai_assistant_summary(): void

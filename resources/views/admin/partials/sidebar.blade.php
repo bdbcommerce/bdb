@@ -34,7 +34,10 @@
     </div>
 
     {{-- Navigation --}}
-    <nav class="flex-1 overflow-y-auto py-4 px-3" aria-label="Main">
+    {{-- Accordion: only the current page's group is open; opening another closes it. The current link is scrolled into view. --}}
+    <nav class="flex-1 overflow-y-auto py-4 px-3" aria-label="Main"
+         x-data="{ openGroup: @js($activeGroupKey) }"
+         x-init="$nextTick(() => $el.querySelector('[aria-current=page]')?.scrollIntoView({ block: 'nearest' }))">
         @foreach ($navGroups as $group)
             @if (! $group['label'])
                 {{-- Ungrouped top-level items (Dashboard) --}}
@@ -49,24 +52,7 @@
                     $groupBadge = collect($group['items'])->sum(fn ($i) => $i['badge'] ?? 0);
                 @endphp
                 <div class="mt-5"
-                     x-data="{
-                         // Collapsed by default; the group of the current page opens, and an admin's own
-                         // open/close choice is remembered (v2: earlier saved states are ignored).
-                         open: @js($group['active']),
-                         key: @js('bdb.admin.nav.v2.' . $group['key']),
-                         forced: @js($group['active']),
-                         init() {
-                             if (! this.forced) {
-                                 try {
-                                     const saved = localStorage.getItem(this.key);
-                                     if (saved !== null) this.open = saved === '1';
-                                 } catch (e) {}
-                             }
-                             this.$watch('open', (value) => {
-                                 try { localStorage.setItem(this.key, value ? '1' : '0'); } catch (e) {}
-                             });
-                         },
-                     }">
+                     x-data="{ get open() { return this.openGroup === @js($group['key']) }, set open(v) { this.openGroup = v ? @js($group['key']) : null } }">
                     <h2>
                         <button type="button"
                                 @click="open = ! open"
