@@ -3,9 +3,12 @@
 namespace App\Services\Telegram;
 
 use App\Models\ChatConversation;
+use App\Models\Client;
+use App\Models\CompanyLink;
 use App\Models\SalesAssistantSetting;
 use App\Models\TelegramBusinessConnection;
 use App\Models\TelegramUser;
+use App\Services\Companies\CompanyLookup;
 use App\Services\SalesAssistant\SalesAssistant;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
@@ -238,6 +241,22 @@ class TelegramRecorder
         }
 
         $this->store($this->conversation('group', $message['chat'], null, $message['from'] ?? [], $edited), $message, 'member', $edited);
+        $this->linkGroupCompanies($chatId, (string) ($message['text'] ?? $message['caption'] ?? ''));
+    }
+
+    /** "INN 301234567" written in a group: the company (ours, 1C, registry) is linked to the group (as found by the AI). */
+    private function linkGroupCompanies(string $chatId, string $text): void
+    {
+        if (! preg_match_all(SalesAssistant::INN_PATTERN, $text, $found)) {
+            return;
+        }
+        $lookup = app(CompanyLookup::class);
+        foreach (array_slice(array_unique(array_map(fn ($i) => Client::cleanInn($i), $found[1])), 0, 3) as $inn) {
+            if (CompanyLink::where('group_chat_id', $chatId)->count() >= SalesAssistant::INNS_PER_CHAT) {
+                return;
+            }
+            rescue(fn () => $lookup->link($lookup->find($inn, byCustomer: true), null, $chatId, 'ai'), null, false);
+        }
     }
 
     // ---------------------------------------------------------------------------

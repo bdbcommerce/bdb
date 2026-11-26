@@ -72,6 +72,7 @@
                 $num('follow_up_days', 'Offer again after (days)', 'When a customer cancelled but agreed to hear from us later.', 1, 90),
                 $num('expert_remind_minutes', 'Expert reminder after (minutes)', 'An expert who has not answered the AI\'s question gets one reminder (working time only).', 5, 480) + ['value' => $settings->expertRemindMinutes()],
                 $num('expert_escalate_minutes', 'To the main admin after (minutes)', 'Still no answer: the question goes to the main admin (working time only).', 10, 960) + ['value' => $settings->expertEscalateMinutes()],
+                $num('large_order_sum', 'Large order from (sum)', 'Catalog prices × quantity: from this total the AI confirms the request and hands it to a manager at once. 0 = off.', 0, 100000000000) + ['value' => $settings->largeOrderSum()],
             ] as $f)
                 <div>
                     <label for="{{ $f['name'] }}" class="block text-sm font-medium text-slate-700 mb-1">{{ $f['label'] }}</label>
@@ -112,6 +113,21 @@
                         <option value="0" @selected((string) old('require_assignment', (int) $settings->requiresAssignment()) === '0')>Off — talk with everyone except employees</option>
                     </select>
                     <p class="text-xs text-slate-400 mt-1">Set the type on the contact's page (Telegram → Users → Not assigned). The sales chat is asked once for every new contact.</p>
+                </div>
+                <div>
+                    <label for="new_contact_mode" class="block text-sm font-medium text-slate-700 mb-1">New contact</label>
+                    @php $newMode = (string) old('new_contact_mode', $settings->newContactMode()); @endphp
+                    <select id="new_contact_mode" name="new_contact_mode" class="{{ $input }}">
+                        @foreach (\App\Models\SalesAssistantSetting::NEW_CONTACT_MODES as $value => [$label])
+                            <option value="{{ $value }}" @selected($newMode === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <ul class="text-xs text-slate-400 mt-1 space-y-0.5">
+                        @foreach (\App\Models\SalesAssistantSetting::NEW_CONTACT_MODES as [$label, $help])
+                            <li><span class="font-medium text-slate-500">{{ $label }}:</span> {{ $help }}</li>
+                        @endforeach
+                    </ul>
+                    @error('new_contact_mode')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
                 <fieldset>
                     <legend class="block text-sm font-medium text-slate-700 mb-1">Greet new contacts in</legend>

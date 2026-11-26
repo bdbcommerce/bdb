@@ -9,6 +9,7 @@ use App\Models\AiShadowDraft;
 use App\Models\AiTrace;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\Client;
 use App\Models\ClientPerson;
 use App\Models\ClientRequest;
 use App\Models\CompanyInfo;
@@ -22,6 +23,7 @@ use App\Services\Ai\AiClient;
 use App\Services\AiErrorAlerts;
 use App\Services\Catalog\CatalogPrompt;
 use App\Services\ChatAssistant;
+use App\Services\Companies\CompanyLookup;
 use App\Services\SalesReport\SalesReporter;
 use App\Services\Seo\SeoFiles;
 use App\Services\Telegram\TelegramApi;
@@ -91,6 +93,7 @@ class SalesAssistant
 - unknown_kind: when unknown_question is set, the KNOWLEDGE section its answer belongs in (product | business | marking | software | device | glossary | reply); else empty.
 - cancelled: true when the customer said they do not need it any more. follow_up_agreed: true when they agreed that we may send an offer later.
 - context_unknown: true when the CONVERSATION clearly continues an earlier talk you cannot see — it starts in the middle, or the customer refers to an order, price, file, promise or person that is not in it. Then reply must be empty: a manager takes the chat.
+- inns: the INN (STIR, 9 digits) of every company the customer gave — typed, or on a photo or PDF you see in this request; [] when none. Digits only; never invent or complete one. Our system looks the company up and links it to the customer.
 - hand_to: only when YOUR COLLEAGUES lists a colleague whose work the customer's need is: their hand_to value, and the reply is one short sentence saying that this colleague (by name) will help now — the colleague answers right after. Otherwise an empty string.
 TXT;
 
@@ -109,8 +112,9 @@ TXT;
         $bool = ['type' => 'boolean'];
 
         return ['type' => 'object', 'additionalProperties' => false,
-            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'expert_draft', 'expert_department', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown'],
+            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'expert_draft', 'expert_department', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown', 'inns'],
             'properties' => [
+                'inns' => ['type' => 'array', 'items' => $str],
                 'reply' => $str,
                 'context_unknown' => $bool,
                 'language' => ['type' => 'string', 'enum' => ['uz', 'ru', 'en']],
@@ -235,13 +239,14 @@ TXT;
 
             return null;
         }
-        if (self::unknownBeginning($conversation)) {
+        $gate = $settings->gate($user);
+        // New contact "Greet, then wait": greeted even when the chat seems to continue an earlier talk.
+        if (! ($gate === 'greet' && $settings->newContactMode() === 'always') && self::unknownBeginning($conversation)) {
             $user && $this->requestAssignment($user, $conversation);
             $this->leaveToManagers($conversation, 'reply to a message the assistant never saw');
 
             return 'unknown';
         }
-        $gate = $settings->gate($user);
         if ($gate === 'silent') {
             return null;
         }
@@ -330,7 +335,7 @@ TXT;
             $channel = $conversation->via() === 'assistant' ? 'business' : 'bot';
             // A manager (the Premium account's owner, or staff) is already talking with them: no welcome in the middle.
             $managerInChat = collect($conversation->messages ?? [])->contains(fn ($m) => is_array($m) && in_array($m['role'] ?? null, ['owner', 'admin'], true));
-            if ($user && ! $user->greeted_at && ! $managerInChat && in_array($channel, $settings->greetingChannels(), true)) {
+            if ($user && ! $user->greeted_at && ! $managerInChat && $settings->newContactMode() !== 'create' && in_array($channel, $settings->greetingChannels(), true)) {
                 $sent = $this->sendGreeting($conversation, $user, $settings, $incoming);
                 $conversation->refresh();
             }
@@ -387,7 +392,7 @@ TXT;
             try {
                 $reply = $this->ai->turn($key, $settings->model, $system, $data, [], self::greetingSchema());
                 $json = AiClient::decodeJson($reply['text']);
-                if (is_array($json) && ! empty($json['context_unknown'])) {
+                if (is_array($json) && ! empty($json['context_unknown']) && $settings->newContactMode() !== 'always') {
                     $this->leaveToManagers($conversation, 'the customer continues a talk the assistant never saw');
 
                     return false;
@@ -683,6 +688,7 @@ TXT;
             };
             $text = isset($m['content']) && is_scalar($m['content']) ? mb_strimwidth((string) $m['content'], 0, 1500, '…') : match ($m['type'] ?? '') {
                 'photo' => '[photo]',
+                'document' => '[a file — a PDF is attached to this request when it is new; other files are not opened]',
                 'voice', 'audio', 'video_note' => '[voice message — forwarded to the manager]',
                 'contact' => '[sent a contact card — the verified phone, if any, is in Known contacts]',
                 default => '[a '.str_replace('_', ' ', (string) ($m['type'] ?? 'file')).' — not opened]',
@@ -694,7 +700,7 @@ TXT;
             $lines[] = json_encode(['at' => $at, 'from' => $who, 'text' => $mask($text), 'chat' => $conversation->viaOf($m) === 'assistant' ? 'premium account' : 'bot'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
             if (($m['role'] ?? null) === 'user') {
                 $query = mb_substr($query.' '.($m['content'] ?? $m['caption'] ?? ''), -1500);
-                if (($m['type'] ?? null) === 'photo' && is_string($m['file_id'] ?? null) && ! in_array($m['file_id'], (array) ($state['seen_photos'] ?? []), true)) {
+                if (in_array($m['type'] ?? null, ['photo', 'document'], true) && is_string($m['file_id'] ?? null) && ! in_array($m['file_id'], (array) ($state['seen_photos'] ?? []), true)) {
                     $photos[] = $m['file_id'];
                 }
             } else {
@@ -705,9 +711,10 @@ TXT;
         $images = [];
         $photos = $sendPhotos ? array_slice($photos, -2) : [];
         foreach ($photos as $fileId) {
-            $file = $this->api->downloadFile($fileId, 5 * 1024 * 1024);
-            $type = $file ? TelegramApi::sniff($file['body']) : null;
-            if ($type && in_array($type, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)) {
+            // A picture, or a PDF (e.g. a requisites card with the INN); any other document is never sent.
+            $file = $this->api->downloadFile($fileId, 5 * 1024 * 1024, ['pdf']);
+            $type = $file ? (str_starts_with($file['body'], '%PDF-') ? 'application/pdf' : TelegramApi::sniff($file['body'])) : null;
+            if ($type && in_array($type, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'], true)) {
                 $images[] = ['type' => $type, 'data' => base64_encode($file['body'])];
             }
         }
@@ -729,6 +736,13 @@ TXT;
         // The client portrait (Admin → AI team → Client portraits): who they are, their company, who else decides there.
         if ($user && $settings->sendsToClaude('portrait') && ($person = rescue(fn () => ClientPerson::current($user), null, false))) {
             array_push($profile, ...$person->forPrompt());
+        }
+        // Companies (Admin → Companies) this contact works with: what they usually order and our sales plan for them —
+        // only for links a manager made or confirmed (an INN anyone can type must not reveal a company's orders).
+        if ($user?->exists && $settings->sendsToClaude('portrait')) {
+            foreach ($user->companyLinks()->with('client.items')->limit(5)->get() as $link) {
+                $profile[] = $link->client->forPrompt($link->byManager());
+            }
         }
         if (filled($state['handed_over'] ?? null)) {
             $profile[] = 'Already handed to the manager: '.$state['handed_over'];
@@ -846,6 +860,39 @@ TXT;
         $items = implode(' ', array_map(fn ($i) => is_array($i) ? ((string) ($i['product'] ?? '')).' '.((string) ($i['details'] ?? '')) : '', (array) ($state['items'] ?? [])));
 
         return rescue(fn () => CatalogPrompt::section($user, mb_substr($items, 0, 500).' '.$query), ['text' => '', 'info' => ['catalog' => 'failed — left out']]);
+    }
+
+    /** "INN 301234567", "СТИР: 301 234 567"… in the customer's own words (Claude also reads photos and PDFs: json inns). */
+    public const INN_PATTERN = '/(?:\\bINN|ИНН|\\bSTIR|СТИР|\\bTIN)\\D{0,15}?(\\d{3}[\\s-]?\\d{3}[\\s-]?\\d{3})(?![\\d])/iu';
+
+    /** At most this many new companies per conversation from INNs (a customer cannot fill the base). */
+    public const INNS_PER_CHAT = 5;
+
+    /** INNs the customer gave → companies (ours, 1C, the registry) linked to them; the sales chat is told about new links. */
+    private function linkCompanies(ChatConversation $conversation, TelegramUser $user, array $json): void
+    {
+        $inns = is_array($json['inns'] ?? null) ? array_filter($json['inns'], 'is_scalar') : [];
+        foreach ($conversation->messages ?? [] as $m) {
+            if (is_array($m) && ($m['role'] ?? null) === 'user' && preg_match_all(self::INN_PATTERN, (string) ($m['content'] ?? $m['caption'] ?? ''), $found)) {
+                array_push($inns, ...$found[1]);
+            }
+        }
+        $inns = collect($inns)->map(fn ($i) => Client::cleanInn((string) $i))->filter(fn ($i) => Client::isInn($i))->unique()->take(self::INNS_PER_CHAT);
+        $known = $user->companyLinks()->join('clients', 'clients.id', '=', 'company_links.client_id')->pluck('clients.inn')->all();
+        foreach ($inns->diff($known) as $inn) {
+            if ($user->companyLinks()->count() >= self::INNS_PER_CHAT) {
+                break;
+            }
+            $company = rescue(fn () => app(CompanyLookup::class)->find($inn, byCustomer: true), null, false);
+            if (! $company) {
+                continue;
+            }
+            app(CompanyLookup::class)->link($company, $user, null, 'ai');
+            $this->notifier->send('🏢 <b>Company by INN</b> — '.e($user->displayName() ?? 'Telegram '.$user->telegram_id)."\n"
+                .e($company->name).' · INN '.e($inn).' · '.e(Client::SOURCES[$company->source] ?? $company->source)
+                ."\n<i>Linked by the AI. Its price type applies only after a manager confirms the link on the company page.</i>\n"
+                .'<a href="'.e(SeoFiles::publicUrl(route('admin.clients.show', $company))).'">Open the company</a>');
+        }
     }
 
     /** The last phone the customer typed in this conversation (used when phones are not sent to Claude). */
@@ -1011,6 +1058,9 @@ TXT;
         $actions = [];
         $state = self::merged((array) ($conversation->sales_state ?? []), $json);
         $language = $state['language'];
+        if ($user?->exists) {
+            $this->linkCompanies($conversation, $user, $json);
+        }
         // Phones are not sent to Claude: the one the customer typed is read here instead.
         if (! SalesAssistantSetting::current()->sendsToClaude('phone') && ($typed = self::typedPhone($conversation))) {
             $state['customer']['phone'] = $typed;
@@ -1420,6 +1470,14 @@ TXT;
                 'business_type' => $state['business_type'] ?? null, 'software' => $state['software'] ?? null, 'conversation_id' => $conversation->id],
         ];
         $lead = $existing ? tap($existing)->update($attributes) : ChatLead::create($attributes);
+        $links = $user?->exists ? $user->companyLinks()->with('client.items')->limit(5)->get() : collect();
+        // A confirmed request: sales-plan items it contains become what the company usually orders (manager links only).
+        if (! $partial) {
+            foreach ($links->filter(fn ($l) => $l->byManager()) as $link) {
+                rescue(fn () => app(CompanyLookup::class)->moveBought($link->client, array_map(fn ($i) => ['product' => $i], $items), 'Request #'.$lead->id), null, false);
+                $link->client->load('items');
+            }
+        }
 
         $e = fn ($v) => e((string) $v);
         $where = $conversation->via() === 'assistant' ? 'Premium-account chat' : 'Telegram bot';
@@ -1439,6 +1497,13 @@ TXT;
         }
         if ($user?->username) {
             $lines[] = '<b>Telegram:</b> @'.$e($user->username);
+        }
+        foreach ($links as $link) {
+            $company = $link->client;
+            $plan = $link->byManager() ? $company->listOf('plan')->map(fn ($i) => $i->label())->implode('; ') : '';
+            $lines[] = '<b>Company:</b> '.$e(mb_strimwidth($company->name.($company->inn ? ', INN '.$company->inn : ''), 0, 200, '…'))
+                .($link->byManager() ? '' : ' <i>(INN given by the customer, not confirmed)</i>')
+                .($plan !== '' ? "\n<b>Sales plan for this company:</b> ".$e(mb_strimwidth($plan, 0, 300, '…')) : '');
         }
         // Every text is shortened before escaping and items are dropped until it fits, so the HTML is never cut.
         $tail = ['', $e(mb_strimwidth((string) $state['summary'], 0, 800, '…')), '', '<a href="'.$e($link).'">Open the chat</a>'];

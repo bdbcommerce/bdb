@@ -34,7 +34,20 @@ class SalesAssistantSetting extends Model
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
         'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
         'off_hours_mode', 'require_assignment', 'greeting_prompt', 'greeting_channels', 'employee_roles',
-        'expert_remind_minutes', 'expert_escalate_minutes', 'claude_data',
+        'expert_remind_minutes', 'expert_escalate_minutes', 'claude_data', 'new_contact_mode', 'large_order_sum',
+    ];
+
+    /** A request at least this big (catalog prices × quantity, sum) goes to a manager at once. */
+    public const LARGE_ORDER_SUM = 10_000_000;
+
+    /**
+     * What the AI does with a contact who is not assigned yet (and suppliers). The sales chat is asked to assign them
+     * in every mode; "Greet new contacts in" picks the chats where a greeting may be sent.
+     */
+    public const NEW_CONTACT_MODES = [
+        'smart' => ['Greet if new, else just create', 'A new customer gets one greeting, then the AI waits. A chat that continues an earlier talk (a reply to an old message, or the AI sees it refers to something it cannot see) gets no greeting: the contact is only created and left to the managers.'],
+        'always' => ['Greet, then wait', 'Every new contact gets one greeting, also when the chat seems to continue an earlier talk. Never in the middle of a manager\'s talk.'],
+        'create' => ['Just create, no greeting', 'Nothing is sent: the contact is created and the sales chat is asked to assign them.'],
     ];
 
     /**
@@ -44,8 +57,8 @@ class SalesAssistantSetting extends Model
     public const CLAUDE_DATA = [
         'phone' => ['Phone numbers', 'Off: the customer card says only whether a phone is known, and phones in messages are sent as [phone]. A phone the customer types is still saved for the request by Laravel itself.'],
         'username' => ['Telegram @username', 'Off: only the Telegram display name is sent.'],
-        'photos' => ['Photos the customer sends', 'Off: the AI sees only "[photo]" and asks the customer to describe it, or leaves it to a manager.'],
-        'portrait' => ['Client portrait', 'Off: the portrait (position, company, part in decisions, style) is not sent. Do not contact still applies.'],
+        'photos' => ['Photos and PDF files the customer sends', 'Off: the AI sees only "[photo]" or "[a file]" and asks the customer to describe it, or leaves it to a manager. An INN typed in a message is still found.'],
+        'portrait' => ['Client portrait and companies', 'Off: the portrait (position, company, part in decisions, style) and the linked companies (what they usually order, the sales plan) are not sent. Do not contact still applies.'],
     ];
 
     /** Employee roles offered on the Telegram user page (editable in Settings, one per line). */
@@ -56,10 +69,21 @@ class SalesAssistantSetting extends Model
 
     protected function casts(): array
     {
-        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array'];
+        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array', 'large_order_sum' => 'integer'];
     }
 
     /** May a sales assistant turn send this kind of customer data to Claude (CLAUDE_DATA key)? */
+    /** 0 = no handover by the amount. */
+    public function largeOrderSum(): int
+    {
+        return $this->large_order_sum ?? self::LARGE_ORDER_SUM;
+    }
+
+    public function newContactMode(): string
+    {
+        return array_key_exists((string) $this->new_contact_mode, self::NEW_CONTACT_MODES) ? $this->new_contact_mode : 'smart';
+    }
+
     public function sendsToClaude(string $key): bool
     {
         return (bool) (((array) ($this->claude_data ?? []))[$key] ?? true);
@@ -311,6 +335,8 @@ class SalesAssistantSetting extends Model
 
         return $head
             ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours ".($this->offHoursMode() === 'ai' ? 'you answer at once.' : 'customers get a fixed note with these hours; the managers answer them when the office opens.')
+            .($this->largeOrderSum() > 0 ? "\n\n# LARGE ORDER\nWhen the products the customer wants, priced from PRODUCT CATALOG (price × quantity), add up to ".number_format($this->largeOrderSum(), 0, '', ' ')
+                .' sum or more: do not sell further or discuss terms. Confirm the summary and the contacts, set confirmed true and say a manager will take the order personally; begin the summary with "Large order ≈ <total> sum".' : '')
             ."\n\n# KNOWLEDGE (use only this; never add facts)\n".SalesKnowledge::forPrompt();
     }
 }

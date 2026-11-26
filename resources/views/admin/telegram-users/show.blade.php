@@ -239,6 +239,37 @@
                 <a href="{{ route('admin.client-people.create', ['telegram_user' => $user->id]) }}" class="inline-block text-sm rounded-lg border border-slate-300 px-3 py-1.5 hover:border-slate-500">Create a portrait (filled in from the chat)</a>
             @endif
         </section>
+
+        {{-- Companies this contact works with (linked by a manager, or by the AI from an INN they sent). --}}
+        <section class="bg-white border border-slate-200 rounded-xl p-4 space-y-2 text-sm" aria-labelledby="companies-h">
+            <h2 id="companies-h" class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Companies</h2>
+            @if ($onec = \App\Models\OnecPerson::forContact($user))
+                <p class="text-slate-700">1C client (private person): <span class="font-medium">{{ $onec->name }}</span>{{ $onec->code ? ' · code '.$onec->code : '' }}
+                    <span class="block text-xs text-slate-500">Matched by phone {{ $onec->phone }}{{ $user->hasVerifiedPhone() ? '' : ' — the contact\'s phone is not verified' }}.</span></p>
+            @endif
+            @forelse ($user->companyLinks()->with('client')->get() as $link)
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="{{ route('admin.clients.show', $link->client) }}" class="font-medium text-slate-900 underline">{{ $link->client->name }}</a>
+                    <span class="text-xs text-slate-500">{{ $link->client->inn ? 'INN '.$link->client->inn.' · ' : '' }}{{ $link->byManager() ? 'linked by a manager' : 'found by the AI' }}</span>
+                    @unless ($link->byManager())
+                        <form method="POST" action="{{ route('admin.companies.confirm-link', $link) }}">@csrf<button class="text-xs border border-slate-900 rounded px-2 py-0.5">Confirm</button></form>
+                    @endunless
+                    <form method="POST" action="{{ route('admin.companies.unlink', $link) }}" onsubmit="return confirm('Unlink?')">@csrf @method('DELETE')<button class="text-xs text-slate-500 underline">Unlink</button></form>
+                </div>
+            @empty
+                <p class="text-slate-600">None yet. The AI links one when the customer sends an INN.</p>
+            @endforelse
+            <form method="POST" action="{{ route('admin.companies.link-contact', $user) }}" class="flex gap-2 pt-1">
+                @csrf
+                <label for="link-inn" class="sr-only">INN</label>
+                <input id="link-inn" name="inn" inputmode="numeric" maxlength="20" placeholder="INN (9 digits)" class="w-36 rounded-lg border-slate-300 text-sm">
+                <button class="text-sm rounded-lg border border-slate-300 px-3 py-1.5 hover:border-slate-500">Link company</button>
+            </form>
+            <form method="POST" action="{{ route('admin.companies.onec-client', $user) }}" class="pt-1">
+                @csrf
+                <button class="text-sm rounded-lg border border-dashed border-slate-400 px-3 py-1.5 text-slate-600 hover:border-slate-600" title="A private person without a company. Demo: the 1C method is not connected yet">Create client in 1C (private person) · demo</button>
+            </form>
+        </section>
     </aside>
 
     {{-- Conversation history --}}

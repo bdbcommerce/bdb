@@ -25,6 +25,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('remind_after_hours')->default(2);
             $table->unsignedSmallInteger('close_after_hours')->default(24);
             $table->unsignedSmallInteger('follow_up_days')->default(14);
+            $table->unsignedBigInteger('large_order_sum')->nullable(); // hand over at once from this total (sum); null = LARGE_ORDER_SUM, 0 = off
             $table->string('model', 64)->default('claude-haiku-5-5');
             $table->mediumText('prompt')->nullable(); // null = resources/prompts/sales-assistant.md
             $table->text('platform_rules')->nullable(); // first prompt layer of every AI employee; null = AiEmployeeTemplates::PLATFORM_RULES
@@ -33,6 +34,7 @@ return new class extends Migration
             $table->boolean('require_assignment')->nullable(); // null = config services.telegram.sales_require_assignment
             $table->text('greeting_prompt')->nullable(); // null = resources/prompts/sales-greeting.md
             $table->json('greeting_channels')->nullable(); // null = bot + business
+            $table->string('new_contact_mode', 10)->nullable(); // SalesAssistantSetting::NEW_CONTACT_MODES; null = smart
             $table->unsignedSmallInteger('expert_remind_minutes')->nullable(); // null = SalesAssistantSetting::EXPERT_REMIND_MINUTES
             $table->unsignedSmallInteger('expert_escalate_minutes')->nullable(); // null = SalesAssistantSetting::EXPERT_ESCALATE_MINUTES
             $table->json('claude_data')->nullable(); // what a turn sends to Claude, SalesAssistantSetting::CLAUDE_DATA; null = everything

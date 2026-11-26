@@ -49,7 +49,7 @@ class ClientController extends Controller
 
     public function show(Client $client)
     {
-        return view('admin.clients.show', ['client' => $client->load('people.telegramUser', 'people.previous.client', 'people.next.client')]);
+        return view('admin.clients.show', ['client' => $client->load('people.telegramUser', 'people.previous.client', 'people.next.client', 'items')]);
     }
 
     public function edit(Client $client)
@@ -59,7 +59,7 @@ class ClientController extends Controller
 
     public function update(Request $request, Client $client)
     {
-        $client->update($this->validated($request));
+        $client->update($this->validated($request, $client));
 
         return redirect()->route('admin.clients.show', $client)->with('success', 'Company saved.');
     }
@@ -71,17 +71,23 @@ class ClientController extends Controller
         return redirect()->route('admin.clients.index')->with('success', 'Company deleted; its people are kept without a company.');
     }
 
-    private function validated(Request $request): array
+    private function validated(Request $request, ?Client $client = null): array
     {
         foreach (['installed', 'consumables', 'notes'] as $k) {
             if (is_string($request->input($k))) {
                 $request->merge([$k => str_replace(["\r\n", "\r"], "\n", $request->input($k))]);
             }
         }
+        // "305 112 448" → 305112448 (one company per INN); letters stay and fail the check.
+        $inn = preg_replace('/[\s-]/u', '', (string) $request->input('inn'));
+        $request->merge(['inn' => $inn === '' ? null : $inn]);
 
         return $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'inn' => ['nullable', 'string', 'max:20', 'regex:/^[0-9 ]+$/'],
+            'inn' => ['nullable', 'string', 'max:20', 'regex:/^\d+$/', Rule::unique('clients', 'inn')->ignore($client?->id)],
+            'price_type' => ['nullable', Rule::in(['dealer', 'partner'])],
+            'address' => ['nullable', 'string', 'max:300'],
+            'director' => ['nullable', 'string', 'max:150'],
             'industry' => ['nullable', 'string', 'max:100'],
             'city' => ['nullable', 'string', 'max:80'],
             'size' => ['nullable', 'string', 'max:150'],
@@ -91,7 +97,7 @@ class ClientController extends Controller
             'installed' => ['nullable', 'string', 'max:3000'],
             'consumables' => ['nullable', 'string', 'max:1000'],
             'notes' => ['nullable', 'string', 'max:2000'],
-        ], ['inn.regex' => 'The INN is digits only.']);
+        ], ['inn.regex' => 'The INN is digits only.', 'inn.unique' => 'Another company has this INN.']);
     }
 
     /** Telegram user → the prefilled person form (the AI collected these details; a manager confirms them). */

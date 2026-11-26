@@ -72,6 +72,28 @@ return [
         'alert_chat_id' => env('TELEGRAM_ALERT_CHAT_ID'),
     ],
 
+    // 1C HTTP service for company data by INN (Companies). Paths are added to the base URL; {inn} is replaced.
+    'onec' => [
+        'url' => env('ONEC_BASE_URL'),
+        'login' => env('ONEC_LOGIN'),
+        'password' => env('ONEC_PASSWORD'),
+        // Company by INN: POST {url}/clients/newClient with {"stir": "<inn>"} (method GET: the INN goes in the path as {inn}).
+        'company_path' => env('ONEC_COMPANY_PATH', '/clients/newClient'),
+        'company_method' => strtoupper((string) env('ONEC_COMPANY_METHOD', 'POST')),
+        'company_field' => env('ONEC_COMPANY_FIELD', 'stir'),
+        'purchases_path' => env('ONEC_PURCHASES_PATH', '/companies/{inn}/purchases'), // empty = not used
+        'items_path' => env('ONEC_ITEMS_PATH', '/crm/item'), // GET: the list of items
+        'companies_path' => env('ONEC_COMPANIES_PATH', '/crm/company'), // GET: the list of companies
+        'timeout' => (int) env('ONEC_TIMEOUT', 15),
+    ],
+
+    // Public company registry, asked when neither our base nor 1C knows the INN. {inn} is replaced in the URL.
+    'registry' => [
+        'url' => env('REGISTRY_URL'), // e.g. https://registry.example.uz/api/company/{inn}
+        'token' => env('REGISTRY_TOKEN'), // sent as a Bearer token when set
+        'timeout' => (int) env('REGISTRY_TIMEOUT', 15),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

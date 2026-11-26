@@ -119,8 +119,13 @@ class AiEmployeeController extends Controller
             $aiEmployee->prompts()->where('status', 'published')->update(['status' => 'archived']);
             $draft->update(['status' => 'published', 'published_at' => now()]);
         });
+        // Shadow first: a live employee with a changed prompt writes drafts until an admin sets it live again.
+        if ($wasLive = $aiEmployee->isLive()) {
+            $aiEmployee->update(['status' => 'shadow']);
+        }
 
-        return back()->with('success', "Version {$draft->version} published.".($aiEmployee->isLive() ? ' Customers get it from the next message.' : ''));
+        return back()->with('success', "Version {$draft->version} published.".($wasLive
+            ? ' The employee is back in Shadow: check a few drafts in AI team → Shadow replies, then set it Live again.' : ''));
     }
 
     /** Copy an older version into the draft (to roll back or start from it). */
@@ -177,6 +182,8 @@ class AiEmployeeController extends Controller
                 $errors[] = 'This role cannot talk to customers yet — it stays a draft.';
             } elseif (! $employee?->publishedPrompt()) {
                 $errors[] = 'Publish a prompt version before switching this employee to Shadow or Live.';
+            } elseif ($data['status'] === 'live' && ! in_array($employee?->status, ['shadow', 'live'], true)) {
+                $errors[] = 'Shadow first: switch it to Shadow, check its drafts in AI team → Shadow replies, then set it Live.';
             } elseif (AiEmployee::where('kind', $data['kind'])->whereIn('status', AiEmployee::ACTIVE)->when($employee, fn ($q) => $q->whereKeyNot($employee->id))->exists()) {
                 $errors[] = 'Another '.mb_strtolower(AiEmployee::KINDS[$data['kind']]).' is in shadow or live already: switch it to Draft first.';
             }

@@ -24,7 +24,9 @@ class SalesAssistantAi
     {
         $content = [['type' => 'text', 'text' => $data]];
         foreach ($images as $image) {
-            $content[] = ['type' => 'image', 'source' => ['type' => 'base64', 'mediaType' => $image['type'], 'data' => $image['data']]];
+            $content[] = $image['type'] === 'application/pdf'
+                ? ['type' => 'document', 'source' => ['type' => 'base64', 'mediaType' => 'application/pdf', 'data' => $image['data']]]
+                : ['type' => 'image', 'source' => ['type' => 'base64', 'mediaType' => $image['type'], 'data' => $image['data']]];
         }
 
         try {

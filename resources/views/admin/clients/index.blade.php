@@ -1,6 +1,6 @@
 @extends('admin.layout')
-@section('title', 'Client portraits')
-@section('heading', 'AI Sales & Support Team — Client portraits')
+@section('title', 'Companies')
+@section('heading', 'Companies')
 
 @php use App\Models\Client; use App\Models\ClientPerson; @endphp
 
@@ -12,7 +12,21 @@
             When a person linked to a Telegram customer writes, the AI team reads the portrait first (who decides, what is installed, what runs out).
             “Do not contact” stops the AI from writing to them first.
         </p>
-        <a href="{{ route('admin.clients.create') }}" class="bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700">Add company</a>
+        <div class="flex flex-wrap items-start gap-2">
+            <form method="POST" action="{{ route('admin.companies.lookup') }}" class="flex gap-2">
+                @csrf
+                <label for="inn-lookup" class="sr-only">INN</label>
+                <input id="inn-lookup" name="inn" inputmode="numeric" maxlength="20" placeholder="INN (9 digits)" value="{{ old('inn') }}" class="w-40 rounded-lg border-slate-300 text-sm">
+                <button class="border border-slate-300 bg-white text-slate-700 text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-50" title="Our base, then 1C, then the public registry">Find by INN</button>
+            </form>
+            <a href="{{ route('admin.clients.create') }}" class="bg-slate-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-slate-700">Add company</a>
+        </div>
+        <div class="w-full flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>1C, read only:</span>
+            <form method="POST" action="{{ route('admin.companies.import') }}">@csrf<button class="border border-slate-300 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50">Load companies from 1C</button></form>
+            <form method="POST" action="{{ route('admin.companies.import-items') }}">@csrf<button class="border border-slate-300 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50">Load items from 1C</button></form>
+            <span>{{ \App\Models\OnecItem::count() }} items from 1C here.</span>
+        </div>
     </div>
 
     <form method="GET" class="flex flex-wrap gap-2" role="search">

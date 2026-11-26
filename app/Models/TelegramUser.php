@@ -49,6 +49,12 @@ class TelegramUser extends Model
      */
     public const TYPES = [self::TYPE_CLIENT => 'Client', self::TYPE_SUPPLIER => 'Supplier', self::TYPE_EMPLOYEE => 'Employee'];
 
+    /** The companies this contact works with (Companies). */
+    public function companyLinks(): HasMany
+    {
+        return $this->hasMany(CompanyLink::class);
+    }
+
     public function aiEmployee(): BelongsTo
     {
         return $this->belongsTo(AiEmployee::class);

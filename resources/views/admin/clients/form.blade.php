@@ -15,6 +15,16 @@
                 <label class="block text-sm"><span class="text-slate-600">{{ $label }}</span>
                     <input name="{{ $field }}" type="text" maxlength="{{ $max }}" @if($required) required @endif value="{{ old($field, $client->$field) }}" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
             @endforeach
+            @foreach (['address' => ['Legal address', 300], 'director' => ['Director', 150]] as $field => [$label, $max])
+                <label class="block text-sm"><span class="text-slate-600">{{ $label }}</span>
+                    <input name="{{ $field }}" type="text" maxlength="{{ $max }}" value="{{ old($field, $client->$field) }}" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
+            @endforeach
+            <label class="block text-sm"><span class="text-slate-600">Price type</span>
+                <select name="price_type" class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                    <option value="">End user (default)</option>
+                    @foreach (['dealer' => 'Dealer', 'partner' => 'Partner'] as $k => $label)<option value="{{ $k }}" @selected(old('price_type', $client->price_type) === $k)>{{ $label }}</option>@endforeach
+                </select>
+                <span class="block text-xs text-slate-400 mt-1">For contacts a manager linked or confirmed. A link the AI made from an INN the customer typed gives nothing until confirmed. With the 1C dealer/partner phones the higher group wins.</span></label>
             <label class="block text-sm"><span class="text-slate-600">Status</span>
                 <select name="status" class="mt-1 w-full rounded-lg border-slate-300 text-sm">
                     @foreach (\App\Models\Client::STATUSES as $k => $label)<option value="{{ $k }}" @selected(old('status', $client->status) === $k)>{{ $label }}</option>@endforeach
