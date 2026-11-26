@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ChatConversation;
+use App\Models\SalesAssistantSetting;
 use App\Models\TelegramUser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -124,6 +125,7 @@ class TelegramUsersPageEdgeCasesTest extends TestCase
             return $n;
         };
 
+        SalesAssistantSetting::current(); // the settings row is created once, on the first page load
         $this->tgUser('1', ['name' => 'A']);
         $this->conversation('1', 'telegram', [['role' => 'user', 'content' => 'x']]);
         $few = $count();
@@ -159,10 +161,10 @@ class TelegramUsersPageEdgeCasesTest extends TestCase
         $admin = $this->admin();
 
         $html = $this->actingAs($admin)->get(route('admin.telegram-users.show', $user))->assertOk()->getContent();
-        $this->assertMatchesRegularExpression('/Telegram\s*<span[^>]*>\/<\/span>\s*Users/', $html);
+        $this->assertMatchesRegularExpression('/Conversations\s*<span[^>]*>\/<\/span>\s*Contacts/', $html);
 
         $html = $this->actingAs($admin)->get(route('admin.telegram.edit'))->assertOk()->getContent();
-        $this->assertMatchesRegularExpression('/Telegram\s*<span[^>]*>\/<\/span>\s*Bot settings/', $html);
+        $this->assertMatchesRegularExpression('/Settings\s*<span[^>]*>\/<\/span>\s*Telegram bot/', $html);
         $this->assertDoesNotMatchRegularExpression('/AI Assistant\s*<span[^>]*>\/<\/span>\s*Telegram bot/', $html);
     }
 

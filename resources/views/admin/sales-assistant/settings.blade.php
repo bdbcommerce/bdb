@@ -138,6 +138,18 @@
             </div>
         </fieldset>
 
+        <fieldset class="border-t border-slate-100 pt-6 space-y-3">
+            <legend class="text-sm font-semibold text-slate-900">Data sent to Claude</legend>
+            <input type="hidden" name="claude_data_section" value="1">
+            <p class="text-xs text-slate-500">Every customer message the AI answers is one request to the Claude API (Anthropic). It always contains the conversation, the prompts, the knowledge, the website data and the catalog prices this customer may see. Untick what should stay on our server. The weekly and daily sales reports always hide phones; experts never see them.</p>
+            @foreach (\App\Models\SalesAssistantSetting::CLAUDE_DATA as $key => [$label, $help])
+                <label class="flex items-start gap-2 text-sm text-slate-700">
+                    <input type="checkbox" name="claude_data[{{ $key }}]" value="1" @checked(old('claude_data_section') ? old('claude_data.'.$key) : $settings->sendsToClaude($key)) class="mt-0.5 rounded border-slate-300">
+                    <span><span class="font-medium">{{ $label }}</span><span class="block text-xs text-slate-400">{{ $help }}</span></span>
+                </label>
+            @endforeach
+        </fieldset>
+
         <div class="flex justify-end">
             <button type="submit" class="bg-slate-900 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-slate-700 transition-colors">Save settings</button>
         </div>

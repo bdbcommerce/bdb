@@ -20,7 +20,7 @@ class DemoContentSeeder extends Seeder
     {
         $this->brands();
         $this->industriesAndCustomers();
-        $this->call([KnowledgeBaseSeeder::class, ArticleSeeder::class]);
+        $this->call([KnowledgeBaseSeeder::class, ArticleSeeder::class, DemoAiTeamSeeder::class]);
     }
 
     private function brands(): void

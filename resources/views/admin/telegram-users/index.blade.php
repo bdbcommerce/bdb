@@ -1,6 +1,6 @@
 @extends('admin.layout')
-@section('title', 'Telegram users')
-@section('heading', 'Telegram users')
+@section('title', 'Contacts')
+@section('heading', 'Contacts')
 
 @section('content')
 @php
@@ -9,7 +9,7 @@
 @endphp
 
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <p class="text-xs text-slate-500">Customers from the bot and the Premium account, created from their Telegram chat info. Open a customer to see and edit their details and every conversation.</p>
+    <p class="text-xs text-slate-500 max-w-2xl">Everyone who writes to the bot or the Premium account. Set who each contact is right here — client, supplier or employee (with their role, and whether they answer the AI’s questions) — and the company they work at. Open a contact for their details and every conversation.</p>
     <nav class="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1" aria-label="Filter users">
         @foreach($filters as $key => $label)
             <a href="{{ route('admin.telegram-users.index', array_filter(['filter' => $key === 'all' ? null : $key, 'q' => $search ?: null])) }}"
@@ -37,9 +37,12 @@
             <p class="text-xs text-slate-400 mt-1">Customers appear here as soon as they write to the bot.</p>
         </div>
     @else
+        @php $field = 'border border-slate-300 rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-slate-400'; @endphp
+        <datalist id="company-list">@foreach($companies as $company)<option value="{{ $company }}">@endforeach</datalist>
         <div class="divide-y divide-slate-100">
             @foreach($users as $user)
-                <a href="{{ route('admin.telegram-users.show', $user) }}" class="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-slate-50">
+                <div class="hover:bg-slate-50">
+                <a href="{{ route('admin.telegram-users.show', $user) }}" class="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 px-4 pt-3 pb-1.5">
                     <span class="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-semibold text-slate-600 uppercase" aria-hidden="true">
                         {{ mb_substr($user->displayName() ?? '?', 0, 1) }}
                     </span>
@@ -66,6 +69,35 @@
                         </span>
                     </div>
                 </a>
+                {{-- Quick assignment: who the contact is and where they work. --}}
+                <form method="POST" action="{{ route('admin.telegram-users.assign', $user) }}" x-data="{ type: @js((string) $user->contact_type), changed: false }" @input="changed = true"
+                      class="flex flex-wrap items-center gap-2 pl-[4.25rem] pr-4 pb-3" aria-label="Assign {{ $user->displayName() ?? 'contact' }}">
+                    @csrf @method('PUT')
+                    <label class="sr-only" for="type-{{ $user->id }}">Type</label>
+                    <select id="type-{{ $user->id }}" name="contact_type" x-model="type" class="{{ $field }} {{ $user->contact_type ? '' : 'border-slate-900' }}">
+                        <option value="">Not assigned</option>
+                        @foreach(\App\Models\TelegramUser::TYPES as $value => $label)
+                            <option value="{{ $value }}" @selected($user->contact_type === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <span x-show="type === 'employee'" x-cloak class="contents">
+                        <label class="sr-only" for="role-{{ $user->id }}">Role</label>
+                        <select id="role-{{ $user->id }}" name="employee_role" class="{{ $field }}">
+                            <option value="">Role…</option>
+                            @foreach($roles as $role)
+                                <option value="{{ $role }}" @selected($user->employee_role === $role)>{{ $role }}</option>
+                            @endforeach
+                        </select>
+                        <label class="flex items-center gap-1 text-xs text-slate-600">
+                            <input type="checkbox" name="answers_questions" value="1" class="rounded border-slate-300" @checked($user->answers_questions)> Answers AI questions
+                        </label>
+                        @if($user->is_main_admin)<span class="text-[11px] font-medium rounded-full px-2 py-0.5 bg-slate-900 text-white">Main admin</span>@endif
+                    </span>
+                    <label class="sr-only" for="company-{{ $user->id }}">Company</label>
+                    <input id="company-{{ $user->id }}" name="company" value="{{ $user->company }}" maxlength="120" list="company-list" placeholder="Company" class="{{ $field }} w-44">
+                    <button type="submit" x-show="changed" x-cloak class="text-xs font-medium rounded-md px-3 py-1 bg-slate-900 text-white hover:bg-slate-700">Save</button>
+                </form>
+                </div>
             @endforeach
         </div>
     @endif

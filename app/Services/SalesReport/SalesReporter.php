@@ -346,16 +346,37 @@ class SalesReporter
      */
     public function maskPhones(string $text): string
     {
+        return (string) preg_replace(self::phonePatterns(), '[phone]', $text);
+    }
+
+    /** @return list<string> the phone numbers written in a text, as written (normalise with TelegramUser::normalizePhone) */
+    public static function phonesIn(string $text): array
+    {
+        $found = [];
+        foreach (self::phonePatterns() as $pattern) {
+            preg_match_all($pattern, $text, $m, PREG_OFFSET_CAPTURE);
+            foreach ($m[0] as [$phone, $at]) {
+                $found[$at] = $phone;
+            }
+        }
+        ksort($found);
+
+        return array_values($found);
+    }
+
+    /** @return list<string> Uzbek (+998 / 9 digits in the usual groupings) and Russian (+7) numbers */
+    private static function phonePatterns(): array
+    {
         $sep = '[\s\-.()]*';
         $end = '(?![\s\-.]?\d)';
 
-        return (string) preg_replace([
+        return [
             "/(?<![\\d+])\\+?998{$sep}(?:\\d{$sep}){8}\\d{$end}/u",
             "/(?<![\\d+])\\(?[2-9]\\d\\)?[\\s\\-.]+\\d{3}[\\s\\-.]+\\d{2}[\\s\\-.]+\\d{2}{$end}/u",
             "/(?<![\\d+])[2-9]\\d{2}[\\s\\-.]+\\d{2}[\\s\\-.]+\\d{2}[\\s\\-.]+\\d{2}{$end}/u",
             "/(?<![\\d+])\\(?[2-9]\\d\\)?[\\s\\-.]+\\d{2}[\\s\\-.]+\\d{3}[\\s\\-.]+\\d{2}{$end}/u",
             "/(?<![\\d+])\\+7{$sep}(?:\\d{$sep}){9}\\d{$end}/u",
-        ], '[phone]', $text);
+        ];
     }
 
     public function systemPrompt(SalesReportSetting $settings, string $period = 'week'): string

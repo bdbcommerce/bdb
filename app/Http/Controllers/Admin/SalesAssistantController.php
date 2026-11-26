@@ -43,12 +43,18 @@ class SalesAssistantController extends Controller
             'expert_escalate_minutes' => ['sometimes', 'required', 'integer', 'min:10', 'max:960', 'gt:expert_remind_minutes'],
             'model' => ['required', Rule::in(array_keys(SalesAssistantSetting::MODELS))],
             'employee_ids' => ['nullable', 'string', 'max:3000'],
+            'claude_data' => ['sometimes', 'array'],
+            'claude_data.*' => ['boolean'],
         ], [
             'work_days.required' => 'Pick at least one working day.',
             'work_end.after' => 'The end of the working day must be after its start.',
             'close_after_hours.gt' => 'Close incomplete requests later than the reminder.',
             'expert_escalate_minutes.gt' => 'Pass to the main admin later than the reminder.',
         ]);
+        if ($request->has('claude_data_section')) { // unticked boxes send nothing: every key is stored, off = false
+            $data['claude_data'] = collect(SalesAssistantSetting::CLAUDE_DATA)->keys()
+                ->mapWithKeys(fn (string $key) => [$key => (bool) (((array) ($data['claude_data'] ?? []))[$key] ?? false)])->all();
+        }
         if ($request->has('greeting_section')) { // unticking every chat sends no array at all
             $data['greeting_channels'] = array_values(array_unique((array) ($data['greeting_channels'] ?? [])));
         }

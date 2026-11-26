@@ -34,7 +34,18 @@ class SalesAssistantSetting extends Model
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
         'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
         'off_hours_mode', 'require_assignment', 'greeting_prompt', 'greeting_channels', 'employee_roles',
-        'expert_remind_minutes', 'expert_escalate_minutes',
+        'expert_remind_minutes', 'expert_escalate_minutes', 'claude_data',
+    ];
+
+    /**
+     * Customer data a sales assistant turn may send to Claude (Settings → Data sent to Claude); all on by default.
+     * Off = left out of the request; the AI is told what it cannot see.
+     */
+    public const CLAUDE_DATA = [
+        'phone' => ['Phone numbers', 'Off: the customer card says only whether a phone is known, and phones in messages are sent as [phone]. A phone the customer types is still saved for the request by Laravel itself.'],
+        'username' => ['Telegram @username', 'Off: only the Telegram display name is sent.'],
+        'photos' => ['Photos the customer sends', 'Off: the AI sees only "[photo]" and asks the customer to describe it, or leaves it to a manager.'],
+        'portrait' => ['Client portrait', 'Off: the portrait (position, company, part in decisions, style) is not sent. Do not contact still applies.'],
     ];
 
     /** Employee roles offered on the Telegram user page (editable in Settings, one per line). */
@@ -45,7 +56,13 @@ class SalesAssistantSetting extends Model
 
     protected function casts(): array
     {
-        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer'];
+        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array'];
+    }
+
+    /** May a sales assistant turn send this kind of customer data to Claude (CLAUDE_DATA key)? */
+    public function sendsToClaude(string $key): bool
+    {
+        return (bool) (((array) ($this->claude_data ?? []))[$key] ?? true);
     }
 
     public static function current(): self

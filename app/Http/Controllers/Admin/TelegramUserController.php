@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AiEmployee;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
+use App\Models\Client;
 use App\Models\ExpertQuestion;
 use App\Models\SalesAssistantSetting;
 use App\Models\TelegramBusinessConnection;
@@ -67,6 +68,10 @@ class TelegramUserController extends Controller
             'filter' => $filter,
             'filters' => self::FILTERS,
             'search' => $search,
+            // Quick assignment on the list: employee roles and the companies of client portraits (suggestions).
+            'roles' => SalesAssistantSetting::current()->employeeRoles(),
+            'companies' => Client::orderBy('name')->limit(500)->pluck('name')
+                ->merge(TelegramUser::whereNotNull('company')->distinct()->limit(500)->pluck('company'))->unique()->sort()->values(),
             'counts' => [
                 'all' => TelegramUser::count(),
                 'registered' => TelegramUser::registered()->count(),
@@ -179,18 +184,60 @@ class TelegramUserController extends Controller
         }
 
         $telegramUser->update($data);
+        $this->afterAssignment($telegramUser);
+
+        return redirect()->route('admin.telegram-users.show', $telegramUser)->with('success', $data['ask_registration']
+            ? 'Saved. The bot will ask for this customer\'s details the next time they write (bot chat or Premium-account chat).'
+            : 'Saved.');
+    }
+
+    /** Contacts list: set who a contact is (type, employee role, answers the AI's questions) without opening their page. */
+    public function assign(Request $request, TelegramUser $telegramUser)
+    {
+        $data = $request->validate([
+            'contact_type' => ['nullable', Rule::in(array_keys(TelegramUser::TYPES))],
+            'employee_role' => ['nullable', 'string', 'max:60', Rule::in(SalesAssistantSetting::current()->employeeRoles())],
+            'answers_questions' => ['sometimes', 'boolean'],
+            'company' => ['sometimes', 'nullable', 'string', 'max:120'],
+        ], ['employee_role.in' => 'Pick a role from the list (Sales assistant → Settings → Employee roles).']);
+
+        $type = $data['contact_type'] ?? null;
+        $employee = $type === TelegramUser::TYPE_EMPLOYEE;
+        $changes = [
+            'contact_type' => $type,
+            'is_employee' => $employee,
+            'employee_role' => $employee ? ($data['employee_role'] ?? null) : null,
+            'answers_questions' => $employee && $request->boolean('answers_questions'),
+        ];
+        if (array_key_exists('company', $data)) {
+            $changes['company'] = filled($data['company']) ? trim($data['company']) : null;
+        }
+        if (! $employee) {
+            $changes['is_main_admin'] = false; // the main admin is set on the contact's page
+        }
+        if ($type !== TelegramUser::TYPE_CLIENT) {
+            $changes['ai_employee_id'] = null;
+        }
+        if ($type !== $telegramUser->contact_type) {
+            $changes['assigned_at'] = $type ? now() : null;
+        }
+        $telegramUser->update($changes);
+        $this->afterAssignment($telegramUser);
+
+        return back()->with('success', ($telegramUser->displayName() ?? 'Contact').': '.($type ? TelegramUser::TYPES[$type] : 'not assigned').
+            ($employee && $telegramUser->answers_questions && ! $telegramUser->bot_chat_at ? ' — ask them to press /start in the bot, or the AI cannot send them questions.' : '.'));
+    }
+
+    /** One main admin; an expert who is no longer one gives their open question back to the queue. */
+    private function afterAssignment(TelegramUser $telegramUser): void
+    {
         if ($telegramUser->is_main_admin) {
             TelegramUser::where('is_main_admin', true)->whereKeyNot($telegramUser->id)->update(['is_main_admin' => false]);
         }
-        // No longer an expert (also a main admin replaced just now): their open questions go back to the queue.
         foreach (ExpertQuestion::where('status', 'asked')->with('expert')->get() as $held) {
             if (! $held->expert?->isExpert()) {
                 $held->update(['status' => 'queued', 'expert_id' => null, 'pending' => null, 'asked_at' => null]);
             }
         }
-
-        return redirect()->route('admin.telegram-users.show', $telegramUser)->with('success', $data['ask_registration']
-            ? 'Saved. The bot will ask for this customer\'s details the next time they write (bot chat or Premium-account chat).'
-            : 'Saved.');
     }
 }
