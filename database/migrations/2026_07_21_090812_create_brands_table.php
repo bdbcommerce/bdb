@@ -16,6 +16,8 @@ return new class extends Migration
             $table->json('name');
             $table->string('logo')->nullable();
             $table->string('website')->nullable();
+            // Link to the online shop already filtered by this brand (e.g. a mylabel.uz catalog filter).
+            $table->string('shop_url', 500)->nullable();
             $table->json('description')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(true);

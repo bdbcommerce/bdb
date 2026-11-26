@@ -118,9 +118,10 @@ class AiTestCaseQaTest extends TestCase
 
     public function test_migration_seed_does_not_make_cases_global_when_an_employee_name_is_missing(): void
     {
-        DB::table('ai_test_cases')->delete();
         DB::table('ai_employees')->where('name', 'Malika')->update(['name' => 'Madina']);
-        (require database_path('migrations/2026_11_23_130000_create_ai_test_tables.php'))->up();
+        $migration = require database_path('migrations/2026_11_23_130000_create_ai_test_tables.php');
+        $migration->down();
+        $migration->up();
 
         $this->assertSame(1, AiTestCase::whereNull('ai_employee_id')->count(),
             "Malika's 3 starter cases were seeded as 'Every employee' because her name was not found");

@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         // Test cases: a scripted customer (one message per turn) and a checklist the answers are graded on.
-        Schema::hasTable('ai_test_cases') || Schema::create('ai_test_cases', function (Blueprint $table) {
+        Schema::create('ai_test_cases', function (Blueprint $table) {
             $table->id();
             $table->string('name', 150);
             $table->foreignId('ai_employee_id')->nullable()->constrained()->nullOnDelete(); // null = every employee
@@ -22,7 +22,7 @@ return new class extends Migration
             $table->timestamps();
         });
         // One run of a case against one prompt version (the prompt text's hash: an edited draft needs a new run).
-        Schema::hasTable('ai_test_runs') || Schema::create('ai_test_runs', function (Blueprint $table) {
+        Schema::create('ai_test_runs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('ai_test_case_id')->constrained()->cascadeOnDelete();
             $table->foreignId('ai_employee_id')->constrained()->cascadeOnDelete();

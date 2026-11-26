@@ -12,7 +12,6 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Input\ArgvInput;
 use Tests\TestCase;
@@ -233,16 +232,5 @@ class SalesReportDailyTest extends TestCase
         // Throws "The "--daily" option does not accept a value." when the event passes --daily=1.
         $input = new ArgvInput(['artisan', ...$args], $command->getDefinition());
         $this->assertTrue($input->getOption('daily'), 'scheduled command line: '.$event->command);
-    }
-
-    public function test_migration_down_and_up_on_sqlite(): void
-    {
-        $migration = require database_path('migrations/2026_11_22_110000_add_daily_sales_report.php');
-        $migration->down();
-        $this->assertFalse(Schema::hasColumn('sales_reports', 'period'));
-        $this->assertFalse(Schema::hasColumn('sales_report_settings', 'daily_enabled'));
-        $migration->up();
-        $this->assertTrue(Schema::hasColumn('sales_reports', 'period'));
-        $this->assertTrue(Schema::hasColumn('sales_report_settings', 'daily_enabled'));
     }
 }

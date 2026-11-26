@@ -16,6 +16,7 @@ return new class extends Migration
             $table->json('name');
             $table->json('description')->nullable();
             $table->string('icon')->nullable();
+            $table->unsignedInteger('extra_customers')->default(0); // unlisted customers, added to the public count
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();

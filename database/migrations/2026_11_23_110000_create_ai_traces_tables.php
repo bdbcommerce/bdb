@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         // The path of one AI turn, step by step (customer → Laravel → Claude API → Laravel → Telegram), with what was sent.
-        Schema::hasTable('ai_traces') || Schema::create('ai_traces', function (Blueprint $table) {
+        Schema::create('ai_traces', function (Blueprint $table) {
             $table->id();
             $table->string('source', 10)->default('live'); // live | sandbox
             $table->foreignId('chat_conversation_id')->nullable()->constrained()->nullOnDelete();
@@ -28,7 +28,7 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['source', 'created_at']);
         });
-        Schema::hasTable('ai_sandbox_chats') || Schema::create('ai_sandbox_chats', function (Blueprint $table) {
+        Schema::create('ai_sandbox_chats', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('ai_employee_id')->nullable()->constrained()->nullOnDelete();
@@ -38,18 +38,11 @@ return new class extends Migration
             $table->json('state')->nullable();
             $table->timestamps();
         });
-        // Dev mode: record the trace of every real customer message (kept AiTrace::KEEP_DAYS).
-        Schema::hasColumn('sales_assistant_settings', 'dev_mode') || Schema::table('sales_assistant_settings', function (Blueprint $table) {
-            $table->boolean('dev_mode')->default(false);
-        });
     }
 
     public function down(): void
     {
         Schema::dropIfExists('ai_traces');
         Schema::dropIfExists('ai_sandbox_chats');
-        if (Schema::hasColumn('sales_assistant_settings', 'dev_mode')) {
-            Schema::table('sales_assistant_settings', fn (Blueprint $table) => $table->dropColumn('dev_mode'));
-        }
     }
 };

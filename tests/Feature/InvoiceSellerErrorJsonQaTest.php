@@ -11,10 +11,8 @@ use App\Services\Telegram\TelegramBot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /** QA: Sellers list, error JSON to the JSON recipient, settings changes between attempts. */
@@ -231,16 +229,6 @@ class InvoiceSellerErrorJsonQaTest extends TestCase
 
         $this->assertSame('failed', $invoice->fresh()->status);
         $this->assertCount(1, array_filter($this->sent, fn ($s) => $s['chat'] === self::USER), 'no error JSON when the last attempt crashed');
-    }
-
-    public function test_seller_inns_migration_down_and_up(): void
-    {
-        $path = 'database/migrations/2026_11_17_300000_add_seller_inns_to_invoice_parser.php';
-        $this->assertTrue(Schema::hasColumn('invoice_parser_settings', 'seller_inns'));
-        Artisan::call('migrate:rollback', ['--path' => $path, '--force' => true]);
-        $this->assertFalse(Schema::hasColumn('invoice_parser_settings', 'seller_inns'));
-        Artisan::call('migrate', ['--path' => $path, '--force' => true]);
-        $this->assertTrue(Schema::hasColumn('invoice_parser_settings', 'seller_inns'));
     }
 
     public function test_settings_page_access_old_input_and_long_list(): void

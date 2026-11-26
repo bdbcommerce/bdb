@@ -7,7 +7,6 @@ use App\Models\TelegramUser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -114,19 +113,5 @@ class TelegramVerifiedPhoneTest extends TestCase
 
         $this->send(['text' => '📞 Заказать звонок']);
         $this->assertSame('+998903334455', ChatLead::sole()->phone);
-    }
-
-    public function test_the_migration_trusts_earlier_bot_registrations_only(): void
-    {
-        $bot = TelegramUser::create(['telegram_id' => '1', 'source' => 'bot', 'phone' => '+998901', 'registered_at' => now()->subMonth(), 'step' => TelegramUser::STEP_DONE]);
-        $business = TelegramUser::create(['telegram_id' => '2', 'source' => 'business', 'phone' => '+998902', 'registered_at' => now(), 'step' => TelegramUser::STEP_DONE]);
-        DB::table('telegram_users')->update(['phone_verified_at' => null]);
-
-        $migration = require database_path('migrations/2026_11_16_000000_add_phone_verified_at_to_telegram_users_table.php');
-        $migration->down();
-        $migration->up();
-
-        $this->assertTrue($bot->fresh()->hasVerifiedPhone());
-        $this->assertFalse($business->fresh()->hasVerifiedPhone());
     }
 }

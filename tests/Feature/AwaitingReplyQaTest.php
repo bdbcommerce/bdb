@@ -236,39 +236,6 @@ class AwaitingReplyQaTest extends TestCase
             ->assertSee('Ассалому алайкум');
     }
 
-    public function test_backfill_migration_on_existing_rows(): void
-    {
-        $migration = require database_path('migrations/2026_11_07_000006_add_awaiting_reply_to_chat_conversations_table.php');
-        $migration->down();
-
-        $row = fn (string $channel, array $messages, ?string $ext = '1', ?string $conn = null) => DB::table('chat_conversations')->insertGetId([
-            'uuid' => (string) Str::uuid(), 'channel' => $channel, 'locale' => 'ru', 'external_id' => $ext, 'business_connection_id' => $conn,
-            'messages' => json_encode($messages), 'message_count' => count($messages), 'unanswered_count' => 0,
-            'created_at' => '2026-11-01 10:00:00', 'updated_at' => '2026-11-01 10:00:00',
-        ]);
-        $waiting = $row('business', [['role' => 'owner', 'content' => 'Hi'], ['role' => 'user', 'content' => 'Price?', 'at' => '2026-11-01T09:30:00+00:00']], '1', 'conn-1');
-        $answered = $row('business', [['role' => 'user', 'content' => 'Price?'], ['role' => 'owner', 'content' => '10$']], '2', 'conn-1');
-        $botAside = $row('telegram', [['role' => 'user', 'content' => '/start', 'aside' => true]], '3');
-        $noAt = $row('telegram', [['role' => 'user', 'content' => 'Q'], ['role' => 'assistant', 'content' => 'A'], ['role' => 'user', 'type' => 'photo', 'file_id' => 'x']], '4');
-        $web = $row('web', [['role' => 'user', 'content' => 'Q']], null);
-        $empty = $row('telegram', [], '5');
-
-        $migration->up();
-
-        $get = fn (int $id) => DB::table('chat_conversations')->find($id);
-        $this->assertEquals(1, $get($waiting)->awaiting_reply);
-        $this->assertStringStartsWith('2026-11-01 09:30:00', $get($waiting)->last_message_at);
-        $this->assertSame('2026-11-01 10:00:00', $get($waiting)->updated_at, 'updated_at untouched');
-        $this->assertEquals(0, $get($answered)->awaiting_reply);
-        $this->assertEquals(0, $get($botAside)->awaiting_reply);
-        $this->assertEquals(1, $get($noAt)->awaiting_reply);
-        $this->assertNotNull($get($noAt)->last_message_at);
-        $this->assertEquals(0, $get($web)->awaiting_reply);
-        $this->assertEquals(0, $get($empty)->awaiting_reply);
-        $this->assertNull($get($empty)->last_message_at);
-        $this->assertSame(2, ChatConversation::awaitingReply()->count());
-    }
-
     public function test_layout_badge_uses_a_constant_number_of_queries(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

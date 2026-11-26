@@ -15,6 +15,9 @@ return new class extends Migration
             $table->string('neutral', 20)->default('gray'); // grey family for text, borders, backgrounds
             $table->boolean('is_locked')->default(false);   // the built-in default: cannot be edited or deleted
             $table->boolean('is_active')->default(false);   // exactly one theme is shown on the site
+            // Optional per-component colours (header, nav, buttons, links, footer): key => #rrggbb.
+            // Missing keys follow the accent / neutral automatically.
+            $table->json('components')->nullable();
             $table->timestamps();
         });
     }

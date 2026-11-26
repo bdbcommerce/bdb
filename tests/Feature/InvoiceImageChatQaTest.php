@@ -10,10 +10,8 @@ use App\Services\Invoices\InvoiceParser;
 use App\Services\Telegram\TelegramApi;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /** QA: rotation direction, multipart JSON encoding, drain termination, JSON output, migration up/down. */
@@ -189,17 +187,5 @@ class InvoiceImageChatQaTest extends TestCase
         $this->assertStringNotContainsString('<a ', $sent[1]['text']);
         $this->assertStringContainsString('STIR: 0', $sent[1]['text'], '"0" is a value, not empty');
         $this->assertStringContainsString('Jami: 0 soʻm', $sent[1]['text']);
-    }
-
-    public function test_migrations_leave_image_message_id_and_drop_image_chat(): void
-    {
-        $this->assertFalse(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
-        $this->assertTrue(Schema::hasColumn('invoice_messages', 'image_message_id'));
-
-        $drop = 'database/migrations/2026_11_17_200000_drop_image_chat_from_invoice_parser.php';
-        Artisan::call('migrate:rollback', ['--path' => $drop, '--force' => true]);
-        $this->assertTrue(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
-        Artisan::call('migrate', ['--path' => $drop, '--force' => true]);
-        $this->assertFalse(Schema::hasColumn('invoice_parser_settings', 'image_chat_id'));
     }
 }

@@ -18,16 +18,25 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->string('channel', 16)->default('web');
             $table->string('external_id')->nullable();
+            $table->string('business_connection_id')->nullable();
             $table->string('locale', 2);
             $table->string('page')->nullable();
+            $table->string('title')->nullable(); // group chat title
             $table->json('messages');
             $table->unsignedSmallInteger('message_count')->default(0);
             $table->unsignedSmallInteger('unanswered_count')->default(0);
+            // Waiting for reply: the customer wrote last (ChatConversation::replyState); Mark answered = handled_count.
+            $table->boolean('awaiting_reply')->default(false);
+            $table->timestamp('last_message_at')->nullable();
+            $table->unsignedInteger('handled_count')->default(0);
+            // The sales assistant's state: stage, collected details, lead, unanswered questions.
+            $table->json('sales_state')->nullable();
             $table->foreignId('chat_lead_id')->nullable()->constrained()->nullOnDelete();
             $table->timestamps();
 
             $table->index('updated_at');
             $table->index(['channel', 'external_id']);
+            $table->index(['awaiting_reply', 'last_message_at']);
         });
     }
 

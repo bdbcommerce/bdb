@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         // Client portraits: a company and the people we talk to there (the AI team reads them before answering).
-        Schema::hasTable('clients') || Schema::create('clients', function (Blueprint $table) {
+        Schema::create('clients', function (Blueprint $table) {
             $table->id();
             $table->string('name', 150);
             $table->string('inn', 20)->nullable()->index();
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
         });
-        Schema::hasTable('client_people') || Schema::create('client_people', function (Blueprint $table) {
+        Schema::create('client_people', function (Blueprint $table) {
             $table->id();
             $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('telegram_user_id')->nullable()->constrained()->nullOnDelete();

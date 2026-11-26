@@ -12,15 +12,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('telegram_users', function (Blueprint $table) {
-            $table->boolean('answers_questions')->default(false)->after('employee_role');
-            $table->boolean('is_main_admin')->default(false)->after('answers_questions');
-            $table->timestamp('bot_chat_at')->nullable()->after('is_main_admin');
-        });
-        Schema::table('sales_assistant_settings', function (Blueprint $table) {
-            $table->unsignedSmallInteger('expert_remind_minutes')->nullable();
-            $table->unsignedSmallInteger('expert_escalate_minutes')->nullable();
-        });
         Schema::create('expert_questions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('chat_conversation_id')->nullable()->constrained()->nullOnDelete();
@@ -60,11 +51,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('expert_questions');
-        Schema::table('sales_assistant_settings', function (Blueprint $table) {
-            $table->dropColumn(['expert_remind_minutes', 'expert_escalate_minutes']);
-        });
-        Schema::table('telegram_users', function (Blueprint $table) {
-            $table->dropColumn(['answers_questions', 'is_main_admin', 'bot_chat_at']);
-        });
     }
 };

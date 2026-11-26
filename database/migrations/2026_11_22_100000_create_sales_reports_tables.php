@@ -8,24 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Admin → Telegram → Sales report (singleton). Guarded: on MySQL an earlier failed run may have left this table.
-        if (! Schema::hasTable('sales_report_settings')) {
-            Schema::create('sales_report_settings', function (Blueprint $table) {
-                $table->id();
-                $table->boolean('enabled')->default(true);
-                $table->string('language', 2)->default('uz');
-                $table->json('channels')->nullable(); // ChatConversation channels to analyse; null = telegram + business
-                $table->text('instructions')->nullable(); // extra notes for Claude
-                $table->timestamps();
-            });
-        }
+        // Admin → Reports → Sales report (singleton).
+        Schema::create('sales_report_settings', function (Blueprint $table) {
+            $table->id();
+            $table->boolean('enabled')->default(true); // weekly, to the invoice parser's source group
+            $table->boolean('daily_enabled')->default(true); // daily 18:00 Tashkent, to the invoice parser's JSON recipient
+            $table->string('language', 2)->default('uz');
+            $table->json('channels')->nullable(); // ChatConversation channels to analyse; null = telegram + business
+            $table->text('instructions')->nullable(); // extra notes for Claude
+            $table->timestamps();
+        });
 
-        // One weekly report (sent to the invoice parser's source group).
-        if (Schema::hasTable('sales_reports')) {
-            return;
-        }
+        // One report: weekly (the source group) or daily (the JSON recipient).
         Schema::create('sales_reports', function (Blueprint $table) {
             $table->id();
+            $table->string('period', 4)->default('week'); // week | day
             $table->dateTime('period_start'); // dateTime: MySQL refuses a second NOT NULL timestamp without a default
             $table->dateTime('period_end');
             $table->string('trigger', 10); // schedule | manual

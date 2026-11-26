@@ -10,7 +10,7 @@ return new class extends Migration
     {
         // Shadow mode: an AI employee's reply waits for a manager (send as is / edit and send / discard); the
         // decisions are kept to train the employee and to know when it can go live.
-        Schema::hasTable('ai_shadow_drafts') || Schema::create('ai_shadow_drafts', function (Blueprint $table) {
+        Schema::create('ai_shadow_drafts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('chat_conversation_id')->constrained()->cascadeOnDelete();
             $table->foreignId('ai_employee_id')->nullable()->constrained()->nullOnDelete();

@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
             $table->string('telegram')->nullable();
+            $table->string('telegram_bot', 64)->nullable();
             $table->string('instagram')->nullable();
             $table->string('facebook')->nullable();
             $table->string('youtube')->nullable();
@@ -26,6 +27,8 @@ return new class extends Migration
             $table->text('map_embed')->nullable();
             $table->text('google_analytics')->nullable();
             $table->text('yandex_metrika')->nullable();
+            // Online shop (catalogue) linked from the site; empty hides the shop block and links.
+            $table->string('shop_url', 255)->nullable()->default('https://mylabel.uz');
             $table->timestamps();
         });
     }

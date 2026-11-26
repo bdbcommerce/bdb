@@ -10,9 +10,7 @@ use App\Services\Invoices\ClaudeInvoiceReader;
 use App\Services\Invoices\ClaudePricing;
 use App\Services\Telegram\TelegramBot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /** Invoice parser: the cost of every Claude read, shown per photo and per period; the daily limit is optional. */
@@ -170,18 +168,5 @@ class InvoiceCostTest extends TestCase
         $this->photo(1);
         $this->assertSame(0, $this->reads);
         $this->assertStringContainsString('Daily limit of 2', InvoiceMessage::sole()->error);
-    }
-
-    public function test_migration_rolls_back_with_no_limit_set_and_runs_again(): void
-    {
-        InvoiceParserSetting::current()->update(['daily_limit' => null]);
-        $this->artisan('migrate:rollback', ['--path' => 'database/migrations/2026_11_16_200000_add_costs_to_invoice_messages.php'])->assertSuccessful();
-        $this->assertSame(100, (int) DB::table('invoice_parser_settings')->value('daily_limit'));
-        $this->assertFalse(Schema::hasTable('invoice_reads'));
-        $this->assertFalse(Schema::hasColumn('invoice_messages', 'cost_usd'));
-
-        $this->artisan('migrate', ['--path' => 'database/migrations/2026_11_16_200000_add_costs_to_invoice_messages.php'])->assertSuccessful();
-        $this->assertNull(DB::table('invoice_parser_settings')->value('daily_limit'));
-        $this->assertTrue(Schema::hasTable('invoice_reads'));
     }
 }

@@ -146,12 +146,12 @@ class SalesAssistantAdminQaTest extends TestCase
     {
         $admin = $this->admin();
         $entry = SalesKnowledge::first();
-        foreach ([route('admin.sales-assistant.edit') => 'Settings', route('admin.sales-assistant.prompt') => 'Prompt',
-            route('admin.sales-knowledge.index') => 'Knowledge', route('admin.sales-knowledge.create') => 'Knowledge', route('admin.sales-knowledge.edit', $entry) => 'Knowledge'] as $url => $label) {
+        foreach ([route('admin.sales-assistant.prompt') => 'Sales playbook',
+            route('admin.sales-knowledge.index') => 'Sales knowledge', route('admin.sales-knowledge.create') => 'Sales knowledge', route('admin.sales-knowledge.edit', $entry) => 'Sales knowledge'] as $url => $label) {
             $html = $this->actingAs($admin)->get($url)->assertOk()->getContent();
-            $this->assertDoesNotMatchRegularExpression('/<ul id="nav-group-sales-assistant"[^>]*x-cloak/', $html, $url);
-            $this->assertMatchesRegularExpression('/<ul id="nav-group-telegram"[^>]*x-cloak/', $html, $url);
-            $this->assertMatchesRegularExpression('/AI Sales &amp; Support Team\s*<span[^>]*>\/<\/span>\s*'.$label.'/', $html, $url);
+            $this->assertDoesNotMatchRegularExpression('/<ul id="nav-group-ai-team"[^>]*x-cloak/', $html, $url);
+            $this->assertMatchesRegularExpression('/<ul id="nav-group-settings"[^>]*x-cloak/', $html, $url);
+            $this->assertMatchesRegularExpression('/AI team\s*<span[^>]*>\/<\/span>\s*'.$label.'/', $html, $url);
         }
     }
 
@@ -175,11 +175,11 @@ class SalesAssistantAdminQaTest extends TestCase
         $migration->down();
         $this->assertFalse(Schema::hasTable('sales_knowledge'));
         $this->assertFalse(Schema::hasTable('sales_assistant_settings'));
-        $this->assertFalse(Schema::hasColumn('telegram_users', 'is_employee'));
-        $this->assertTrue(Schema::hasTable('telegram_users'));
+        $this->assertFalse(Schema::hasColumn('client_requests', 'sales_knowledge_id'));
+        $this->assertTrue(Schema::hasTable('client_requests'));
 
         $migration->up();
-        $this->assertTrue(Schema::hasColumn('telegram_users', 'is_employee'));
+        $this->assertTrue(Schema::hasColumn('client_requests', 'sales_knowledge_id'));
         $this->assertSame(array_sum(array_map('count', SalesKnowledge::DEFAULTS)), SalesKnowledge::count());
     }
 }

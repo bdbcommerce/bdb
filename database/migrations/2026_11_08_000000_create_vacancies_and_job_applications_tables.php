@@ -33,7 +33,11 @@ return new class extends Migration
             $table->string('phone', 40);
             $table->string('email', 190)->nullable();
             $table->text('message')->nullable();
-            $table->string('cv_path');
+            $table->string('cv_path')->nullable(); // local file until it reaches Telegram, then null
+            $table->string('cv_file_id')->nullable();
+            // The chat message holding the CV, so deleting/pruning the application removes it there too.
+            $table->string('cv_chat_id', 64)->nullable();
+            $table->unsignedBigInteger('cv_message_id')->nullable();
             $table->string('cv_name');
             $table->unsignedInteger('cv_size')->default(0);
             $table->string('locale', 5)->default('uz');

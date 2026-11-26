@@ -26,7 +26,9 @@ return new class extends Migration
             $table->string('status', 16)->default('open');
             $table->string('topic', 120)->nullable();
             $table->string('category', 32)->nullable();
+            $table->string('knowledge_kind', 16)->nullable();
             $table->foreignId('knowledge_entry_id')->nullable()->constrained()->nullOnDelete();
+            // sales_knowledge_id is added with the sales_knowledge table (2026_11_22_120000).
             $table->timestamp('resolved_at')->nullable();
             $table->timestamp('notified_at')->nullable();
             $table->timestamps();

@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         // AI employees: a name, a role and a temperament per card; their role prompts are versioned.
-        Schema::hasTable('ai_employees') || Schema::create('ai_employees', function (Blueprint $table) {
+        Schema::create('ai_employees', function (Blueprint $table) {
             $table->id();
             $table->string('name', 40);
             $table->string('role', 80);
@@ -28,7 +28,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('sort')->default(0);
             $table->timestamps();
         });
-        Schema::hasTable('ai_employee_prompts') || Schema::create('ai_employee_prompts', function (Blueprint $table) {
+        Schema::create('ai_employee_prompts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('ai_employee_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('version');
@@ -40,15 +40,12 @@ return new class extends Migration
             $table->timestamps();
             $table->unique(['ai_employee_id', 'version']);
         });
-        // The platform rules (first prompt layer for every AI employee); null = AiEmployeeTemplates::PLATFORM_RULES.
-        Schema::hasColumn('sales_assistant_settings', 'platform_rules') || Schema::table('sales_assistant_settings', function (Blueprint $table) {
-            $table->text('platform_rules')->nullable();
+        // The AI agent chosen for a contact (null = by role).
+        Schema::table('telegram_users', function (Blueprint $table) {
+            $table->foreignId('ai_employee_id')->nullable()->constrained()->nullOnDelete();
         });
 
         // The first three AI employees, each with a published role prompt (v1).
-        if (DB::table('ai_employees')->exists()) {
-            return;
-        }
         $templates = AiEmployeeTemplates::all();
         DB::transaction(fn () => $this->seed($templates));
     }
@@ -72,10 +69,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::table('telegram_users', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('ai_employee_id');
+        });
         Schema::dropIfExists('ai_employee_prompts');
         Schema::dropIfExists('ai_employees');
-        if (Schema::hasColumn('sales_assistant_settings', 'platform_rules')) {
-            Schema::table('sales_assistant_settings', fn (Blueprint $table) => $table->dropColumn('platform_rules'));
-        }
     }
 };

@@ -46,14 +46,10 @@ class AiEmployeeQaTest extends TestCase
 
     // --- migration -------------------------------------------------------------------------------
 
-    public function test_migration_is_idempotent_and_reversible(): void
+    public function test_migration_is_reversible(): void
     {
         $this->assertSame(3, AiEmployee::count());
         $this->assertSame(3, AiEmployeePrompt::where('status', 'published')->count());
-
-        $this->migration()->up(); // re-run: guards, no second seed
-        $this->assertSame(3, AiEmployee::count());
-        $this->assertSame(3, AiEmployeePrompt::count());
 
         // Later migrations reference these tables: they go first.
         $later = fn (string $name) => require database_path("migrations/{$name}.php");
@@ -62,7 +58,9 @@ class AiEmployeeQaTest extends TestCase
         }
         $this->migration()->down();
         $this->assertFalse(DB::getSchemaBuilder()->hasTable('ai_employees'));
+        $this->assertFalse(DB::getSchemaBuilder()->hasColumn('telegram_users', 'ai_employee_id'));
         $this->migration()->up();
+        $this->assertTrue(DB::getSchemaBuilder()->hasColumn('telegram_users', 'ai_employee_id'));
         $this->assertSame(['Malika', 'Javohir', 'Dilshod'], AiEmployee::orderBy('sort')->pluck('name')->all());
         $this->assertSame(['Warm', 'Patient', 'Curious', 'Never pushes'], $this->malika()->traits);
     }

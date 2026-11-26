@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('token_hint', 8)->nullable();       // last characters, to recognise the token
             $table->json('tools')->nullable();                  // tool => enabled
             $table->unsignedSmallInteger('rate_limit')->default(60); // requests per minute per client
+            $table->boolean('autopublish')->default(false);
             $table->timestamp('last_used_at')->nullable();
             $table->unsignedInteger('calls_count')->default(0);
             $table->timestamps();
