@@ -34,8 +34,14 @@ class SalesAssistantSetting extends Model
         'bot_mode', 'business_mode', 'wait_minutes', 'work_days', 'work_start', 'work_end',
         'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
         'off_hours_mode', 'require_assignment', 'greeting_prompt', 'greeting_channels', 'employee_roles',
-        'expert_remind_minutes', 'expert_escalate_minutes', 'claude_data', 'new_contact_mode', 'large_order_sum',
+        'expert_remind_minutes', 'expert_escalate_minutes', 'claude_data', 'new_contact_mode', 'large_order_sum', 'lead_remind_minutes', 'draft_nudge_days', 'reorder_hints',
     ];
+
+    /** A draft order the customer left: the AI writes once after this many days (working hours). */
+    public const DRAFT_NUDGE_DAYS = 3;
+
+    /** A request from the assistant nobody took ("I take it") or marked handled: the main admin is reminded after this (working minutes). */
+    public const LEAD_REMIND_MINUTES = 15;
 
     /** A request at least this big (catalog prices × quantity, sum) goes to a manager at once. */
     public const LARGE_ORDER_SUM = 10_000_000;
@@ -69,10 +75,21 @@ class SalesAssistantSetting extends Model
 
     protected function casts(): array
     {
-        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array', 'large_order_sum' => 'integer'];
+        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array', 'large_order_sum' => 'integer', 'lead_remind_minutes' => 'integer', 'draft_nudge_days' => 'integer', 'reorder_hints' => 'boolean'];
     }
 
-    /** May a sales assistant turn send this kind of customer data to Claude (CLAUDE_DATA key)? */
+    /** A request nobody took: minutes (working time) before the main admin is reminded. */
+    public function leadRemindMinutes(): int
+    {
+        return max(1, (int) ($this->lead_remind_minutes ?? self::LEAD_REMIND_MINUTES));
+    }
+
+    /** 0 = no reminder about quiet drafts. */
+    public function draftNudgeDays(): int
+    {
+        return $this->draft_nudge_days ?? self::DRAFT_NUDGE_DAYS;
+    }
+
     /** 0 = no handover by the amount. */
     public function largeOrderSum(): int
     {
@@ -84,6 +101,7 @@ class SalesAssistantSetting extends Model
         return array_key_exists((string) $this->new_contact_mode, self::NEW_CONTACT_MODES) ? $this->new_contact_mode : 'smart';
     }
 
+    /** May a sales assistant turn send this kind of customer data to Claude (CLAUDE_DATA key)? */
     public function sendsToClaude(string $key): bool
     {
         return (bool) (((array) ($this->claude_data ?? []))[$key] ?? true);

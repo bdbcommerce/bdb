@@ -180,7 +180,8 @@ class TelegramNotifier
         return implode("\n", $lines);
     }
 
-    public function send(string $html): bool
+    /** @param  array|null  $keyboard  an inline keyboard (reply_markup), e.g. the request's "I take it" button */
+    public function send(string $html, ?array $keyboard = null): bool
     {
         if (! $this->enabled()) {
             return false;
@@ -189,6 +190,6 @@ class TelegramNotifier
         return $this->api->sendMessage(config('services.telegram.chat_id'), $html, [
             'parse_mode' => 'HTML',
             'disable_web_page_preview' => true,
-        ]);
+        ] + ($keyboard ? ['reply_markup' => $keyboard] : []));
     }
 }

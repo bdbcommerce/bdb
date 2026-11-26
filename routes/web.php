@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\InvoiceParserSettingController;
 use App\Http\Controllers\Admin\JobApplicationController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\McpSettingController;
+use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\SalesAssistantController;
 use App\Http\Controllers\Admin\SalesKnowledgeController;
 use App\Http\Controllers\Admin\SalesReportController;
@@ -212,6 +213,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('clients/{client}/items', [CompanyController::class, 'addItem'])->name('companies.add-item');
         Route::post('company-items/{item}/move', [CompanyController::class, 'moveItem'])->name('companies.move-item');
         Route::delete('company-items/{item}', [CompanyController::class, 'removeItem'])->name('companies.remove-item');
+        Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
         Route::resource('clients', ClientController::class);
         Route::resource('client-people', ClientPersonController::class)->except(['index', 'show'])->parameters(['client-people' => 'clientPerson']);
         Route::post('client-people/{clientPerson}/move', [ClientPersonController::class, 'move'])->name('client-people.move');
@@ -249,3 +251,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('articles', ArticleController::class)->only(['index', 'create', 'edit', 'destroy']);
     });
 });
+
+// Local only: one-time sign-in link (routes/dev.php is not committed).
+if (app()->isLocal() && is_file(__DIR__.'/dev.php')) {
+    require __DIR__.'/dev.php';
+}

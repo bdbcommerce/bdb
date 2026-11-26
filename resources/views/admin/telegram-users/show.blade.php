@@ -240,6 +240,27 @@
             @endif
         </section>
 
+        {{-- Orders from the chat: the open draft, the last confirmed ones (documents) and older ones per month. --}}
+        @php $draftOrder = \App\Models\Order::where('telegram_user_id', $user->id)->where('status', 'draft')->latest('id')->first();
+             $orders = \App\Models\Order::where('telegram_user_id', $user->id)->where('status', 'confirmed')->orderByDesc('confirmed_at')->limit(\App\Services\SalesAssistant\OrderBook::KEEP)->get();
+             $months = \App\Models\OrderMonth::where('telegram_user_id', $user->id)->orderByDesc('month')->limit(24)->get(); @endphp
+        <section class="bg-white border border-slate-200 rounded-xl p-4 space-y-2 text-sm" aria-labelledby="orders-h">
+            <h2 id="orders-h" class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Orders</h2>
+            @if ($draftOrder)
+                <p><a href="{{ route('admin.orders.show', $draftOrder) }}" class="underline text-slate-900">Draft #{{ $draftOrder->id }}</a>
+                    <span class="text-xs text-slate-500">{{ $draftOrder->updated_at->format('d.m.Y') }} · {{ count((array) $draftOrder->items) }} items · the AI continues it</span></p>
+            @endif
+            @foreach ($orders as $o)
+                <p><a href="{{ route('admin.orders.show', $o) }}" class="underline text-slate-900">#{{ $o->id }} · {{ $o->confirmed_at?->format('d.m.Y') }}</a>
+                    <span class="text-xs text-slate-500">{{ \Illuminate\Support\Str::limit(implode(', ', $o->itemLines()), 80) }}</span></p>
+            @endforeach
+            @foreach ($months as $m)
+                <p class="text-slate-600">{{ $m->month }}: {{ $m->orders }} {{ \Illuminate\Support\Str::plural('order', $m->orders) }}@if ($m->quoted_sum) · ≈ {{ number_format($m->quoted_sum, 0, '', ' ') }} sum @endif
+                    <span class="block text-xs text-slate-400">{{ \Illuminate\Support\Str::limit(implode(', ', array_keys((array) $m->items)), 100) }}</span></p>
+            @endforeach
+            @if (! $draftOrder && $orders->isEmpty() && $months->isEmpty())<p class="text-slate-600">No orders yet.</p>@endif
+        </section>
+
         {{-- Companies this contact works with (linked by a manager, or by the AI from an INN they sent). --}}
         <section class="bg-white border border-slate-200 rounded-xl p-4 space-y-2 text-sm" aria-labelledby="companies-h">
             <h2 id="companies-h" class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Companies</h2>

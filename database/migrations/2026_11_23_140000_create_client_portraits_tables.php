@@ -65,6 +65,36 @@ return new class extends Migration
             $table->index('group_chat_id');
         });
 
+        // A contact's orders: one open draft (the AI continues it until it is confirmed or cancelled), the last confirmed
+        // ones kept in full (OrderBook::KEEP), older ones added up per month in order_months. Company details are copied.
+        Schema::create('orders', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('telegram_user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('chat_conversation_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('chat_lead_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
+            $table->json('company')->nullable(); // {name, full_name, inn, address} as at the order
+            $table->string('status', 10)->default('draft'); // draft | confirmed | cancelled
+            $table->json('items')->nullable(); // [{product, details}]
+            $table->json('quoted')->nullable(); // [{product, price}]
+            $table->string('summary', 800)->nullable();
+            $table->timestamp('confirmed_at')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->timestamp('nudged_at')->nullable(); // the AI's one reminder about a quiet draft
+            $table->timestamps();
+            $table->index(['telegram_user_id', 'status']);
+        });
+        Schema::create('order_months', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('telegram_user_id')->constrained()->cascadeOnDelete();
+            $table->string('month', 7); // YYYY-MM
+            $table->unsignedInteger('orders')->default(0);
+            $table->json('items')->nullable(); // {product: times ordered}
+            $table->unsignedBigInteger('quoted_sum')->default(0); // the quoted prices added up (sum), when they could be read
+            $table->timestamps();
+            $table->unique(['telegram_user_id', 'month']);
+        });
+
         // Items from 1C (crm/item, loaded by an admin): names, MXIK and the client company an item was made for.
         Schema::create('onec_items', function (Blueprint $table) {
             $table->id();
@@ -109,6 +139,8 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::dropIfExists('order_months');
+        Schema::dropIfExists('orders');
         Schema::dropIfExists('company_items');
         Schema::dropIfExists('onec_items');
         Schema::dropIfExists('onec_people');

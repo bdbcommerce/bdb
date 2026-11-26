@@ -7,6 +7,7 @@ use App\Models\AiEmployeePrompt;
 use App\Models\AiSandboxChat;
 use App\Models\AiShadowDraft;
 use App\Models\AiTrace;
+use App\Models\CatalogSetting;
 use App\Models\ChatConversation;
 use App\Models\ChatLead;
 use App\Models\Client;
@@ -15,6 +16,7 @@ use App\Models\ClientRequest;
 use App\Models\CompanyInfo;
 use App\Models\ExpertQuestion;
 use App\Models\InvoiceParserSetting;
+use App\Models\Order;
 use App\Models\SalesAssistantSetting;
 use App\Models\SalesKnowledge;
 use App\Models\TelegramBusinessConnection;
@@ -93,6 +95,12 @@ class SalesAssistant
 - unknown_kind: when unknown_question is set, the KNOWLEDGE section its answer belongs in (product | business | marking | software | device | glossary | reply); else empty.
 - cancelled: true when the customer said they do not need it any more. follow_up_agreed: true when they agreed that we may send an offer later.
 - context_unknown: true when the CONVERSATION clearly continues an earlier talk you cannot see — it starts in the middle, or the customer refers to an order, price, file, promise or person that is not in it. Then reply must be empty: a manager takes the chat.
+- start_new: true when the customer wants a new order instead of the open draft order in CONVERSATION CONTEXT (that draft is then cancelled); else false.
+- temperature: how ready the customer is — hot (wants to buy now), warm (comparing, soon), cold (just asking); empty in the greeting or off-topic.
+- competitor: a competitor or a competitor's price the customer named, in a few words; else empty.
+- handover_reason: when the request goes to a manager (confirmed, large order, a discount or special terms, a complaint), why — one short sentence; else empty.
+- next_step: what the manager should do next (e.g. "send the offer for 3 scanners", "call about delivery") — one short sentence; else empty.
+- quoted: every price you gave in this conversation, from PRODUCT CATALOG: [{product, price}] (price exactly as you wrote it); [] when none.
 - inns: the INN (STIR, 9 digits) of every company the customer gave — typed, or on a photo or PDF you see in this request; [] when none. Digits only; never invent or complete one. Our system looks the company up and links it to the customer.
 - hand_to: only when YOUR COLLEAGUES lists a colleague whose work the customer's need is: their hand_to value, and the reply is one short sentence saying that this colleague (by name) will help now — the colleague answers right after. Otherwise an empty string.
 TXT;
@@ -112,9 +120,14 @@ TXT;
         $bool = ['type' => 'boolean'];
 
         return ['type' => 'object', 'additionalProperties' => false,
-            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'expert_draft', 'expert_department', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown', 'inns'],
+            'required' => ['reply', 'language', 'ask_phone_button', 'stage', 'customer', 'business_type', 'software', 'items', 'summary', 'confirmed', 'unknown_question', 'unknown_topic', 'unknown_kind', 'expert_draft', 'expert_department', 'cancelled', 'follow_up_agreed', 'hand_to', 'context_unknown', 'inns', 'temperature', 'competitor', 'handover_reason', 'next_step', 'quoted', 'start_new'],
             'properties' => [
                 'inns' => ['type' => 'array', 'items' => $str],
+                'start_new' => $bool,
+                'temperature' => ['type' => 'string', 'enum' => ['', 'hot', 'warm', 'cold']],
+                'competitor' => $str, 'handover_reason' => $str, 'next_step' => $str,
+                'quoted' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['product', 'price'],
+                    'properties' => ['product' => $str, 'price' => $str]]],
                 'reply' => $str,
                 'context_unknown' => $bool,
                 'language' => ['type' => 'string', 'enum' => ['uz', 'ru', 'en']],
@@ -744,6 +757,10 @@ TXT;
                 $profile[] = $link->client->forPrompt($link->byManager());
             }
         }
+        // The contact's orders: the open draft to continue, the last orders and the month totals.
+        if ($user?->exists) {
+            array_push($profile, ...app(OrderBook::class)->forPrompt($user));
+        }
         if (filled($state['handed_over'] ?? null)) {
             $profile[] = 'Already handed to the manager: '.$state['handed_over'];
         }
@@ -925,6 +942,12 @@ TXT;
             'customer' => array_filter(['first_name' => $s($customer['first_name'] ?? '', 40), 'last_name' => $s($customer['last_name'] ?? '', 40),
                 'phone' => str_contains($phone = $s($customer['phone'] ?? '', 30), '[') ? '' : $phone, 'city' => $s($customer['city'] ?? '', 60), 'company' => $s($customer['company'] ?? '', 120)]) + (array) ($state['customer'] ?? []),
             'business_type' => $s($json['business_type'] ?? '', 120) ?: ($state['business_type'] ?? ''),
+            'temperature' => in_array($json['temperature'] ?? null, ['hot', 'warm', 'cold'], true) ? $json['temperature'] : ($state['temperature'] ?? ''),
+            'competitor' => $s($json['competitor'] ?? '', 200) ?: ($state['competitor'] ?? ''),
+            'handover_reason' => $s($json['handover_reason'] ?? '', 300) ?: ($state['handover_reason'] ?? ''),
+            'next_step' => $s($json['next_step'] ?? '', 300) ?: ($state['next_step'] ?? ''),
+            'quoted' => array_values(array_filter(array_map(fn ($q) => is_array($q) && $s($q['product'] ?? '') !== '' && $s($q['price'] ?? '') !== ''
+                ? ['product' => $s($q['product'], 100), 'price' => $s($q['price'], 60)] : null, is_array($json['quoted'] ?? null) ? array_slice($json['quoted'], 0, 20) : []))) ?: ($state['quoted'] ?? []),
             'software' => $s($json['software'] ?? '', 120) ?: ($state['software'] ?? ''),
             'items' => $items ?: ($state['items'] ?? []),
             'summary' => $s($json['summary'] ?? '', 800),
@@ -1093,6 +1116,20 @@ TXT;
                 unset($state['follow_up_sent']); // a new agreement gets its own follow-up
             }
             $actions[] = 'Request cancelled'.(isset($state['follow_up_at']) && ! empty($json['follow_up_agreed']) ? '; offer follow-up planned for '.$state['follow_up_at'] : '');
+            if ($user?->exists && ($draft = app(OrderBook::class)->cancelDraft($user))) {
+                $actions[] = "Draft order #{$draft->id} cancelled";
+            }
+            $state['items'] = []; // the next request starts empty
+            $state['quoted'] = [];
+        } elseif ($user?->exists) {
+            // A new order instead of the open draft; else the items collected so far are the draft.
+            if (! empty($json['start_new']) && ($old = app(OrderBook::class)->cancelDraft($user))) {
+                $actions[] = "Draft order #{$old->id} cancelled: the customer starts a new one";
+            }
+            // Only items Claude returned in this turn (the state keeps older ones, e.g. of a confirmed or cancelled order).
+            if (empty($json['confirmed']) && ! empty($json['items'])) {
+                app(OrderBook::class)->syncDraft($user, $conversation, $state);
+            }
         }
 
         $unknown = $s($json['unknown_question'] ?? '', 500);
@@ -1126,11 +1163,13 @@ TXT;
                 // The unfinished request is now confirmed: it gets the phone and the sales chat a "New request" post.
                 $this->handOver($conversation, $user, $state, $phone, verified: $user?->phone === $phone && $user->hasVerifiedPhone(), existing: $open);
                 $actions[] = "Unfinished request #{$open->id} completed and posted to the sales chat";
+                $confirmedLead = $open->id;
                 $state['lead_hash'] = md5($state['summary']);
                 $state['handed_over'] = $state['summary'];
             } elseif ($open) {
                 // One open request per conversation: a later confirmation updates it, without a new post.
                 $open->update(['topic' => mb_substr($state['summary'], 0, 1000)]);
+                $confirmedLead = $open->id;
                 $actions[] = "Open request #{$open->id} updated (no new post)";
                 $state['lead_hash'] = md5($state['summary']);
                 $state['handed_over'] = $state['summary'];
@@ -1142,8 +1181,13 @@ TXT;
                 $state['lead_id'] = $lead->id;
                 $state['handed_over'] = $state['summary'];
                 $actions[] = "New request #{$lead->id} posted to the sales chat";
+                $confirmedLead = $lead->id;
             } else {
                 $actions[] = 'Request not posted: '.self::LEADS_PER_DAY.' requests from this customer today already';
+            }
+            if ($user?->exists && isset($confirmedLead)) {
+                $order = app(OrderBook::class)->confirm($user, $conversation, $state, $confirmedLead);
+                $actions[] = "Order #{$order->id} confirmed";
             }
         }
 
@@ -1354,7 +1398,6 @@ TXT;
         }
     }
 
-    /** A cancelled request whose customer agreed to hear from us again, and the day has come (sent in working hours only). */
     /** The customer's client card says "Do not contact": the assistant never writes to them first. */
     public static function doNotContact(ChatConversation $conversation): bool
     {
@@ -1362,6 +1405,44 @@ TXT;
             ->whereHas('telegramUser', fn ($q) => $q->where('telegram_id', $conversation->external_id))->exists(), false, false);
     }
 
+    /**
+     * A draft order the customer left draft_nudge_days ago: the AI writes ONCE to continue it (working hours; never when
+     * the customer or a manager wrote since, do-not-contact, or the assistant may not write there). Returns whether it ran.
+     */
+    public function draftNudge(Order $draft): bool
+    {
+        $settings = SalesAssistantSetting::current();
+        $days = $settings->draftNudgeDays();
+        if ($days < 1 || $draft->status !== 'draft' || $draft->nudged_at || $draft->updated_at->gt(now()->subDays($days)) || ! $settings->isWorkingTime()) {
+            return false;
+        }
+        $user = $draft->telegramUser;
+        $conversation = $user ? ChatConversation::newestOf(ChatConversation::whereIn('channel', ['telegram', 'business'])->where('external_id', $user->telegram_id)->get()) : null;
+        $since = $draft->updated_at->copy(); // when the customer left it (read before nudged_at is saved)
+        $draft->timestamps = false;
+        $draft->update(['nudged_at' => now()]); // never twice, also when nothing is sent; the draft keeps its own date
+        $draft->timestamps = true;
+        if (! $user || ! $conversation || self::doNotContact($conversation) || $settings->gate($user) !== 'talk'
+            || ! $settings->enabledFor($conversation->modeChannel(), $user, $conversation->external_id) || ! $this->mayWrite($conversation, $settings, $user)) {
+            return false;
+        }
+        $wrote = collect($conversation->messages ?? [])->contains(fn ($m) => is_array($m) && in_array($m['role'] ?? null, ['user', 'owner', 'admin'], true)
+            && empty($m['deleted']) && isset($m['at']) && Carbon::parse($m['at'])->gt($since));
+        if ($wrote) {
+            return false;
+        }
+        $lock = Cache::lock('sales-assistant:'.$conversation->id, 150);
+        if (! $lock->get()) {
+            return false;
+        }
+        try {
+            return $this->turn($conversation, $settings, $user, "The customer started an order {$days} days ago and has not confirmed it (see the open draft order in CONVERSATION CONTEXT). Write ONE short, friendly message in the customer's language: remind them in a few words what they chose and ask whether to continue, change it or leave it. No pressure; never invent prices. Keep the items as they are; confirmed false.", kind: 'follow-up');
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** A cancelled request whose customer agreed to hear from us again, and the day has come (sent in working hours only). */
     public static function followUpDue(ChatConversation $conversation, SalesAssistantSetting $settings, ?Carbon $now = null): bool
     {
         $now ??= now();
@@ -1468,6 +1549,11 @@ TXT;
             'topic' => mb_substr(($partial ? '[Unfinished] ' : '').$state['summary'], 0, 1000), 'page_url' => $link,
             'transcript' => ['items' => $items, 'city' => $c['city'] ?? null, 'company' => $c['company'] ?? null,
                 'business_type' => $state['business_type'] ?? null, 'software' => $state['software'] ?? null, 'conversation_id' => $conversation->id],
+            'temperature' => in_array($state['temperature'] ?? null, ['hot', 'warm', 'cold'], true) ? $state['temperature'] : null,
+            'competitor' => filled($state['competitor'] ?? null) ? mb_substr($state['competitor'], 0, 200) : null,
+            'handover_reason' => filled($state['handover_reason'] ?? null) ? mb_substr($state['handover_reason'], 0, 300) : null,
+            'next_step' => filled($state['next_step'] ?? null) ? mb_substr($state['next_step'], 0, 300) : null,
+            'quoted' => ($quoted = array_slice((array) ($state['quoted'] ?? []), 0, 20)) ? ['items' => $quoted, 'catalog_at' => CatalogSetting::current()->last_success_at?->toIso8601String()] : null,
         ];
         $lead = $existing ? tap($existing)->update($attributes) : ChatLead::create($attributes);
         $links = $user?->exists ? $user->companyLinks()->with('client.items')->limit(5)->get() : collect();
@@ -1505,14 +1591,28 @@ TXT;
                 .($link->byManager() ? '' : ' <i>(INN given by the customer, not confirmed)</i>')
                 .($plan !== '' ? "\n<b>Sales plan for this company:</b> ".$e(mb_strimwidth($plan, 0, 300, '…')) : '');
         }
+        // The handover note: temperature, competitor, why, the prices quoted (with the catalog date), the next step.
+        $note = [];
+        if ($lead->temperature) {
+            $note[] = '<b>Temperature:</b> '.['hot' => '🔥 ', 'warm' => '', 'cold' => ''][$lead->temperature].$e(ChatLead::TEMPERATURES[$lead->temperature]);
+        }
+        foreach (['competitor' => 'Competitor', 'handover_reason' => 'Why a manager', 'next_step' => 'Next step'] as $k => $label) {
+            if (filled($lead->$k)) {
+                $note[] = "<b>{$label}:</b> ".$e($lead->$k);
+            }
+        }
+        if ($q = $lead->quoted['items'] ?? []) {
+            $at = filled($lead->quoted['catalog_at'] ?? null) ? Carbon::parse($lead->quoted['catalog_at'])->setTimezone(SalesAssistantSetting::TZ)->format('d.m H:i') : null;
+            $note[] = '<b>Prices quoted</b>'.($at ? ' (catalog of '.$at.')' : '').': '.$e(mb_strimwidth(collect($q)->map(fn ($x) => $x['product'].' — '.$x['price'])->implode('; '), 0, 600, '…'));
+        }
         // Every text is shortened before escaping and items are dropped until it fits, so the HTML is never cut.
-        $tail = ['', $e(mb_strimwidth((string) $state['summary'], 0, 800, '…')), '', '<a href="'.$e($link).'">Open the chat</a>'];
+        $tail = [...($note ? ['', ...$note] : []), '', $e(mb_strimwidth((string) $state['summary'], 0, 800, '…')), '', '<a href="'.$e($link).'">Open the chat</a>'];
         $bullets = array_map(fn ($i) => '• '.$e($i), $items);
         while ($bullets && mb_strlen(implode("\n", [...$lines, '', ...$bullets, '• …', ...$tail])) > 4000) {
             array_pop($bullets);
         }
         $more = count($bullets) < count($items) ? ['• … +'.(count($items) - count($bullets))] : [];
-        $this->notifier->send(implode("\n", [...$lines, '', ...$bullets, ...$more, ...$tail]));
+        $this->notifier->send(implode("\n", [...$lines, '', ...$bullets, ...$more, ...$tail]), $lead->taken_at ? null : LeadDesk::keyboard($lead));
 
         return $lead;
     }

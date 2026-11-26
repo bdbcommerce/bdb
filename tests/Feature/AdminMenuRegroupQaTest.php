@@ -73,6 +73,7 @@ class AdminMenuRegroupQaTest extends TestCase
             'salesKnowledge' => DB::table('sales_knowledge')->value('id'),
             'salesReport' => $id('sales_reports', ['period_start' => $now->copy()->subWeek(), 'period_end' => $now, 'trigger' => 'manual', 'status' => 'sent']),
             'telegram_user' => $tg,
+            'order' => $id('orders', ['telegram_user_id' => $tg, 'status' => 'confirmed', 'items' => json_encode([['product' => 'Zebra', 'details' => '1']])]),
             'vacancy' => $vacancy,
             'page' => 'audit',
         ];

@@ -3,10 +3,16 @@
 namespace App\Console\Commands;
 
 use App\Models\ChatConversation;
+use App\Models\Order;
 use App\Models\SalesAssistantSetting;
 use App\Services\SalesAssistant\ExpertDesk;
+use App\Services\SalesAssistant\LeadDesk;
+use App\Services\SalesAssistant\OrderBook;
 use App\Services\SalesAssistant\SalesAssistant;
+use App\Services\Seo\SeoFiles;
+use App\Services\TelegramNotifier;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Every minute: answers customers whose wait is over — in working hours a manager gets `wait_minutes` first
@@ -25,6 +31,8 @@ class SalesAssistantTick extends Command
         // Questions to experts: send the next ones, remind, pass to the main admin, deliver answers.
         $experts = rescue(fn () => $desk->tick(), null);
         $experts && $this->info("Experts: sent {$experts['sent']}, reminded {$experts['reminded']}, to the main admin {$experts['escalated']}, answers delivered {$experts['delivered']}.");
+        // Requests nobody took ("I take it") in time: the main admin is reminded.
+        ($leads = rescue(fn () => app(LeadDesk::class)->tick(), 0)) && $this->info("Requests not taken, reminded: {$leads}.");
         $settings = SalesAssistantSetting::current();
         if ($settings->bot_mode !== 'on' && $settings->business_mode !== 'on') {
             return self::SUCCESS;
@@ -57,7 +65,27 @@ class SalesAssistantTick extends Command
                     $followedUp++;
                 }
             });
-        $this->info("Answered {$answered}, reminded {$reminded}, closed {$closed} as unfinished, followed up {$followedUp}.");
+        // Draft orders the customer left: one reminder after draft_nudge_days (working hours).
+        $nudged = 0;
+        if ($settings->draftNudgeDays() > 0 && $settings->isWorkingTime()) {
+            Order::where('status', 'draft')->whereNull('nudged_at')->where('updated_at', '<=', now()->subDays($settings->draftNudgeDays()))
+                ->orderBy('id')->limit(20)->get()->each(function (Order $draft) use ($assistant, &$nudged) {
+                    rescue(fn () => $assistant->draftNudge($draft), false) && $nudged++;
+                });
+        }
+        // Reorder hints to the sales chat, once a day in working hours.
+        $hints = 0;
+        if ($settings->reorder_hints && $settings->isWorkingTime() && Cache::add('reorder-hints:'.now()->toDateString(), true, now()->addDay())) {
+            foreach (rescue(fn () => app(OrderBook::class)->dueReorders(), []) as $r) {
+                if (Cache::add('reorder-hint:'.$r['user']->id.':'.md5($r['product'].$r['last']), true, now()->addDays(120))) {
+                    app(TelegramNotifier::class)->send('🔁 <b>Reorder due?</b> '.e($r['user']->displayName() ?? 'Telegram '.$r['user']->telegram_id)
+                        ."\nUsually orders <b>".e(mb_strimwidth($r['product'], 0, 100, '…')).'</b> about every '.$r['every'].' days — last order '.$r['since'].' days ago.'
+                        ."\n<a href=\"".e(SeoFiles::publicUrl(route('admin.telegram-users.show', $r['user']))).'">Open the contact</a>');
+                    $hints++;
+                }
+            }
+        }
+        $this->info("Answered {$answered}, reminded {$reminded}, closed {$closed} as unfinished, followed up {$followedUp}, draft reminders {$nudged}, reorder hints {$hints}.");
 
         return self::SUCCESS;
     }

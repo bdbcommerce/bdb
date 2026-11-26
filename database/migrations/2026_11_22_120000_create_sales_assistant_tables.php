@@ -37,6 +37,9 @@ return new class extends Migration
             $table->string('new_contact_mode', 10)->nullable(); // SalesAssistantSetting::NEW_CONTACT_MODES; null = smart
             $table->unsignedSmallInteger('expert_remind_minutes')->nullable(); // null = SalesAssistantSetting::EXPERT_REMIND_MINUTES
             $table->unsignedSmallInteger('expert_escalate_minutes')->nullable(); // null = SalesAssistantSetting::EXPERT_ESCALATE_MINUTES
+            $table->unsignedSmallInteger('lead_remind_minutes')->nullable(); // a request nobody took → main admin; null = LEAD_REMIND_MINUTES
+            $table->unsignedSmallInteger('draft_nudge_days')->nullable(); // a quiet draft order: one AI reminder after N days; null = DRAFT_NUDGE_DAYS, 0 = off
+            $table->boolean('reorder_hints')->default(true); // the sales chat is told when a customer's usual reorder is due
             $table->json('claude_data')->nullable(); // what a turn sends to Claude, SalesAssistantSetting::CLAUDE_DATA; null = everything
             $table->boolean('dev_mode')->default(false); // record the trace of every real customer message (AiTrace::KEEP_DAYS)
             $table->timestamps();

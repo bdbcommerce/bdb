@@ -72,6 +72,8 @@
                 $num('follow_up_days', 'Offer again after (days)', 'When a customer cancelled but agreed to hear from us later.', 1, 90),
                 $num('expert_remind_minutes', 'Expert reminder after (minutes)', 'An expert who has not answered the AI\'s question gets one reminder (working time only).', 5, 480) + ['value' => $settings->expertRemindMinutes()],
                 $num('expert_escalate_minutes', 'To the main admin after (minutes)', 'Still no answer: the question goes to the main admin (working time only).', 10, 960) + ['value' => $settings->expertEscalateMinutes()],
+                $num('lead_remind_minutes', 'Request not taken — remind after (minutes)', 'Nobody tapped "I take it" (or marked it handled): the main admin is reminded in the bot (working time only).', 5, 480) + ['value' => $settings->leadRemindMinutes()],
+                $num('draft_nudge_days', 'Draft order reminder after (days)', 'A customer left a draft order: the AI writes once to continue it (working hours). 0 = off.', 0, 60) + ['value' => $settings->draftNudgeDays()],
                 $num('large_order_sum', 'Large order from (sum)', 'Catalog prices × quantity: from this total the AI confirms the request and hands it to a manager at once. 0 = off.', 0, 100000000000) + ['value' => $settings->largeOrderSum()],
             ] as $f)
                 <div>
@@ -153,6 +155,15 @@
                 @error('employee_roles')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
         </fieldset>
+
+        <div class="border-t border-slate-100 pt-6">
+            <input type="hidden" name="reorder_hints" value="0">
+            <label class="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="reorder_hints" value="1" @checked(old('reorder_hints', $settings->reorder_hints)) class="mt-0.5 rounded border-slate-300">
+                <span><span class="font-medium">Reorder hints to the sales chat</span>
+                    <span class="block text-xs text-slate-400">Once a day: "Ali usually orders ribbons about every 30 days — last order 36 days ago" (from the order history; a manager decides to write).</span></span>
+            </label>
+        </div>
 
         <fieldset class="border-t border-slate-100 pt-6 space-y-3">
             <legend class="text-sm font-semibold text-slate-900">Data sent to Claude</legend>

@@ -12,6 +12,7 @@ use App\Services\AiErrorAlerts;
 use App\Services\ChatAssistant;
 use App\Services\Invoices\InvoiceParser;
 use App\Services\SalesAssistant\ExpertDesk;
+use App\Services\SalesAssistant\LeadDesk;
 use App\Services\SalesAssistant\SalesAssistant;
 use App\Services\TelegramNotifier;
 use Illuminate\Support\Facades\Cache;
@@ -102,7 +103,8 @@ class TelegramBot
 
         // Buttons under the AI's questions to experts (ExpertDesk); other buttons are not used by the bot.
         if (is_array($update['callback_query'] ?? null)) {
-            app(ExpertDesk::class)->callback($update['callback_query']);
+            // "I take it" under a request in the sales chat, else an expert's buttons.
+            app(LeadDesk::class)->callback($update['callback_query']) || app(ExpertDesk::class)->callback($update['callback_query']);
 
             return;
         }
