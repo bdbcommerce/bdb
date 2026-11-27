@@ -38,6 +38,7 @@ use App\Http\Controllers\Admin\SalesKnowledgeController;
 use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\ScheduledTaskController;
 use App\Http\Controllers\Admin\SeoSettingController;
+use App\Http\Controllers\Admin\TelegramGroupController;
 use App\Http\Controllers\Admin\TelegramSettingsController;
 use App\Http\Controllers\Admin\TelegramUserController;
 use App\Http\Controllers\Admin\UploadController;
@@ -187,6 +188,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('telegram-users', TelegramUserController::class)->only(['index', 'show', 'update']);
         Route::get('awaiting-replies', [AwaitingReplyController::class, 'index'])->name('awaiting-replies.index');
         Route::get('telegram-chats', [ChatConversationController::class, 'index'])->name('telegram-chats.index');
+        Route::get('telegram-groups', [TelegramGroupController::class, 'index'])->name('telegram-groups.index');
+        Route::get('telegram-groups/{telegramGroup}', [TelegramGroupController::class, 'show'])->name('telegram-groups.show');
+        Route::put('telegram-groups/{telegramGroup}/recording', [TelegramGroupController::class, 'recording'])->name('telegram-groups.recording');
+        Route::put('telegram-groups/{telegramGroup}/role', [TelegramGroupController::class, 'role'])->name('telegram-groups.role');
+        Route::post('telegram-groups/{telegramGroup}/companies', [TelegramGroupController::class, 'link'])->middleware('throttle:30,1')->name('telegram-groups.link');
+        Route::post('telegram-groups/{telegramGroup}/leave', [TelegramGroupController::class, 'leave'])->middleware('throttle:5,1')->name('telegram-groups.leave');
         Route::post('chat-conversations/{chatConversation}/handled', [AwaitingReplyController::class, 'handled'])->name('chat-conversations.handled');
         // AI Sales & Support Team: AI employees (real) and the training / client pages (mock-up, sample data).
         Route::resource('ai-employees', AiEmployeeController::class)->except('show');

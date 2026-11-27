@@ -18,7 +18,7 @@ class AdminMenuRegroupQaTest extends TestCase
     private const FORMER_ROUTES = [
         'admin.dashboard', 'admin.analytics', 'admin.scheduled-tasks.index', 'admin.awaiting-replies.index',
         'admin.ai-team.shadow', 'admin.expert-questions.index', 'admin.client-requests.index', 'admin.chat-leads.index',
-        'admin.chat-conversations.index', 'admin.telegram-chats.index', 'admin.telegram-users.index', 'admin.clients.index',
+        'admin.chat-conversations.index', 'admin.telegram-chats.index', 'admin.telegram-groups.index', 'admin.telegram-users.index', 'admin.clients.index',
         'admin.ai-employees.index', 'admin.sales-knowledge.index', 'admin.knowledge.index', 'admin.catalog.index',
         'admin.sales-assistant.prompt', 'admin.ai-instructions.index', 'admin.ai-test-cases.index', 'admin.ai-team.sandbox',
         'admin.ai-team.traces', 'admin.sales-report.index', 'admin.invoice-messages.index', 'admin.company-info.edit',
@@ -73,6 +73,7 @@ class AdminMenuRegroupQaTest extends TestCase
             'salesKnowledge' => DB::table('sales_knowledge')->value('id'),
             'salesReport' => $id('sales_reports', ['period_start' => $now->copy()->subWeek(), 'period_end' => $now, 'trigger' => 'manual', 'status' => 'sent']),
             'telegram_user' => $tg,
+            'telegramGroup' => $id('telegram_chats', ['chat_id' => '-1009001', 'type' => 'supergroup', 'title' => 'Dealers']),
             'order' => $id('orders', ['telegram_user_id' => $tg, 'status' => 'confirmed', 'items' => json_encode([['product' => 'Zebra', 'details' => '1']])]),
             'vacancy' => $vacancy,
             'page' => 'audit',

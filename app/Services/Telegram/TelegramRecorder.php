@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\CompanyLink;
 use App\Models\SalesAssistantSetting;
 use App\Models\TelegramBusinessConnection;
+use App\Models\TelegramChat;
 use App\Models\TelegramUser;
 use App\Services\Companies\CompanyLookup;
 use App\Services\SalesAssistant\SalesAssistant;
@@ -236,7 +237,8 @@ class TelegramRecorder
         $message = $this->clean($message);
         $chatId = (string) ($message['chat']['id'] ?? '');
         $internal = array_filter([config('services.telegram.chat_id'), config('services.telegram.alert_chat_id')]);
-        if ($chatId === '' || in_array($chatId, array_map('strval', $internal), true)) {
+        // An admin switched recording off for this group (Conversations → Telegram groups).
+        if ($chatId === '' || in_array($chatId, array_map('strval', $internal), true) || TelegramChat::isMuted($chatId)) {
             return;
         }
 

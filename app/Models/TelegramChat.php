@@ -19,11 +19,102 @@ class TelegramChat extends Model
     /** A chat seen again within this many minutes is not written again. */
     private const SEEN_EVERY_MINUTES = 10;
 
-    protected $fillable = ['chat_id', 'type', 'title', 'username', 'bot_status', 'last_seen_at'];
+    /** What a group is used for (TelegramChat::roles). Sales and alerts chats come from .env. */
+    public const ROLES = [
+        'sales' => 'Sales chat — leads, requests, notices (TELEGRAM_CHAT_ID in .env)',
+        'alerts' => 'Alerts chat — errors and warnings (TELEGRAM_ALERT_CHAT_ID in .env)',
+        'invoice_source' => 'Invoice source — the bot reads invoice photos here; the weekly sales report and AI notes go here too',
+        'invoice_chat' => 'Invoice chat — read invoices are posted here (accountants)',
+        'json' => 'JSON recipient — invoice JSON, errors and the daily sales report',
+    ];
+
+    /** Short role names for badges. */
+    public const ROLE_NAMES = ['sales' => 'Sales chat', 'alerts' => 'Alerts chat', 'invoice_source' => 'Invoice source', 'invoice_chat' => 'Invoice chat', 'json' => 'JSON recipient'];
+
+    /** Roles an admin sets from the group page (stored in the invoice parser settings). */
+    public const SETTABLE_ROLES = ['invoice_source' => 'source_chat_id', 'invoice_chat' => 'target_chat_id'];
+
+    protected $fillable = ['chat_id', 'type', 'title', 'username', 'bot_status', 'is_recorded', 'last_seen_at'];
 
     protected function casts(): array
     {
-        return ['last_seen_at' => 'datetime'];
+        return ['last_seen_at' => 'datetime', 'is_recorded' => 'boolean'];
+    }
+
+    public function isGroup(): bool
+    {
+        return in_array($this->type, self::GROUP_TYPES, true);
+    }
+
+    /** @return list<string> keys of ROLES this chat has */
+    public function roles(): array
+    {
+        $invoice = InvoiceParserSetting::current();
+        $map = ['sales' => config('services.telegram.chat_id'), 'alerts' => config('services.telegram.alert_chat_id'),
+            'invoice_source' => $invoice->source_chat_id, 'invoice_chat' => $invoice->target_chat_id, 'json' => $invoice->json_chat_id];
+
+        return array_keys(array_filter($map, fn ($id) => filled($id) && trim((string) $id) === $this->chat_id));
+    }
+
+    /**
+     * Sales and alerts chats are never recorded as conversations, whatever the switch says; the invoice source
+     * only while the invoice parser is on (it takes those messages first).
+     *
+     * @return list<string>
+     */
+    public function neverRecordedRoles(): array
+    {
+        $roles = array_intersect($this->roles(), ['sales', 'alerts', 'invoice_source']);
+        if (! InvoiceParserSetting::current()->enabled) {
+            $roles = array_diff($roles, ['invoice_source']);
+        }
+
+        return array_values($roles);
+    }
+
+    public function neverRecorded(): bool
+    {
+        return $this->neverRecordedRoles() !== [];
+    }
+
+    /** A group whose messages the admin chose not to record. */
+    public static function isMuted(string $chatId): bool
+    {
+        return static::where('chat_id', $chatId)->where('is_recorded', false)->exists();
+    }
+
+    /** All recorded sessions of this group, newest first. */
+    public function conversations()
+    {
+        return ChatConversation::where('channel', 'group')->where('external_id', $this->chat_id);
+    }
+
+    /**
+     * People who wrote in the group (from its recorded sessions): sender ID => name, messages, last time, contact.
+     *
+     * @return Collection<string, array{name: string, messages: int, last: ?string, user: ?TelegramUser}>
+     */
+    public function members(int $sessions = 50): Collection
+    {
+        $people = [];
+        foreach ($this->conversations()->orderByDesc('id')->limit($sessions)->get(['id', 'messages']) as $c) {
+            foreach ((array) $c->messages as $m) {
+                $id = is_array($m) && is_scalar($m['sender_id'] ?? null) ? (string) $m['sender_id'] : null;
+                if ($id === null || $id === '' || ($m['role'] ?? null) !== 'member') {
+                    continue;
+                }
+                $people[$id] ??= ['name' => '', 'messages' => 0, 'last' => null];
+                $people[$id]['messages']++;
+                $people[$id]['name'] = $people[$id]['name'] ?: (is_string($m['sender'] ?? null) ? mb_substr($m['sender'], 0, 100) : '');
+                $at = is_string($m['at'] ?? null) && strtotime($m['at']) !== false ? $m['at'] : null;
+                if ($at && ($people[$id]['last'] === null || $at > $people[$id]['last'])) {
+                    $people[$id]['last'] = $at;
+                }
+            }
+        }
+        $users = TelegramUser::whereIn('telegram_id', array_keys($people))->get()->keyBy('telegram_id');
+
+        return collect($people)->map(fn ($p, $id) => $p + ['user' => $users[$id] ?? null])->sortByDesc('messages');
     }
 
     /** Remember a chat from a Telegram `chat` object; $botStatus from my_chat_member is always written. */
