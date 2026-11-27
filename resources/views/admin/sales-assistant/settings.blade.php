@@ -98,7 +98,7 @@
             </div>
             <div>
                 <label for="employee_ids" class="block text-sm font-medium text-slate-700 mb-1">More employees (Telegram IDs or @usernames)</label>
-                <textarea id="employee_ids" name="employee_ids" rows="3" maxlength="3000" class="{{ $input }} font-mono" placeholder="123456789&#10;@aziz_sales">{{ old('employee_ids', $settings->employee_ids) }}</textarea>
+                <x-admin.chat-picker name="employee_ids" kind="people" separator="newline" rows="3" maxlength="3000" :value="old('employee_ids', $settings->employee_ids)" placeholder="123456789 or @aziz_sales — one per line" :class="$input" />
                 <p class="text-xs text-slate-400 mt-1">For staff who never wrote to the bot. Others: set the type “Employee” on their page in Telegram → Users.</p>
                 @error('employee_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>

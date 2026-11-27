@@ -15,6 +15,7 @@ class TelegramWebhook
         'message', 'edited_message',
         'business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages',
         'callback_query', // buttons under the AI's questions to experts
+        'my_chat_member', // the bot added to / removed from a group (the group picker)
     ];
 
     public function __construct(private TelegramApi $api) {}

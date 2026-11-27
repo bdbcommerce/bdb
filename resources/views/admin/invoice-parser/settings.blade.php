@@ -66,12 +66,12 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label for="source_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Source chat ID — the bot reads photos here</label>
-                    <input type="text" id="source_chat_id" name="source_chat_id" inputmode="numeric" value="{{ old('source_chat_id', $settings->source_chat_id) }}" placeholder="-1001234567890" class="{{ $input }} font-mono">
+                    <x-admin.chat-picker name="source_chat_id" kind="groups" :value="old('source_chat_id', $settings->source_chat_id)" placeholder="-1001234567890" inputmode="numeric" :class="$input" />
                     @error('source_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="source_from_ids" class="block text-sm font-medium text-slate-700 mb-1">From IDs — read photos only from these senders</label>
-                    <input type="text" id="source_from_ids" name="source_from_ids" value="{{ old('source_from_ids', $settings->source_from_ids) }}" placeholder="Empty = anyone in the source chat" class="{{ $input }} font-mono">
+                    <x-admin.chat-picker name="source_from_ids" kind="people" separator=", " :value="old('source_from_ids', $settings->source_from_ids)" placeholder="Empty = anyone in the source chat" :class="$input" />
                     <p class="text-xs text-slate-400 mt-1">Telegram user IDs, separated by commas. Shown as “From ID” under Messages and AI Assistant → Conversations.</p>
                     @error('source_from_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
@@ -83,18 +83,18 @@
                 </div>
                 <div>
                     <label for="target_chat_id" class="block text-sm font-medium text-slate-700 mb-1">Invoice chat ID — the photo and the summary are posted here</label>
-                    <input type="text" id="target_chat_id" name="target_chat_id" inputmode="numeric" value="{{ old('target_chat_id', $settings->target_chat_id) }}" placeholder="-1009876543210" class="{{ $input }} font-mono">
+                    <x-admin.chat-picker name="target_chat_id" kind="groups" :value="old('target_chat_id', $settings->target_chat_id)" placeholder="-1009876543210" inputmode="numeric" :class="$input" />
                     @error('target_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="json_chat_id" class="block text-sm font-medium text-slate-700 mb-1">JSON recipient — Telegram user ID (or chat ID)</label>
-                    <input type="text" id="json_chat_id" name="json_chat_id" inputmode="numeric" value="{{ old('json_chat_id', $settings->json_chat_id) }}" placeholder="123456789 — empty = no JSON" class="{{ $input }} font-mono">
+                    <x-admin.chat-picker name="json_chat_id" kind="chats" :value="old('json_chat_id', $settings->json_chat_id)" placeholder="123456789 — empty = no JSON" inputmode="numeric" :class="$input" />
                     <p class="text-xs text-slate-400 mt-1">Gets the read data of each invoice as JSON (code block; a long invoice comes as a .json file), and <code>{"status": "error", …}</code> when a photo failed after all attempts. Find a user's ID under Telegram → Users, or with @getidsbot.</p>
                     @error('json_chat_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
             <p class="text-xs text-slate-400">Set the invoice chat, the JSON recipient, or both.</p>
-            <p class="text-xs text-slate-400">Group IDs start with -100. To find one, add the bot to the group, post a message, and see the chat under AI Assistant → Conversations, or use a bot such as @getidsbot. Messages in the source chat are only read for invoices — they are not recorded as conversations or answered, so use a dedicated group (not a channel, and not your own private chat with the bot).</p>
+            <p class="text-xs text-slate-400">Group IDs start with -100. Choose a group from the list: it shows every group the bot is in (add the bot to the group; it appears as soon as it is added or someone posts there). You can still type an ID. Messages in the source chat are only read for invoices — they are not recorded as conversations or answered, so use a dedicated group (not a channel, and not your own private chat with the bot).</p>
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="notify_skipped" value="1" @checked(old('notify_skipped', $settings->notify_skipped)) class="rounded border-slate-300">
                 Also tell the JSON recipient when a photo is not an invoice (the invoice chat only ever gets invoices — no errors or skipped photos)

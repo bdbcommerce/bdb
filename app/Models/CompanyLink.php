@@ -31,9 +31,10 @@ class CompanyLink extends Model
         return $this->linked_by === 'manager';
     }
 
-    /** The group's title from its latest recorded conversation. */
+    /** The group's title: from the bot's chat list, else its latest recorded conversation. */
     public function groupTitle(): ?string
     {
-        return $this->group_chat_id ? ChatConversation::where('channel', 'group')->where('external_id', $this->group_chat_id)->latest('id')->value('title') : null;
+        return $this->group_chat_id ? (TelegramChat::where('chat_id', $this->group_chat_id)->value('title')
+            ?? ChatConversation::where('channel', 'group')->where('external_id', $this->group_chat_id)->latest('id')->value('title')) : null;
     }
 }

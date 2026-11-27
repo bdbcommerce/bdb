@@ -97,7 +97,7 @@
                 <li class="px-5 py-4 text-slate-500">Nobody yet. The AI links a contact when they send this company's INN.</li>
             @endforelse
         </ul>
-        @php $groups = \App\Models\ChatConversation::where('channel', 'group')->whereNotNull('external_id')->orderByDesc('id')->limit(200)->get(['external_id', 'title'])->unique('external_id'); @endphp
+        @php $groups = \App\Models\TelegramChat::options('groups'); @endphp
         <form method="POST" action="{{ route('admin.companies.link', $client) }}" class="px-5 py-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
             @csrf
             <label for="link-contact" class="sr-only">Contact</label>
@@ -107,7 +107,7 @@
                 <label for="link-group" class="sr-only">Group</label>
                 <select id="link-group" name="group_chat_id" class="rounded-lg border-slate-300 text-sm">
                     <option value="">a Telegram group…</option>
-                    @foreach ($groups as $g)<option value="{{ $g->external_id }}">{{ $g->title ?: $g->external_id }}</option>@endforeach
+                    @foreach ($groups as $gid => $gname)<option value="{{ $gid }}">{{ $gname }}</option>@endforeach
                 </select>
             @endif
             <button class="bg-slate-900 text-white text-sm font-medium rounded-lg px-3 py-1.5 hover:bg-slate-700">Link</button>

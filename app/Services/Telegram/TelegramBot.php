@@ -6,6 +6,7 @@ use App\Models\ChatConversation;
 use App\Models\ChatLead;
 use App\Models\ClientRequest;
 use App\Models\SalesAssistantSetting;
+use App\Models\TelegramChat;
 use App\Models\TelegramUser;
 use App\Services\Ai\VoiceTranscriber;
 use App\Services\AiErrorAlerts;
@@ -84,6 +85,16 @@ class TelegramBot
 
     public function handle(array $update): void
     {
+        // Every chat the bot sees goes to the chat / group pickers (TelegramChat), before anything else.
+        foreach (['message', 'edited_message', 'channel_post', 'edited_channel_post'] as $key) {
+            is_array($update[$key] ?? null) && rescue(fn () => TelegramChat::see($update[$key]['chat'] ?? null), report: false); // never stops the update
+        }
+        // The bot was added to / removed from a group (or a person blocked it): only the list changes.
+        if (is_array($member = $update['my_chat_member'] ?? null)) {
+            rescue(fn () => TelegramChat::see($member['chat'] ?? null, is_string($member['new_chat_member']['status'] ?? null) ? $member['new_chat_member']['status'] : 'member'), report: false);
+
+            return;
+        }
         // The invoice source chat belongs to the invoice parser (Admin → Invoice parser): photos are read
         // by Claude, everything else there (text, edits) is ignored and never recorded or answered.
         foreach (['message', 'edited_message'] as $key) {

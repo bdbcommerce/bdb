@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CatalogProduct;
-use App\Models\ChatConversation;
 use App\Models\Client;
 use App\Models\CompanyItem;
 use App\Models\CompanyLink;
 use App\Models\OnecItem;
+use App\Models\TelegramChat;
 use App\Models\TelegramUser;
 use App\Services\Companies\CompanyLookup;
 use Illuminate\Http\Request;
@@ -105,7 +105,8 @@ class CompanyController extends Controller
         $name = $request->user()->name;
 
         if (filled($data['group_chat_id'] ?? null)) {
-            abort_unless(ChatConversation::where('channel', 'group')->where('external_id', $data['group_chat_id'])->exists(), 422, 'Unknown group.');
+            // A group the bot is in (TelegramChat), or one known from its recorded conversations.
+            abort_unless(TelegramChat::options('groups')->has($data['group_chat_id']), 422, 'Unknown group.');
             $lookup->link($client, null, $data['group_chat_id'], 'manager', $name);
 
             return back()->with('success', 'Group linked.');

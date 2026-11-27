@@ -1407,7 +1407,8 @@ TXT;
 
     /**
      * A draft order the customer left draft_nudge_days ago: the AI writes ONCE to continue it (working hours; never when
-     * the customer or a manager wrote since, do-not-contact, or the assistant may not write there). Returns whether it ran.
+     * the customer or a manager wrote since, the request was handed over / cancelled (stage outside OPEN_STAGES),
+     * do-not-contact, or the assistant may not write there). Returns whether it ran.
      */
     public function draftNudge(Order $draft): bool
     {
@@ -1428,7 +1429,9 @@ TXT;
         }
         $wrote = collect($conversation->messages ?? [])->contains(fn ($m) => is_array($m) && in_array($m['role'] ?? null, ['user', 'owner', 'admin'], true)
             && empty($m['deleted']) && isset($m['at']) && Carbon::parse($m['at'])->gt($since));
-        if ($wrote) {
+        // Handed to a manager or cancelled: the manager has it, the AI does not remind.
+        $stage = (string) (($conversation->sales_state ?? [])['stage'] ?? '');
+        if ($wrote || ($stage !== '' && ! in_array($stage, self::OPEN_STAGES, true))) {
             return false;
         }
         $lock = Cache::lock('sales-assistant:'.$conversation->id, 150);

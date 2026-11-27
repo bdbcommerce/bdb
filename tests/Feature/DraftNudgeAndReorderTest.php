@@ -108,6 +108,15 @@ class DraftNudgeAndReorderTest extends TestCase
         $this->assertNull($draft->refresh()->nudged_at); // still due tomorrow morning
     }
 
+    public function test_no_reminder_when_the_request_went_to_a_manager(): void
+    {
+        $draft = $this->draftAged(5);
+        $draft->conversation->update(['sales_state' => ['handled' => 2, 'stage' => 'handed_over']]);
+        $this->assertFalse(app(SalesAssistant::class)->draftNudge($draft->refresh()));
+        $this->assertSame([], $this->toCustomer());
+        $this->assertSame([], $this->calls);
+    }
+
     public function test_a_steady_reorder_that_is_overdue_gives_one_hint_to_the_sales_chat(): void
     {
         $user = TelegramUser::create(['telegram_id' => '7002', 'name' => 'Aziz']);
