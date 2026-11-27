@@ -734,7 +734,9 @@ TXT;
 
         $profile = [
             'Channel: the customer can write to the bot and to our Premium account; this is one conversation (each line says which chat). Your reply goes to the chat they wrote in last: '.($conversation->via() === 'assistant' ? 'the Premium-account chat — no buttons, the phone is typed' : 'the bot chat'),
-            'Now: '.now()->setTimezone($tz)->format('D d.m.Y H:i').' Tashkent — '.($settings->isWorkingTime() ? 'working hours' : 'outside working hours'),
+            'Now: '.now()->setTimezone($tz)->format('D d.m.Y H:i').' Tashkent — '.($settings->isWorkingTime() ? 'working hours'
+                : 'outside working hours'.(($holiday = $settings->holidayOn(now())) !== null ? ' (holiday'.($holiday !== '' ? ': '.$holiday : '').')' : '')
+                    .'; managers are back '.$settings->nextOpening()->format('D d.m H:i')),
             'Customer: '.($earlier || $user?->phone ? 'returning' : 'new').'; Telegram name: '.($user?->profile_name ?: '—')
                 .($user?->username && $settings->sendsToClaude('username') ? ' (@'.$user->username.')' : ''),
             'Known contacts: name '.($user?->name ?: '—').', phone '.($sendPhone ? ($user?->phone ?: '—') : ($user?->phone ? 'known (the number is kept by us)' : '—'))

@@ -26,7 +26,7 @@ class SalesAssistantSetting extends Model
     /** What the assistant does when a customer writes outside working hours. */
     public const OFF_HOURS_MODES = [
         'note' => 'Send the working hours once, then stay silent until the office opens',
-        'ai' => 'Answer as in working hours',
+        'ai' => 'Answer fully, as in working hours (what a manager must confirm waits for the morning)',
         'silent' => 'Send nothing (managers answer when the office opens)',
     ];
 
@@ -35,6 +35,7 @@ class SalesAssistantSetting extends Model
         'remind_after_hours', 'close_after_hours', 'follow_up_days', 'model', 'prompt', 'employee_ids', 'platform_rules', 'dev_mode',
         'off_hours_mode', 'require_assignment', 'greeting_prompt', 'greeting_channels', 'employee_roles',
         'expert_remind_minutes', 'expert_escalate_minutes', 'claude_data', 'new_contact_mode', 'large_order_sum', 'lead_remind_minutes', 'draft_nudge_days', 'reorder_hints',
+        'holidays', 'morning_summary', 'morning_summary_sent_on',
     ];
 
     /** A draft order the customer left: the AI writes once after this many days (working hours). */
@@ -75,7 +76,7 @@ class SalesAssistantSetting extends Model
 
     protected function casts(): array
     {
-        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array', 'large_order_sum' => 'integer', 'lead_remind_minutes' => 'integer', 'draft_nudge_days' => 'integer', 'reorder_hints' => 'boolean'];
+        return ['greeting_channels' => 'array', 'require_assignment' => 'boolean', 'work_days' => 'array', 'wait_minutes' => 'integer', 'remind_after_hours' => 'integer', 'close_after_hours' => 'integer', 'follow_up_days' => 'integer', 'dev_mode' => 'boolean', 'expert_remind_minutes' => 'integer', 'expert_escalate_minutes' => 'integer', 'claude_data' => 'array', 'large_order_sum' => 'integer', 'lead_remind_minutes' => 'integer', 'draft_nudge_days' => 'integer', 'reorder_hints' => 'boolean', 'morning_summary' => 'boolean', 'morning_summary_sent_on' => 'date'];
     }
 
     /** A request nobody took: minutes (working time) before the main admin is reminded. */
@@ -141,7 +142,90 @@ class SalesAssistantSetting extends Model
         $at = ($at ?? now())->copy()->setTimezone(self::TZ);
         $time = $at->format('H:i');
 
-        return in_array($at->isoWeekday(), $this->workDays(), true) && $time >= (string) $this->work_start && $time < (string) $this->work_end;
+        return $this->isWorkingDay($at) && $time >= (string) $this->work_start && $time < (string) $this->work_end;
+    }
+
+    /** A working weekday that is not a holiday (Tashkent date). */
+    public function isWorkingDay(Carbon $day): bool
+    {
+        $day = $day->copy()->setTimezone(self::TZ);
+
+        return in_array($day->isoWeekday(), $this->workDays(), true) && $this->holidayOn($day) === null;
+    }
+
+    /**
+     * Holidays from the settings, one per line: "2027-03-21 Navruz", a range "2027-03-20 – 2027-03-23 Navruz",
+     * dates also as 21.03.2027. Lines that do not parse are skipped (the settings form refuses them).
+     *
+     * @return list<array{from: string, to: string, name: string}>
+     */
+    public function holidays(): array
+    {
+        return array_values(array_filter(array_map(fn ($line) => self::parseHoliday($line), preg_split('/\R/u', (string) $this->holidays))));
+    }
+
+    /** One holiday line → {from, to (Y-m-d), name}; null for an empty or unreadable line or a range over 31 days. */
+    public static function parseHoliday(string $line): ?array
+    {
+        $date = '(\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4})';
+        if (! preg_match('/^\s*'.$date.'(?:\s*(?:-|–|—|\.\.)\s*'.$date.')?(?:\s+(.*))?\s*$/u', $line, $m)) {
+            return null;
+        }
+        $parse = function (string $d): ?string {
+            if (str_contains($d, '.')) {
+                [$day, $month, $year] = array_map('intval', explode('.', $d));
+            } else {
+                [$year, $month, $day] = array_map('intval', explode('-', $d));
+            }
+
+            return checkdate($month, $day, $year) ? sprintf('%04d-%02d-%02d', $year, $month, $day) : null;
+        };
+        $from = $parse($m[1]);
+        $to = ($m[2] ?? '') !== '' ? $parse($m[2]) : $from;
+        if (! $from || ! $to || $to < $from || Carbon::parse($from)->diffInDays(Carbon::parse($to)) > 30) {
+            return null;
+        }
+
+        return ['from' => $from, 'to' => $to, 'name' => mb_substr(trim($m[3] ?? '', " \t-–—:"), 0, 60)];
+    }
+
+    /** The holiday's name on that day ('' when it has none), or null on an ordinary day. */
+    public function holidayOn(Carbon $day): ?string
+    {
+        $date = $day->copy()->setTimezone(self::TZ)->toDateString();
+        foreach ($this->holidays() as $h) {
+            if ($date >= $h['from'] && $date <= $h['to']) {
+                return $h['name'];
+            }
+        }
+
+        return null;
+    }
+
+    /** @return list<string> holidays from today on, for the AI ("21.03 Navruz"), at most 5 */
+    public function upcomingHolidays(int $days = 60): array
+    {
+        $today = now()->setTimezone(self::TZ)->toDateString();
+        $until = now()->setTimezone(self::TZ)->addDays($days)->toDateString();
+
+        return collect($this->holidays())->filter(fn ($h) => $h['to'] >= $today && $h['from'] <= $until)->sortBy('from')->take(5)
+            ->map(fn ($h) => Carbon::parse($h['from'])->format('d.m').($h['to'] !== $h['from'] ? '–'.Carbon::parse($h['to'])->format('d.m') : '').($h['name'] !== '' ? ' '.$h['name'] : ''))
+            ->values()->all();
+    }
+
+    /** The end of the last working period before $at (Tashkent time). */
+    public function previousClosing(?Carbon $at = null): Carbon
+    {
+        $at = ($at ?? now())->copy()->setTimezone(self::TZ);
+        for ($i = 0; $i <= 400; $i++) { // holidays can chain
+            $day = $at->copy()->startOfDay()->subDays($i);
+            $close = $day->copy()->setTimeFromTimeString((string) ($this->work_end ?: '18:00'));
+            if ($this->isWorkingDay($day) && $close->lte($at)) {
+                return $close;
+            }
+        }
+
+        return $at->copy()->subDay();
     }
 
     /** The AI team talks only with assigned clients; others get the greeting (null = config, on). */
@@ -197,10 +281,10 @@ class SalesAssistantSetting extends Model
 
     public function offHoursMode(): string
     {
-        // Not chosen yet: the config default (note; the test suite uses ai, the earlier behaviour).
-        $mode = (string) ($this->off_hours_mode ?? config('services.telegram.sales_off_hours', 'note'));
+        // Not chosen yet: the config default (ai — answer fully; SALES_OFF_HOURS can choose note or silent).
+        $mode = (string) ($this->off_hours_mode ?? config('services.telegram.sales_off_hours', 'ai'));
 
-        return array_key_exists($mode, self::OFF_HOURS_MODES) ? $mode : 'note';
+        return array_key_exists($mode, self::OFF_HOURS_MODES) ? $mode : 'ai';
     }
 
     /** Expert questions: a reminder to the expert after this many working minutes, then the main admin. */
@@ -225,7 +309,7 @@ class SalesAssistantSetting extends Model
         $to = $to->copy()->setTimezone(self::TZ);
         $minutes = 0;
         for ($day = $from->copy()->startOfDay(), $i = 0; $day->lte($to) && $i < 400; $day->addDay(), $i++) {
-            if (! in_array($day->isoWeekday(), $this->workDays(), true)) {
+            if (! $this->isWorkingDay($day)) {
                 continue;
             }
             $open = $day->copy()->setTimeFromTimeString((string) ($this->work_start ?: '09:00'));
@@ -244,10 +328,10 @@ class SalesAssistantSetting extends Model
     public function nextOpening(?Carbon $at = null): Carbon
     {
         $at = ($at ?? now())->copy()->setTimezone(self::TZ);
-        for ($i = 0; $i <= 7; $i++) {
+        for ($i = 0; $i <= 400; $i++) { // holidays can chain for weeks
             $day = $at->copy()->startOfDay()->addDays($i);
             $open = $day->copy()->setTimeFromTimeString((string) ($this->work_start ?: '09:00'));
-            if (in_array($day->isoWeekday(), $this->workDays(), true) && $open->gt($at)) {
+            if ($this->isWorkingDay($day) && $open->gt($at)) {
                 return $open;
             }
         }
@@ -287,7 +371,11 @@ class SalesAssistantSetting extends Model
             default => (string) (((array) __('chat.sales_on_day', [], $locale))[$open->isoWeekday()] ?? ''),
         };
 
-        return __('chat.sales_off_hours', ['hours' => $this->hoursText($locale), 'when' => $when, 'time' => $open->format('H:i')], $locale);
+        $note = __('chat.sales_off_hours', ['hours' => $this->hoursText($locale), 'when' => $days > 7 ? $open->format('d.m') : $when, 'time' => $open->format('H:i')], $locale);
+        $holiday = $this->holidayOn($now);
+
+        return $holiday === null ? $note
+            : __($holiday !== '' ? 'chat.sales_holiday_named' : 'chat.sales_holiday', ['holiday' => $holiday], $locale).' '.$note;
     }
 
     /** Whether the assistant talks to this customer in this channel (telegram | business). Employees never. */
@@ -352,7 +440,10 @@ class SalesAssistantSetting extends Model
         };
 
         return $head
-            ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours ".($this->offHoursMode() === 'ai' ? 'you answer at once.' : 'customers get a fixed note with these hours; the managers answer them when the office opens.')
+            ."\n\n# WORKING HOURS (Tashkent time)\n{$days} {$this->work_start}–{$this->work_end}. In Business chats during working hours a manager gets {$this->wait_minutes} minutes to answer first; outside working hours ".($this->offHoursMode() === 'ai'
+                ? 'you answer at once and fully: answer questions and take the order or request as usual. Managers are not at work then: whatever a manager must confirm (a special price or discount, a delivery date, reserving stock, an invoice or payment, a call back) — collect it and say a manager will confirm it when the office opens (CONVERSATION CONTEXT says when); never say it is already done.'
+                : 'customers get a fixed note with these hours; the managers answer them when the office opens.')
+            .($this->upcomingHolidays() ? ' The office is closed on holidays: '.implode(', ', $this->upcomingHolidays()).'.' : '')
             .($this->largeOrderSum() > 0 ? "\n\n# LARGE ORDER\nWhen the products the customer wants, priced from PRODUCT CATALOG (price × quantity), add up to ".number_format($this->largeOrderSum(), 0, '', ' ')
                 .' sum or more: do not sell further or discuss terms. Confirm the summary and the contacts, set confirmed true and say a manager will take the order personally; begin the summary with "Large order ≈ <total> sum".' : '')
             ."\n\n# KNOWLEDGE (use only this; never add facts)\n".SalesKnowledge::forPrompt();

@@ -59,9 +59,21 @@
                         <option value="{{ $value }}" @selected(old('off_hours_mode', $settings->offHoursMode()) === $value)>{{ $name }}</option>
                     @endforeach
                 </select>
-                <p class="text-xs text-slate-400 mt-1">The note goes once per closed period, in the customer's language — e.g. “{{ $settings->offHoursNote('en') }}” Later messages get no reply; they stay in Waiting for reply for the managers.</p>
+                <p class="text-xs text-slate-400 mt-1"><b class="font-medium">Answer fully</b> — the AI talks and takes orders at night too; a special price, delivery date, invoice or call is collected and left for a manager to confirm when the office opens. <b class="font-medium">Note</b> — sent once per closed period in the customer's language (e.g. “{{ $settings->offHoursNote('en') }}”); later messages get no reply and stay in Waiting for reply.</p>
                 @error('off_hours_mode')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
+            <div class="max-w-xl">
+                <label for="holidays" class="block text-sm font-medium text-slate-700 mb-1">Holidays and days off (one per line)</label>
+                <textarea id="holidays" name="holidays" rows="5" maxlength="5000" placeholder="2027-01-01 New Year&#10;2027-03-20 – 2027-03-23 Navruz&#10;09.05.2027 Remembrance Day" class="{{ $input }} font-mono">{{ old('holidays', $settings->holidays) }}</textarea>
+                <p class="text-xs text-slate-400 mt-1">A date (2027-03-21 or 21.03.2027) or a range up to 31 days, then the name. These days are off hours all day: the note says the office is closed for the holiday, reminders and expert questions wait, and the AI knows the next 60 days' holidays.</p>
+                @error('holidays')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <input type="hidden" name="morning_summary" value="0">
+            <label class="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="morning_summary" value="1" @checked(old('morning_summary', $settings->morning_summary)) class="mt-0.5 rounded border-slate-300">
+                <span><span class="font-medium">Morning summary to the sales chat</span>
+                    <span class="block text-xs text-slate-400">When the office opens: who wrote while it was closed, what they want, whether the AI answered and who still waits, and the new requests — with links. Nothing is sent when nobody wrote.</span></span>
+            </label>
         </fieldset>
 
         <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

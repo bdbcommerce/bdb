@@ -31,6 +31,16 @@ class SalesAssistantController extends Controller
             'work_start' => $time,
             'work_end' => [...$time, Rule::when(is_string($request->input('work_start')), 'after:work_start')],
             'off_hours_mode' => ['sometimes', 'required', Rule::in(array_keys(SalesAssistantSetting::OFF_HOURS_MODES))],
+            'holidays' => ['sometimes', 'nullable', 'string', 'max:5000', function ($attribute, $value, $fail) {
+                foreach (preg_split('/\R/u', (string) $value) as $i => $line) {
+                    if (trim($line) !== '' && SalesAssistantSetting::parseHoliday($line) === null) {
+                        $fail('Holidays, line '.($i + 1).' ("'.mb_strimwidth(trim($line), 0, 40, '…').'"): write a date like 2027-03-21 or 21.03.2027, or a range of up to 31 days, then the name.');
+
+                        return;
+                    }
+                }
+            }],
+            'morning_summary' => ['sometimes', 'boolean'],
             'require_assignment' => ['sometimes', 'boolean'],
             'greeting_channels' => ['sometimes', 'array'],
             'greeting_channels.*' => [Rule::in(array_keys(SalesAssistantSetting::GREETING_CHANNELS))],
@@ -70,6 +80,10 @@ class SalesAssistantController extends Controller
         if (array_key_exists('employee_roles', $data)) {
             $roles = collect(preg_split('/\R/u', (string) $data['employee_roles']))->map(fn ($r) => trim(mb_substr($r, 0, 60)))->filter()->unique()->values();
             $data['employee_roles'] = $roles->isEmpty() || $roles->all() === SalesAssistantSetting::DEFAULT_EMPLOYEE_ROLES ? null : $roles->implode("\n");
+        }
+        if (array_key_exists('holidays', $data)) {
+            $lines = collect(preg_split('/\R/u', (string) $data['holidays']))->map(fn ($l) => trim($l))->filter()->values();
+            $data['holidays'] = $lines->isEmpty() ? null : $lines->implode("\n");
         }
         $data['work_days'] = array_values(array_unique(array_map('intval', $data['work_days'])));
         sort($data['work_days']);

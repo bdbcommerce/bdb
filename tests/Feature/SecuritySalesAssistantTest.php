@@ -202,6 +202,8 @@ class SecuritySalesAssistantTest extends TestCase
         ChatConversation::create(['uuid' => 'u1', 'channel' => 'telegram', 'external_id' => '7001', 'locale' => 'ru', 'messages' => [
             ['role' => 'user', 'content' => 'Narxi qancha?', 'at' => $at->toIso8601String()]]]);
         $this->answers = [$this->answer(['reply' => 'Salom!'])];
+        // The managers' morning summary may list it; the customer gets nothing.
+        SalesAssistantSetting::current()->update(['morning_summary' => false]);
 
         $this->artisan('sales:assistant-tick')->assertSuccessful();
 

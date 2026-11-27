@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\SalesAssistantSetting;
 use App\Services\SalesAssistant\ExpertDesk;
 use App\Services\SalesAssistant\LeadDesk;
+use App\Services\SalesAssistant\MorningSummary;
 use App\Services\SalesAssistant\OrderBook;
 use App\Services\SalesAssistant\SalesAssistant;
 use App\Services\Seo\SeoFiles;
@@ -34,6 +35,8 @@ class SalesAssistantTick extends Command
         // Requests nobody took ("I take it") in time: the main admin is reminded.
         ($leads = rescue(fn () => app(LeadDesk::class)->tick(), 0)) && $this->info("Requests not taken, reminded: {$leads}.");
         $settings = SalesAssistantSetting::current();
+        // When the office opens: who wrote while it was closed, to the sales chat (once a working day).
+        ($morning = rescue(fn () => app(MorningSummary::class)->run($settings), 0)) && $this->info("Morning summary: {$morning} chats.");
         if ($settings->bot_mode !== 'on' && $settings->business_mode !== 'on') {
             return self::SUCCESS;
         }
