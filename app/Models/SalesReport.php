@@ -14,13 +14,13 @@ class SalesReport extends Model
     public const KEEP_DAYS = 365;
 
     protected $fillable = [
-        'period', 'period_start', 'period_end', 'trigger', 'status', 'chat_id', 'conversations', 'report', 'html', 'message_ids',
+        'period', 'period_start', 'period_end', 'trigger', 'status', 'chat_id', 'conversations', 'report', 'metrics', 'html', 'message_ids',
         'model', 'input_tokens', 'output_tokens', 'cost_usd', 'error',
     ];
 
     protected function casts(): array
     {
-        return ['period_start' => 'datetime', 'period_end' => 'datetime', 'report' => 'array', 'message_ids' => 'array', 'cost_usd' => 'float'];
+        return ['period_start' => 'datetime', 'period_end' => 'datetime', 'report' => 'array', 'metrics' => 'array', 'message_ids' => 'array', 'cost_usd' => 'float'];
     }
 
     /**
@@ -37,6 +37,13 @@ class SalesReport extends Model
             return (string) preg_replace_callback('/<a\b[^>]*>/i', fn ($m) => preg_match('/\bhref="(https?:\/\/[^"<>\s]+)"/i', $m[0], $h)
                 ? '<a href="'.$h[1].'" target="_blank" rel="noopener noreferrer">' : '<a>', $html);
         }, array_values(array_filter(explode("\n\n— — —\n\n", (string) $this->html), 'strlen')));
+    }
+
+    /** The latest earlier report of the same period that has numbers (for the change shown on the admin page). */
+    public function previous(): ?self
+    {
+        return static::where('period', $this->period)->whereNotNull('metrics')->where('period_end', '<=', $this->period_start)
+            ->whereKeyNot($this->id)->latest('period_end')->first();
     }
 
     public function prunable(): Builder

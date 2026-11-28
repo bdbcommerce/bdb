@@ -124,7 +124,7 @@
                                 <td class="px-3 py-2">{{ $report->conversations }}</td>
                                 <td class="px-3 py-2">{{ count(array_filter((array) $report->message_ids)) }}</td>
                                 <td class="px-3 py-2">{{ \App\Services\Invoices\ClaudePricing::format($report->cost_usd) }}</td>
-                                <td class="px-3 py-2 text-right">@if ($report->html)<a href="{{ route('admin.sales-report.show', $report) }}" class="underline text-slate-700">View</a>@endif</td>
+                                <td class="px-3 py-2 text-right">@if ($report->html || $report->metrics)<a href="{{ route('admin.sales-report.show', $report) }}" class="underline text-slate-700">View</a>@endif</td>
                             </tr>
                         @endforeach
                     </tbody>

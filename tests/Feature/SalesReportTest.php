@@ -126,7 +126,7 @@ class SalesReportTest extends TestCase
         $sent = $this->sent();
         $this->assertSame([self::GROUP], array_values(array_unique(array_column($sent, 'chat'))), 'only the Telegram group');
         $texts = array_column($sent, 'text');
-        $this->assertCount(4, $texts, 'intro, the order, other chats, summary');
+        $this->assertCount(5, $texts, 'intro, the order, other chats, the numbers, summary');
         $this->assertStringContainsString('Haftalik savdo hisoboti', $texts[0]);
         $this->assertStringContainsString('🟢 <b>Ali &lt;b&gt;Valiyev&lt;/b&gt; (Mega Market)</b>', $texts[1]);
         $this->assertStringContainsString('5 × DS2208 &lt;a href=&quot;x&quot;&gt;', $texts[1]);
@@ -134,9 +134,11 @@ class SalesReportTest extends TestCase
         $this->assertStringContainsString('Send the invoice', $texts[1]);
         $this->assertStringContainsString('Greeting only', $texts[2]);
         $this->assertStringNotContainsString('Made up', implode('', $texts), 'refs Claude invented are dropped');
-        $this->assertStringContainsString('Sales: Aziz', $texts[3]);
-        $this->assertStringContainsString('&lt;script&gt;', $texts[3]);
-        $this->assertStringContainsString('100%', $texts[3]);
+        $this->assertStringContainsString('📈 <b>Raqamlar</b>', $texts[3]);
+        $this->assertStringContainsString('## Measured numbers', $data);
+        $this->assertStringContainsString('Sales: Aziz', $texts[4]);
+        $this->assertStringContainsString('&lt;script&gt;', $texts[4]);
+        $this->assertStringContainsString('100%', $texts[4]);
 
         $report = SalesReport::sole();
         $this->assertSame(['sent', 2, self::GROUP], [$report->status, $report->conversations, $report->chat_id]);

@@ -115,6 +115,16 @@ class SalesReporter
             }
             $data = $this->collect($from, $to, $settings->channelList());
             $report->conversations = count($data['chats']);
+            // Measured numbers (step 8): kept on the report even when Claude or Telegram fails later.
+            $report->metrics = rescue(fn () => app(SalesMetrics::class)->measure($from, $to, $data['reply_times']), null);
+            if ($report->metrics) {
+                // Before the first "## Conversations" (ours; customer text only comes after it).
+                $at = strpos($data['text'], "\n## Conversations\n");
+                if ($at !== false) {
+                    $numbers = "\n## Measured numbers (from our database; use them, never recount)\n".$this->maskPhones(SalesMetrics::forPrompt($report->metrics))."\n";
+                    $data['text'] = substr_replace($data['text'], $numbers, $at, 0);
+                }
+            }
 
             if (! $data['chats'] && $data['omitted']) {
                 throw new RuntimeException("All {$data['omitted']} conversations were left out (too much text for one report).");
@@ -144,7 +154,7 @@ class SalesReporter
             // Saved before sending: the analysis is paid for, so keep it even when Telegram fails.
             $report->save();
 
-            $messages = $this->render($json, $data, $from, $to, $lang, (float) $report->cost_usd, $period);
+            $messages = $this->render($json, $data, $from, $to, $lang, (float) $report->cost_usd, $period, $report->metrics);
             $report->html = implode("\n\n— — —\n\n", $messages);
             $ids = $this->send($chat, $messages);
             $report->message_ids = $ids;
@@ -427,7 +437,7 @@ class SalesReporter
      *
      * @return list<string>
      */
-    public function render(array $json, array $data, Carbon $from, Carbon $to, string $lang, float $cost = 0, string $period = 'week'): array
+    public function render(array $json, array $data, Carbon $from, Carbon $to, string $lang, float $cost = 0, string $period = 'week', ?array $metrics = null): array
     {
         $l = fn (string $key) => $this->label($lang, $key, $period);
         // Claude's texts are shortened before escaping, so a message stays under Telegram's limit without cutting HTML.
@@ -516,6 +526,10 @@ class SalesReporter
         $end = (filled($json['conclusion'] ?? null) ? '<b>'.e($l('conclusion')).':</b> '.$t($json['conclusion'], 1500) : '')
             .(filled($json['next_week_goal'] ?? null) ? "\n🎯 <b>".e($l('goal')).':</b> '.$t($json['next_week_goal']) : '');
         $summary[] = trim($end."\n\n<i>Claude Opus 5.5 · ".e(ClaudePricing::format($cost)).'</i>');
+
+        if ($metrics) {
+            $messages[] = $this->fit($this->maskPhones(app(SalesMetrics::class)->telegram($metrics, $lang)));
+        }
 
         return array_merge($messages, $this->chunks(null, $summary, "\n\n"));
     }

@@ -67,6 +67,6 @@ class SalesReportController extends Controller
 
     public function show(SalesReport $salesReport)
     {
-        return view('admin.sales-report.show', ['report' => $salesReport]);
+        return view('admin.sales-report.show', ['report' => $salesReport, 'previous' => $salesReport->metrics ? $salesReport->previous() : null]);
     }
 }
