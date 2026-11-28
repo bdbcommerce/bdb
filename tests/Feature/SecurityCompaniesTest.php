@@ -277,26 +277,53 @@ class SecurityCompaniesTest extends TestCase
 
     // ---- Transport -----------------------------------------------------------------------------------
 
-    /** Holds: outside local / tests a plain-http 1C or registry URL is refused before any request (no Basic auth over http). */
-    public function test_http_urls_are_refused_in_production(): void
+    /** Holds: only http:// and https:// 1C / registry URLs are requested; any other scheme is refused before a request. */
+    public function test_only_http_and_https_urls_are_requested_in_production(): void
     {
-        config(['services.onec.url' => 'http://1c.test/hs', 'services.registry.url' => 'http://registry.test/api/{inn}']);
         $env = $this->app['env'];
         $this->app['env'] = 'production';
         try {
+            config(['services.onec.url' => 'ftp://1c.test/hs', 'services.registry.url' => 'file://registry.test/api/{inn}']);
             foreach (['fromOneCList', 'fromRegistry'] as $method) {
                 try {
                     app(CompanyLookup::class)->{$method}('301234567');
-                    $this->fail("{$method} accepted an http URL");
+                    $this->fail("{$method} accepted a URL that is not http(s)");
                 } catch (RuntimeException $e) {
-                    $this->assertStringContainsString('https://', $e->getMessage());
+                    $this->assertStringContainsString('http://', $e->getMessage());
                     $this->assertStringNotContainsString('secret', $e->getMessage());
                 }
             }
+            $this->assertSame(0, Http::recorded(fn (Request $r) => str_contains($r->url(), '1c.test') || str_contains($r->url(), 'registry.test'))->count());
+
+            // Plain http is accepted: the 1C server may have no certificate.
+            config(['services.onec.url' => 'http://1c.test/hs', 'services.registry.url' => 'http://registry.test/api/{inn}']);
+            foreach (['fromOneCList', 'fromRegistry'] as $method) {
+                try {
+                    app(CompanyLookup::class)->{$method}('301234567');
+                } catch (RuntimeException $e) {
+                    $this->assertStringNotContainsString('must start with', $e->getMessage());
+                }
+            }
+            $this->assertGreaterThan(0, Http::recorded(fn (Request $r) => str_starts_with($r->url(), 'http://1c.test'))->count());
+            $this->assertGreaterThan(0, Http::recorded(fn (Request $r) => str_starts_with($r->url(), 'http://registry.test'))->count());
         } finally {
             $this->app['env'] = $env;
         }
-        $this->assertSame(0, Http::recorded(fn (Request $r) => str_contains($r->url(), '1c.test') || str_contains($r->url(), 'registry.test'))->count());
+    }
+
+    /** Holds: a 1C / registry address typed with backslashes or spaces around it is still requested as a normal URL. */
+    public function test_backslash_urls_are_normalised(): void
+    {
+        config(['services.onec.url' => ' http:\\\\1c.test\\hs\\ ', 'services.registry.url' => ' http:\\\\registry.test\\api\\{inn} ']);
+        foreach (['fromOneCList', 'fromRegistry'] as $method) {
+            try {
+                app(CompanyLookup::class)->{$method}('301234567');
+            } catch (RuntimeException $e) {
+                $this->assertStringNotContainsString('must start with', $e->getMessage());
+            }
+        }
+        $this->assertGreaterThan(0, Http::recorded(fn (Request $r) => str_starts_with($r->url(), 'http://1c.test/hs/'))->count());
+        $this->assertGreaterThan(0, Http::recorded(fn (Request $r) => str_starts_with($r->url(), 'http://registry.test/api/301234567'))->count());
     }
 
     /** Holds: 1C redirects are not followed (the Basic auth header never goes to another host). */

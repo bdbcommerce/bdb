@@ -404,17 +404,19 @@ class CompanyLookup
 
     private function url(string $base, string $path, string $inn): string
     {
-        return rtrim($base, '/').'/'.ltrim(str_replace('{inn}', $inn, $path), '/');
+        // A Windows-style address typed with backslashes (http:\\host\base\hs\) still works.
+        return rtrim(str_replace('\\', '/', trim($base)), '/').'/'.ltrim(str_replace('{inn}', $inn, $path), '/');
     }
 
     /**
-     * GET (or POST with a JSON body) → JSON; the $notFound statuses = unknown (null). HTTPS only (plain http only
-     * locally / in tests), no redirects; the login never appears in errors.
+     * GET (or POST with a JSON body) → JSON; the $notFound statuses = unknown (null). http:// and https://
+     * are both accepted (the 1C server may be plain http), no redirects; the login never appears in errors.
      */
     private function get(string $what, string $url, callable $auth, int $timeout, ?array $post = null, array $notFound = [404]): mixed
     {
-        if (! str_starts_with(strtolower($url), 'https://') && ! (app()->isLocal() || app()->runningUnitTests())) {
-            throw new RuntimeException("{$what}: the URL must start with https://");
+        $url = str_replace('\\', '/', trim($url)); // the registry URL does not go through url()
+        if (! preg_match('#^https?://#i', $url)) {
+            throw new RuntimeException("{$what}: the URL must start with http:// or https://");
         }
         $http = $auth(Http::timeout(max(3, min($timeout, 120)))->acceptJson()->withoutRedirecting());
         /** @var Response $response */

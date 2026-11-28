@@ -24,9 +24,10 @@ class OneCProbe extends Command
 
             return self::FAILURE;
         }
-        $url = rtrim($base, '/').'/'.ltrim((string) $this->argument('path'), '/');
+        // Same as CompanyLookup::url: an address typed with backslashes still works.
+        $url = rtrim(str_replace('\\', '/', trim($base)), '/').'/'.ltrim((string) $this->argument('path'), '/');
         if (! str_starts_with(strtolower($url), 'https://')) {
-            $this->warn('Plain http: the 1C login and password travel unencrypted. Use https:// for production.');
+            $this->warn('Plain http: the 1C login and password travel unencrypted (fine on your own network or a VPN).');
         }
         $method = strtoupper((string) $this->option('method'));
         $body = $this->option('body') ? json_decode((string) $this->option('body'), true) : null;
