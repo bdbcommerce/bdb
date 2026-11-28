@@ -312,7 +312,15 @@ class ExpertDesk
         }
         $file = is_string($voice['file_id'] ?? null) ? $this->api->downloadFile($voice['file_id'], self::VOICE_MAX_BYTES) : null;
         $name = is_string($voice['file_name'] ?? null) && preg_match('/\.(mp3|m4a|wav|ogg|oga|opus|webm|flac)$/i', $voice['file_name'], $ext) ? 'voice.'.strtolower($ext[1]) : 'voice.ogg';
-        $result = $file ? $this->transcriber->transcribe($file['body'], $name) : null;
+        // The real length of Telegram voice is read from the file; a paid transcriber gets nothing it cannot measure.
+        $real = $file ? VoiceTranscriber::oggSeconds($file['body']) : null;
+        if ($file && (($real !== null && $real > self::VOICE_MAX_SECONDS + 1) || ($real === null && $this->transcriber->paid()))) {
+            $file = null;
+        }
+        $result = $file ? $this->transcriber->transcribeVoice(
+            ['file_id' => $voice['file_id'], 'file_unique_id' => $voice['file_unique_id'] ?? null, 'telegram_id' => $expert->telegram_id, 'source' => 'expert'],
+            $file['body'], $name,
+        ) : null;
         $text = is_array($result) ? trim((string) ($result['text'] ?? '')) : '';
         if ($text === '' || VoiceTranscriber::isHallucination($text)) {
             $this->say($expert, $this->t('voice_failed', $expert));

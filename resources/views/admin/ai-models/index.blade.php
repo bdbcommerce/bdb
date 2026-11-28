@@ -23,12 +23,16 @@
         <span class="font-medium">Telegram voice messages:</span>
         @if($voice['forward'])
             forwarded to the sales chat with the customer's name and phone; the bot does not answer them. Staff reply from Telegram → Chats.
-            (Set TELEGRAM_VOICE_MODE=transcribe in .env to have them transcribed by Groq Whisper and answered by the AI instead.)
+            (Set TELEGRAM_VOICE_MODE=transcribe in .env to have them transcribed by {{ $voice['neuronai'] ? 'NeuronAI' : ($voice['on'] ? 'Groq Whisper (NeuronAI once NEURONAI_API_KEY is set)' : 'NeuronAI (needs NEURONAI_API_KEY)') }} and answered by the AI instead.)
+        @elseif($voice['neuronai'])
+            on — Telegram voice notes up to 1 minute from registered customers are transcribed by NeuronAI (language: {{ $voice['language'] }}), the text is sent back to the customer and answered.
+            Key: NEURONAI_API_KEY in .env. NeuronAI charges 1 credit per second of audio, so a guest's voice is forwarded to the sales chat instead, and audio files (mp3, m4a) are not read.
         @elseif($voice['on'])
             on — voice messages up to 1 minute are transcribed by Groq Whisper ({{ $voice['model'] }}), the text is sent back to the customer and answered.
             Key: {{ $voice['env'] ? 'GROQ_API_KEY in .env' : 'the key of a Groq model below' }}.
+            Set NEURONAI_API_KEY in .env to use NeuronAI instead.
         @else
-            off — add a Groq model below with its free key (any Groq model; it can stay switched off) or set GROQ_API_KEY in .env.
+            off — set NEURONAI_API_KEY in .env (a key with the stt:write permission from my.neuronai.uz → API keys).
             Until then voice messages are only saved in the chat.
         @endif
     </div>
@@ -38,13 +42,22 @@
         <h2 id="models-heading" class="px-5 pt-5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Models in use</h2>
         @if($models->isEmpty())
             <div class="px-5 py-6 text-sm text-slate-600">
-                No models added yet. The assistant uses Gemini from <code class="bg-slate-100 px-1 rounded">.env</code>
-                ({{ $env['model'] }}, key {{ $env['key'] ? 'set' : 'not set' }}).
-                @unless($env['key'])
+                No models added yet. The assistant uses {{ $default['name'] }} from <code class="bg-slate-100 px-1 rounded">.env</code>
+                ({{ $default['model'] }}, key {{ $default['key'] ? 'set' : 'not set' }}).
+                @unless($default['key'])
                     <span class="text-red-700">Without a key the AI cannot answer: add a model below.</span>
                 @endunless
             </div>
         @else
+            @unless($models->contains('is_active', true))
+                <p class="px-5 pt-3 text-sm text-slate-600">
+                    No model is switched on, so the assistant uses {{ $default['name'] }} from <code class="bg-slate-100 px-1 rounded">.env</code>
+                    ({{ $default['model'] }}, key {{ $default['key'] ? 'set' : 'not set' }}).
+                    @unless($default['key'])
+                        <span class="text-red-700">Without a key the AI cannot answer: set ANTHROPIC_API_KEY or switch a model on below.</span>
+                    @endunless
+                </p>
+            @endunless
             <ul class="divide-y divide-slate-100 mt-3" role="list">
                 @foreach($models as $model)
                     <li class="px-5 py-4 flex flex-wrap items-start gap-x-4 gap-y-2">

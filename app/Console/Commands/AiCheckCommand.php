@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 
 /**
  * Why can't the AI answer? Makes one tiny real call to each active model (Admin → AI settings,
- * or Gemini from .env when none are set up) and prints the exact error.
+ * or the default Claude from .env when none are switched on) and prints the exact error.
  */
 class AiCheckCommand extends Command
 {
@@ -30,8 +30,8 @@ class AiCheckCommand extends Command
 
         $models = AiModel::where('is_active', true)->orderBy('priority')->orderBy('id')->get();
         if ($models->isEmpty()) {
-            $this->line('No active models in Admin → AI settings; using Gemini from .env.');
             $models = collect([AiModel::fromEnv()]);
+            $this->line('No active models in Admin → AI settings; using '.$models[0]->name.'.');
         }
 
         $working = 0;

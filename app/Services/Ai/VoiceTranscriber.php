@@ -3,14 +3,16 @@
 namespace App\Services\Ai;
 
 use App\Models\AiModel;
+use App\Models\VoiceTranscription;
 use App\Services\AiErrorAlerts;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Speech to text with Groq Whisper (OpenAI-compatible /audio/transcriptions).
- * The key is GROQ_API_KEY, else the key of any Groq model in Admin → AI settings.
+ * Speech to text. NeuronAI (POST {url}/stt/transcribe, key NEURONAI_API_KEY) is the transcriber; while that key
+ * is empty the older Groq Whisper (OpenAI-compatible /audio/transcriptions) is used: GROQ_API_KEY, else the key
+ * of any Groq model in Admin → AI settings.
  */
 class VoiceTranscriber
 {
@@ -19,10 +21,36 @@ class VoiceTranscriber
     /** Whisper models Groq serves; large-v3 is the most accurate for Uzbek. */
     public const MODELS = ['whisper-large-v3', 'whisper-large-v3-turbo'];
 
+    /** The `language` values NeuronAI accepts. */
+    public const NEURONAI_LANGUAGES = ['auto', 'uz', 'kaa', 'ru', 'en', 'kk', 'tk', 'tg', 'tr', 'az', 'ja', 'de', 'ko'];
+
     public function __construct(private AiErrorAlerts $alerts) {}
+
+    /** neuronai | groq */
+    public function provider(): string
+    {
+        return filled(config('services.neuronai.key')) ? 'neuronai' : 'groq';
+    }
+
+    /**
+     * NeuronAI bills every second of audio. Callers then send only what they could measure themselves — Telegram
+     * voice (Ogg Opus, see oggSeconds) from registered customers — never a file whose length only the sender states.
+     */
+    public function paid(): bool
+    {
+        return $this->provider() === 'neuronai';
+    }
+
+    public function providerName(): string
+    {
+        return $this->provider() === 'neuronai' ? 'NeuronAI' : 'Groq Whisper';
+    }
 
     public function key(): ?string
     {
+        if (filled($key = config('services.neuronai.key'))) {
+            return $key;
+        }
         if (filled($key = config('services.groq.key'))) {
             return $key;
         }
@@ -84,6 +112,9 @@ class VoiceTranscriber
 
     public function model(): string
     {
+        if ($this->provider() === 'neuronai') {
+            return 'neuronai-stt';
+        }
         $model = (string) config('services.groq.transcribe_model');
 
         return in_array($model, self::MODELS, true) ? $model : self::MODELS[0];
@@ -127,46 +158,118 @@ class VoiceTranscriber
         $this->alerts->report('Voice transcription: could not download a voice message from Telegram', 'getFile or the download failed, or the file was over the size limit.', 'Telegram bot');
     }
 
+    /** What the last transcribe() call learned besides the text: language, cost, request_id, error. */
+    private array $last = [];
+
     /**
-     * @return array{text: string|null, seconds: float|null}|null null when Groq failed (admins alerted); text null for
-     *                                                            silence; seconds = the audio length Groq measured (verbose_json), counted against the daily budget
+     * transcribe() for a Telegram voice message, kept in `voice_transcriptions`: the Telegram file ID with the
+     * text that came back (or why none did).
+     *
+     * @param  array{file_id?: mixed, file_unique_id?: mixed, telegram_id?: mixed, message_id?: mixed, source?: string}  $voice
+     * @return array{text: string|null, seconds: float|null}|null
+     */
+    public function transcribeVoice(array $voice, string $audio, string $filename = 'voice.ogg'): ?array
+    {
+        $this->last = [];
+        $result = $this->transcribe($audio, $filename);
+
+        if (is_string($voice['file_id'] ?? null) && $voice['file_id'] !== '') {
+            try {
+                $short = fn ($value, int $max) => is_scalar($value) && (string) $value !== '' ? mb_substr((string) $value, 0, $max) : null;
+                VoiceTranscription::create([
+                    'file_id' => mb_substr($voice['file_id'], 0, 255),
+                    'file_unique_id' => $short($voice['file_unique_id'] ?? null, 64),
+                    'telegram_id' => $short($voice['telegram_id'] ?? null, 32),
+                    'message_id' => is_numeric($voice['message_id'] ?? null) ? (int) $voice['message_id'] : null,
+                    'source' => $short($voice['source'] ?? null, 20) ?? 'bot',
+                    'provider' => $this->provider(),
+                    'status' => $result === null ? 'failed' : ($result['text'] === null ? 'empty' : 'ok'),
+                    'text' => $result['text'] ?? null,
+                    'language' => $short($this->last['language'] ?? null, 10),
+                    'seconds' => $result['seconds'] ?? null,
+                    'cost' => is_numeric($this->last['cost'] ?? null) ? (float) $this->last['cost'] : null,
+                    'request_id' => $short($this->last['request_id'] ?? null, 64),
+                    'error' => $result === null ? $short($this->last['error'] ?? 'failed', 255) : null,
+                ]);
+            } catch (Throwable $e) {
+                Log::warning('Voice transcription: not saved', ['error' => mb_substr($e->getMessage(), 0, 300)]);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array{text: string|null, seconds: float|null}|null null when the provider failed (admins alerted); text null for
+     *                                                            silence; seconds = the audio length the provider measured, counted against the daily budget
      */
     public function transcribe(string $audio, string $filename = 'voice.ogg'): ?array
     {
         $key = $this->key();
         if (! $key) {
-            $this->alerts->report('Voice transcription: no Groq API key', 'Add a Groq key in Admin → AI settings (any Groq model) or GROQ_API_KEY in .env.', 'Telegram bot');
+            $this->last = ['error' => 'no API key'];
+            $this->alerts->report('Voice transcription: no API key', 'Set NEURONAI_API_KEY in .env (a key with the stt:write permission from my.neuronai.uz → API keys).', 'Telegram bot');
 
             return null;
         }
+        $neuron = $this->provider() === 'neuronai';
+        $name = $neuron ? 'NeuronAI' : 'Groq';
 
         try {
-            $response = Http::withToken($key)->timeout(30)
-                ->attach('file', $audio, $filename)
-                ->post(self::ENDPOINT, ['model' => $this->model(), 'response_format' => 'verbose_json', 'temperature' => '0']);
+            // No redirects: a 307 would re-post the customer's recording to another address.
+            $request = Http::withToken($key)->timeout(30)->connectTimeout(10)->withoutRedirecting()->acceptJson()->attach('file', $audio, $filename);
+            $response = $neuron
+                ? $request->post(config('services.neuronai.url').'/stt/transcribe', ['language' => $this->language()])
+                : $request->post(self::ENDPOINT, ['model' => $this->model(), 'response_format' => 'verbose_json', 'temperature' => '0']);
         } catch (Throwable $e) {
-            $this->fail('Voice transcription: Groq did not respond', $e->getMessage(), $key);
+            $this->fail("Voice transcription: {$name} did not respond", $e->getMessage(), $key);
 
             return null;
         }
 
         if ($response->failed()) {
-            $this->fail("Voice transcription: Groq HTTP {$response->status()}", (string) $response->json('error.message', $response->body()), $key);
+            // The code is the provider's text: only a plain short one is shown (the reason is also the alert's mute key).
+            $code = $response->json('error.code');
+            $code = $neuron && is_string($code) && preg_match('/\A[a-z0-9_]{1,40}\z/', $code) ? " ({$code})" : '';
+            $message = $response->json('error.message');
+            $this->fail("Voice transcription: {$name} HTTP {$response->status()}{$code}", is_string($message) ? $message : mb_substr($response->body(), 0, 500), $key);
 
             return null;
         }
 
-        $text = $response->json('text');
+        // A 200 that is not the answer (an error object, a login or proxy page): a failure, not silence.
+        if ($neuron && ! is_array($response->json('data'))) {
+            $message = $response->json('error.message');
+            $this->fail('Voice transcription: NeuronAI sent an answer without data', is_string($message) ? $message : mb_substr($response->body(), 0, 500), $key);
+
+            return null;
+        }
+
+        // NeuronAI: {"data": {"text", "duration_seconds", …}}; Groq: {"text", "duration"}.
+        $text = $response->json($neuron ? 'data.text' : 'text');
         $text = is_string($text) ? trim(preg_replace('/\s+/u', ' ', $text) ?? '') : '';
 
-        $seconds = $response->json('duration');
+        $seconds = $response->json($neuron ? 'data.duration_seconds' : 'duration');
+        $this->last = $neuron
+            ? ['language' => $response->json('data.language'), 'cost' => $response->json('data.cost'), 'request_id' => $response->json('request_id')]
+            : ['language' => $response->json('language')];
 
         return ['text' => $text !== '' ? mb_substr($text, 0, 3000) : null, 'seconds' => is_numeric($seconds) ? (float) $seconds : null];
     }
 
+    /** The language sent to NeuronAI: NEURONAI_LANGUAGE when it is one NeuronAI knows, else auto. */
+    public function language(): string
+    {
+        $language = strtolower(trim((string) config('services.neuronai.language')));
+
+        return in_array($language, self::NEURONAI_LANGUAGES, true) ? $language : 'auto';
+    }
+
     private function fail(string $reason, string $details, string $key): void
     {
-        $details = AiErrorAlerts::withoutSecrets($details, $key, config('services.groq.key'));
+        $details = AiErrorAlerts::withoutSecrets($details, $key, config('services.groq.key'), config('services.neuronai.key'));
+        $reason = AiErrorAlerts::withoutSecrets($reason, $key, config('services.groq.key'), config('services.neuronai.key'));
+        $this->last = ['error' => preg_replace('/^Voice transcription: /', '', $reason)];
         Log::warning($reason, ['error' => mb_substr($details, 0, 500)]);
         $this->alerts->report($reason, $details, 'Telegram bot', model: $this->model());
     }

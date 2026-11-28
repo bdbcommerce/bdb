@@ -31,7 +31,7 @@ class AiClient
         $label = $model->provider === 'gemini' ? 'Gemini' : $model->name;
 
         if (blank($model->key())) {
-            return $this->failure($isEnv ? 'GEMINI_API_KEY is not set in .env' : "No API key for {$model->name}");
+            return $this->failure($isEnv ? ($model->provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY').' is not set in .env' : "No API key for {$model->name}");
         }
         if ($model->provider === 'anthropic') {
             return $this->anthropic($model, $system, $contents, $schema, $maxTokens);

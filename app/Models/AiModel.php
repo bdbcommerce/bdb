@@ -145,7 +145,7 @@ class AiModel extends Model
 
     /**
      * Models to try for a task: active ones by priority, paused ones last (still better than no answer).
-     * With none configured, a model built from the .env Gemini settings.
+     * With none configured, the default model from .env (fromEnv: Claude).
      *
      * @return Collection<int, self>
      */
@@ -161,22 +161,27 @@ class AiModel extends Model
         return $models->sortBy(fn (self $m) => $m->isPaused() ? 1 : 0, SORT_REGULAR)->values();
     }
 
-    /** The Gemini model from .env (not stored), used when no models are set up. */
+    /**
+     * The default model (not stored), used while no model is switched on in AI settings: Claude with
+     * ANTHROPIC_API_KEY (AI_DEFAULT_MODEL, default Opus). Gemini only when AI_DEFAULT_PROVIDER=gemini.
+     */
     public static function fromEnv(): self
     {
+        $gemini = config('services.ai.default') === 'gemini';
+
         return new self([
-            'name' => 'Gemini (.env)',
-            'provider' => 'gemini',
-            'model' => (string) config('services.gemini.model'),
+            'name' => $gemini ? 'Gemini (.env)' : 'Claude (.env)',
+            'provider' => $gemini ? 'gemini' : 'anthropic',
+            'model' => (string) ($gemini ? config('services.gemini.model') : config('services.ai.model')),
             'tasks' => array_keys(self::TASKS),
             'is_active' => true,
         ]);
     }
 
-    /** True when any model can be tried (configured models, or a Gemini key in .env). */
+    /** True when any model can be tried (a model switched on, or a key for the default one). */
     public static function available(): bool
     {
-        return static::where('is_active', true)->exists() || filled(config('services.gemini.key'));
+        return static::where('is_active', true)->exists() || filled(self::fromEnv()->key());
     }
 
     /** The key to send: the model's own, or GEMINI_API_KEY for Gemini models without one. */

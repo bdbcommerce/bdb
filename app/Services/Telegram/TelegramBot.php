@@ -603,6 +603,13 @@ class TelegramBot
         if (! $fileId || $this->messageId === null || ! $this->transcriber->available()) {
             return;
         }
+        // A paid transcriber (NeuronAI, per second) is for registered customers: a guest's voice goes to staff.
+        $paid = $this->transcriber->paid();
+        if ($paid && ! $user->isRegistered()) {
+            $this->forwardVoice($user, $message);
+
+            return;
+        }
 
         $reply = fn (string $text) => $this->api->sendMessage($user->telegram_id, $text, [
             'reply_parameters' => ['message_id' => $this->messageId, 'allow_sending_without_reply' => true],
@@ -653,9 +660,19 @@ class TelegramBot
 
             return;
         }
+        // Anything else (mp3, m4a…) has only the length its sender states: never sent to a paid transcriber.
+        if ($paid && $real === null) {
+            $reply(__('chat.tg_voice_failed', [], $locale));
 
-        $result = $this->transcriber->transcribe($file['body'], VoiceTranscriber::filename($file['name']) ?? $filename);
-        $measured = $result['seconds'] ?? $real ?? $duration;
+            return;
+        }
+
+        $result = $this->transcriber->transcribeVoice(
+            ['file_id' => $fileId, 'file_unique_id' => $audio['file_unique_id'] ?? null, 'telegram_id' => $user->telegram_id, 'message_id' => $this->messageId, 'source' => 'bot'],
+            $file['body'], VoiceTranscriber::filename($file['name']) ?? $filename,
+        );
+        // The longest of what the transcriber measured and what the file says is counted.
+        $measured = max($result['seconds'] ?? 0, $real ?? 0) ?: $duration;
         if ($result !== null) {
             Cache::increment($secondsKey, (int) ceil(max(1, $measured)));
         }

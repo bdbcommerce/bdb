@@ -43,6 +43,10 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinutes(10, 5)->by('careers|'.$r->ip()),
             Limit::perDay(200)->by('careers|all'), // caps CV storage growth even from many IPs
         ]);
+        // Admin buttons that call 1C or the AI: one counter each, per admin (plain throttle:N,1 routes share one).
+        foreach (['products-ai' => 20, 'products-ai-batch' => 6, 'onec-import-start' => 5, 'onec-import-step' => 1200] as $name => $perMinute) {
+            RateLimiter::for($name, fn (Request $r) => Limit::perMinute($perMinute)->by($name.'|'.($r->user()?->id ?: $r->ip())));
+        }
         // Brand link redirects (/go/…): the redirect always works; this only slows down scripted floods.
         RateLimiter::for('brand-links', fn (Request $r) => Limit::perMinute(20)->by('brand-links|'.$r->ip()));
         $this->app->register(ViewServiceProvider::class);

@@ -23,9 +23,8 @@
         </div>
         <div class="w-full flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span>1C, read only:</span>
-            <form method="POST" action="{{ route('admin.companies.import') }}">@csrf<button class="border border-slate-300 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50">Load companies from 1C</button></form>
-            <form method="POST" action="{{ route('admin.companies.import-items') }}">@csrf<button class="border border-slate-300 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50">Load items from 1C</button></form>
-            <span>{{ \App\Models\OnecItem::count() }} items from 1C here.</span>
+            <form method="POST" action="{{ route('admin.companies.import') }}" data-onec-import="companies">@csrf<button class="border border-slate-300 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50">Load companies from 1C</button></form>
+            <span>Items from 1C ({{ \App\Models\OnecItem::count() }}) are loaded in the <a href="{{ route('admin.products.index') }}" class="underline hover:text-slate-900">Product catalog</a>.</span>
         </div>
     </div>
 
@@ -70,4 +69,5 @@
     </div>
     <div>{{ $clients->links() }}</div>
 </div>
+@include('admin.partials.onec-import')
 @endsection

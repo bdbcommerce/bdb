@@ -9,10 +9,12 @@ use App\Models\CompanyLink;
 use App\Models\OnecItem;
 use App\Models\OnecPerson;
 use App\Models\TelegramUser;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -30,6 +32,18 @@ class CompanyLookup
 
     /** How long the 1C company list is kept for lookups (it is ~500 entries). */
     public const LIST_MINUTES = 60;
+
+    /** Rows one step of the progress window saves. */
+    public const IMPORT_STEP = 100;
+
+    /** The 1C item fields saveItem reads: only these are kept in the cache (the raw rows are several times larger). */
+    private const ITEM_FIELDS = ['id', 'code', 'name', 'acc_name', 'short_name', 'mxik', 'barcode', 'unit', 'category_id', 'company_id', 'description'];
+
+    /** What a load counts, per list. */
+    public const IMPORT_COUNTS = [
+        'items' => ['saved' => 0, 'skipped' => 0],
+        'companies' => ['added' => 0, 'updated' => 0, 'private' => 0, 'other' => 0],
+    ];
 
     /** Field names accepted in the 1C / registry answers (first one present wins). */
     private const FIELDS = [
@@ -137,11 +151,17 @@ class CompanyLookup
             return [];
         }
 
-        return Cache::remember('onec:companies', now()->addMinutes(self::LIST_MINUTES), function () use ($c) {
-            $body = $this->get('1C companies', $this->url($c['url'], $c['companies_path'], ''), $this->oneCAuth(), max(30, (int) ($c['timeout'] ?? 15)));
+        if (is_array($cached = Cache::get('onec:companies'))) {
+            return $cached;
+        }
+        $body = $this->get('1C companies', $this->url($c['url'], $c['companies_path'], ''), $this->oneCAuth(), max(30, (int) ($c['timeout'] ?? 15)));
+        $rows = array_values(array_filter(array_map(fn ($row) => is_array($row) ? $this->mappedRow($row) : null, $this->rows($body))));
+        // An empty answer (404, an odd body) is not kept: for an hour every INN lookup would say "not in 1C".
+        if ($rows) {
+            Cache::put('onec:companies', $rows, now()->addMinutes(self::LIST_MINUTES));
+        }
 
-            return array_values(array_filter(array_map(fn ($row) => is_array($row) ? $this->mappedRow($row) : null, $this->rows($body))));
-        });
+        return $rows;
     }
 
     /**
@@ -152,38 +172,42 @@ class CompanyLookup
      */
     public function importCompanies(): array
     {
-        Cache::forget('onec:companies');
-        $counts = ['added' => 0, 'updated' => 0, 'private' => 0, 'other' => 0];
-        foreach ($this->oneCCompanies() as $row) {
-            $inn = (string) ($row['inn'] ?? '');
-            if ($inn === '') {
-                // A private person: kept with their phone, to show on the Telegram contact with the same phone.
-                if (filled($row['onec_id'] ?? null) && filled($row['name'] ?? null)) {
-                    OnecPerson::updateOrCreate(['onec_id' => mb_substr((string) $row['onec_id'], 0, 40)], [
-                        'code' => is_numeric($row['onec_code'] ?? null) ? (int) $row['onec_code'] : null, 'name' => mb_substr(self::oneLine((string) $row['name']), 0, 150),
-                        'phone' => $row['phone'] ?? null, 'address' => filled($row['address'] ?? null) ? mb_substr(self::oneLine((string) $row['address']), 0, 300) : null,
-                    ]);
-                }
-                $counts['private']++;
-
-                continue;
-            }
-            if (! Client::isInn($inn)) {
-                $counts['other']++; // a number of another length
-
-                continue;
-            }
-            $client = Client::where('inn', $inn)->first() ?? (filled($row['onec_id'] ?? null) ? Client::where('onec_id', $row['onec_id'])->first() : null);
-            if ($client) {
-                $client->update($this->fields($row, '1c', $client) + ['inn' => $inn, 'source' => '1c', 'lookup_data' => $row, 'looked_up_at' => now()]);
-                $counts['updated']++;
-            } else {
-                $this->store($inn, '1c', $row);
-                $counts['added']++;
-            }
+        $this->startImport('companies');
+        $counts = self::IMPORT_COUNTS['companies'];
+        foreach (Cache::get('onec:companies', []) as $row) {
+            $counts[$this->saveCompany($row)]++;
         }
 
         return $counts;
+    }
+
+    /** One 1C company row → added | updated | private | other. */
+    private function saveCompany(array $row): string
+    {
+        $inn = (string) ($row['inn'] ?? '');
+        if ($inn === '') {
+            // A private person: kept with their phone, to show on the Telegram contact with the same phone.
+            if (filled($row['onec_id'] ?? null) && filled($row['name'] ?? null)) {
+                OnecPerson::updateOrCreate(['onec_id' => mb_substr((string) $row['onec_id'], 0, 40)], [
+                    'code' => is_numeric($row['onec_code'] ?? null) ? (int) $row['onec_code'] : null, 'name' => mb_substr(self::oneLine((string) $row['name']), 0, 150),
+                    'phone' => $row['phone'] ?? null, 'address' => filled($row['address'] ?? null) ? mb_substr(self::oneLine((string) $row['address']), 0, 300) : null,
+                ]);
+            }
+
+            return 'private';
+        }
+        if (! Client::isInn($inn)) {
+            return 'other'; // a number of another length
+        }
+        $client = Client::where('inn', $inn)->first() ?? (filled($row['onec_id'] ?? null) ? Client::where('onec_id', $row['onec_id'])->first() : null);
+        if ($client) {
+            $client->update($this->fields($row, '1c', $client) + ['inn' => $inn, 'source' => '1c', 'lookup_data' => $row, 'looked_up_at' => now()]);
+
+            return 'updated';
+        }
+        $this->store($inn, '1c', $row);
+
+        return 'added';
     }
 
     /**
@@ -193,29 +217,97 @@ class CompanyLookup
      */
     public function importItems(): array
     {
+        $this->startImport('items');
+        $counts = self::IMPORT_COUNTS['items'];
+        foreach (Cache::get('onec:items', []) as $row) {
+            $counts[$this->saveItem($row)]++;
+        }
+
+        return $counts;
+    }
+
+    /** One 1C item row → saved | skipped. Only the 1C columns are written: the AI information (Products) stays. */
+    private function saveItem(mixed $row): string
+    {
+        if (! is_array($row) || ! is_scalar($row['id'] ?? null) || ! is_numeric($row['code'] ?? null) || blank($row['name'] ?? null)) {
+            return 'skipped';
+        }
+        $cut = fn ($v, int $max) => is_scalar($v) && trim((string) $v) !== '' ? mb_substr(self::oneLine((string) $v), 0, $max) : null;
+        try {
+            $this->writeItem($row, $cut);
+        } catch (QueryException $e) {
+            // E.g. two 1C items with one code: this row is left out, the load goes on.
+            Log::warning('1C item not saved', ['id' => (string) $row['id'], 'code' => $row['code'], 'error' => mb_substr($e->getMessage(), 0, 300)]);
+
+            return 'skipped';
+        }
+
+        return 'saved';
+    }
+
+    private function writeItem(array $row, callable $cut): void
+    {
+        OnecItem::updateOrCreate(['onec_id' => mb_substr((string) $row['id'], 0, 40)], [
+            'code' => (int) $row['code'], 'name' => $cut($row['name'], 200), 'full_name' => $cut($row['acc_name'] ?? null, 300), 'short_name' => $cut($row['short_name'] ?? null, 200),
+            'mxik' => $cut($row['mxik'] ?? null, 20), 'barcode' => $cut($row['barcode'] ?? null, 64), 'unit' => $cut($row['unit'] ?? null, 40),
+            'category_id' => is_numeric($row['category_id'] ?? null) ? (int) $row['category_id'] : null,
+            'company_onec_id' => $cut($row['company_id'] ?? null, 40), 'description' => $cut($row['description'] ?? null, 500),
+        ]);
+    }
+
+    /**
+     * The load in two parts, for the progress window: startImport asks 1C for the whole list once and keeps it
+     * (cache, LIST_MINUTES), importPart then saves it a slice at a time.
+     *
+     * @param  'items'|'companies'  $what
+     * @return int rows in the list
+     */
+    public function startImport(string $what): int
+    {
         $c = config('services.onec');
+        if ($what === 'companies') {
+            Cache::forget('onec:companies');
+
+            return count($this->oneCCompanies());
+        }
         if (blank($c['url'] ?? null) || blank($c['items_path'] ?? null)) {
             throw new RuntimeException('1C is not set (ONEC_BASE_URL / ONEC_ITEMS_PATH).');
         }
         $body = $this->get('1C items', $this->url($c['url'], $c['items_path'], ''), $this->oneCAuth(), max(30, (int) ($c['timeout'] ?? 15)));
-        $cut = fn ($v, int $max) => is_scalar($v) && trim((string) $v) !== '' ? mb_substr(self::oneLine((string) $v), 0, $max) : null;
-        $counts = ['saved' => 0, 'skipped' => 0];
-        foreach (array_slice($this->rows($body), 0, 20000) as $row) {
-            if (! is_array($row) || ! is_scalar($row['id'] ?? null) || ! is_numeric($row['code'] ?? null) || blank($row['name'] ?? null)) {
-                $counts['skipped']++;
-
-                continue;
+        $keep = array_flip(self::ITEM_FIELDS);
+        $rows = array_map(function ($row) use ($keep) {
+            if (! is_array($row)) {
+                return null; // counted as skipped
             }
-            OnecItem::updateOrCreate(['onec_id' => mb_substr((string) $row['id'], 0, 40)], [
-                'code' => (int) $row['code'], 'name' => $cut($row['name'], 200), 'full_name' => $cut($row['acc_name'] ?? null, 300), 'short_name' => $cut($row['short_name'] ?? null, 200),
-                'mxik' => $cut($row['mxik'] ?? null, 20), 'barcode' => $cut($row['barcode'] ?? null, 64), 'unit' => $cut($row['unit'] ?? null, 40),
-                'category_id' => is_numeric($row['category_id'] ?? null) ? (int) $row['category_id'] : null,
-                'company_onec_id' => $cut($row['company_id'] ?? null, 40), 'description' => $cut($row['description'] ?? null, 500),
-            ]);
-            $counts['saved']++;
+            $row = array_filter(array_intersect_key($row, $keep), 'is_scalar');
+
+            return array_map(fn ($v) => is_string($v) ? mb_substr($v, 0, 600) : $v, $row);
+        }, array_slice($this->rows($body), 0, 20000));
+        Cache::put('onec:items', $rows, now()->addMinutes(self::LIST_MINUTES));
+
+        return count($rows);
+    }
+
+    /**
+     * Saves rows [offset, offset + limit) of the list startImport kept.
+     *
+     * @param  'items'|'companies'  $what
+     * @return array{total: int, done: int, counts: array<string, int>}
+     */
+    public function importPart(string $what, int $offset, int $limit = self::IMPORT_STEP): array
+    {
+        $rows = Cache::get('onec:'.$what);
+        if (! is_array($rows)) {
+            throw new RuntimeException('The list from 1C is no longer kept. Start the load again.');
+        }
+        $offset = max(0, $offset);
+        $limit = max(1, min($limit, 500));
+        $counts = self::IMPORT_COUNTS[$what];
+        foreach (array_slice($rows, $offset, $limit) as $row) {
+            $counts[$what === 'items' ? $this->saveItem($row) : $this->saveCompany($row)]++;
         }
 
-        return $counts;
+        return ['total' => count($rows), 'done' => min(count($rows), $offset + $limit), 'counts' => $counts];
     }
 
     /** @return array<string, mixed>|null */

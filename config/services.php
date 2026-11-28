@@ -38,7 +38,22 @@ return [
         'key' => env('ANTHROPIC_API_KEY'),
     ],
 
-    // Voice messages in the Telegram bot are transcribed by Groq Whisper. Without GROQ_API_KEY the key of
+    // The AI used while no model is switched on in Admin → AI settings: Claude (ANTHROPIC_API_KEY).
+    // AI_DEFAULT_PROVIDER=gemini brings back the old GEMINI_API_KEY fallback (phpunit.xml sets it for the old tests).
+    'ai' => [
+        'default' => env('AI_DEFAULT_PROVIDER', 'anthropic'),
+        'model' => env('AI_DEFAULT_MODEL', 'claude-opus-5-5'),
+    ],
+
+    // Voice messages are transcribed by NeuronAI (https://docs.neuronai.uz/uz/api/, key with the stt:write
+    // permission, 1 credit per second of audio). While NEURONAI_API_KEY is empty the older Groq Whisper is used.
+    'neuronai' => [
+        'key' => env('NEURONAI_API_KEY'),
+        'url' => rtrim((string) env('NEURONAI_BASE_URL', 'https://my.neuronai.uz/api/v1'), '/'),
+        'language' => env('NEURONAI_LANGUAGE', 'auto'), // auto | uz | ru | en | kaa | kk …
+    ],
+
+    // Older transcriber, used only without a NeuronAI key: Groq Whisper. Without GROQ_API_KEY the key of
     // any Groq model in Admin → AI settings is used; with no Groq key voice messages are not transcribed.
     'groq' => [
         'key' => env('GROQ_API_KEY'),

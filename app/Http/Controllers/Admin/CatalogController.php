@@ -7,6 +7,7 @@ use App\Models\CatalogClient;
 use App\Models\CatalogLoad;
 use App\Models\CatalogProduct;
 use App\Models\CatalogSetting;
+use App\Models\OnecItem;
 use App\Services\Catalog\CatalogPuller;
 use App\Services\Seo\SeoFiles;
 use Illuminate\Http\Request;
@@ -19,6 +20,11 @@ class CatalogController extends Controller
         $search = is_string($q = $request->query('q')) ? mb_substr(trim($q), 0, 100) : '';
         $category = is_string($c = $request->query('category')) && isset(CatalogProduct::CATEGORIES[$c]) ? $c : null;
         $hidden = $request->boolean('hidden');
+        // The catalog opens on the items loaded from 1C (the Products list, one list for both); this page is its
+        // "Price list" tab. A bare /admin/catalog goes there once items are loaded — never with a message to show.
+        if ($request->query() === [] && ! $request->session()->hasAny(['success', 'error', 'catalog_token', 'errors']) && OnecItem::exists()) {
+            return redirect()->route('admin.products.index');
+        }
 
         $products = CatalogProduct::query()
             ->when(! $hidden, fn ($q) => $q->available())
@@ -40,8 +46,7 @@ class CatalogController extends Controller
             'hiddenCount' => CatalogProduct::where(fn ($w) => $w->where('in_feed', false)->orWhere('is_active', false))->count(),
             'clientCounts' => CatalogClient::toBase()->selectRaw('price_group, count(*) as n')->groupBy('price_group')->pluck('n', 'price_group'),
             'endpoint' => SeoFiles::publicUrl(route('api.catalog')),
-            'search' => $search, 'category' => $category, 'hidden' => $hidden,
-        ]);
+            'search' => $search, 'category' => $category, 'hidden' => $hidden,        ]);
     }
 
     public function update(Request $request)

@@ -70,6 +70,43 @@ class CompanyController extends Controller
         return back()->with('success', "From 1C: {$n['added']} companies added, {$n['updated']} updated; {$n['private']} private persons (no STIR) saved for matching contacts by phone; {$n['other']} without a usable number not loaded.");
     }
 
+    /**
+     * The progress window of "Load … from 1C" (admin/partials/onec-import): asks 1C for the whole list once and
+     * answers with the row count; importStep then saves it IMPORT_STEP rows at a time.
+     */
+    public function importStart(string $what, CompanyLookup $lookup)
+    {
+        if (blank(config('services.onec.url')) || blank(config('services.onec.'.$what.'_path'))) {
+            return response()->json(['message' => '1C is not set (ONEC_BASE_URL / ONEC_'.strtoupper($what).'_PATH).'], 422);
+        }
+        try {
+            $total = $lookup->startImport($what);
+        } catch (Throwable $e) {
+            report($e);
+
+            // Our own messages ("1C items: HTTP 500") are shown; a database or other error never is.
+            return response()->json(['message' => get_class($e) === \RuntimeException::class ? $e->getMessage() : 'The list from 1C could not be kept. See the log.'], 422);
+        }
+
+        return response()->json(['total' => $total, 'step' => CompanyLookup::IMPORT_STEP]);
+    }
+
+    public function importStep(Request $request, string $what, CompanyLookup $lookup)
+    {
+        // Checked by hand: a validation error on an admin page is a redirect, and the window needs JSON.
+        $offset = filter_var($request->input('offset'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 1000000]]);
+        if ($offset === false) {
+            return response()->json(['message' => 'Wrong row number.'], 422);
+        }
+        try {
+            return response()->json($lookup->importPart($what, $offset));
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => get_class($e) === \RuntimeException::class ? $e->getMessage() : 'Saving failed at row '.$offset.'. See the log.'], 422);
+        }
+    }
+
     /** Companies → "Load items from 1C" (crm/item, on demand). */
     public function importItems(CompanyLookup $lookup)
     {

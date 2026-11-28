@@ -33,6 +33,7 @@ use App\Http\Controllers\Admin\JobApplicationController;
 use App\Http\Controllers\Admin\KnowledgeEntryController;
 use App\Http\Controllers\Admin\McpSettingController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SalesAssistantController;
 use App\Http\Controllers\Admin\SalesKnowledgeController;
 use App\Http\Controllers\Admin\SalesReportController;
@@ -209,6 +210,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('clients/lookup', [CompanyController::class, 'lookup'])->middleware('throttle:30,1')->name('companies.lookup');
         Route::post('clients/import-companies', [CompanyController::class, 'importCompanies'])->middleware('throttle:5,1')->name('companies.import');
         Route::post('clients/import-items', [CompanyController::class, 'importItems'])->middleware('throttle:5,1')->name('companies.import-items');
+        // The same loads for the progress window: start = ask 1C for the list, step = save the next rows.
+        Route::post('clients/import/{what}/start', [CompanyController::class, 'importStart'])->whereIn('what', ['items', 'companies'])->middleware('throttle:onec-import-start')->name('companies.import-start');
+        Route::post('clients/import/{what}/step', [CompanyController::class, 'importStep'])->whereIn('what', ['items', 'companies'])->middleware('throttle:onec-import-step')->name('companies.import-step');
         Route::post('clients/{client}/create-in-1c', [CompanyController::class, 'createInOneC'])->middleware('throttle:10,1')->name('companies.create-in-1c');
         Route::post('clients/{client}/refresh', [CompanyController::class, 'refresh'])->middleware('throttle:30,1')->name('companies.refresh');
         Route::post('clients/{client}/purchases', [CompanyController::class, 'purchases'])->middleware('throttle:10,1')->name('companies.purchases');
@@ -221,6 +225,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('company-items/{item}/move', [CompanyController::class, 'moveItem'])->name('companies.move-item');
         Route::delete('company-items/{item}', [CompanyController::class, 'removeItem'])->name('companies.remove-item');
         Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+        // Products: the items loaded from 1C and what the AI team needs to know about each (typed by staff or drafted by the AI).
+        Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        Route::post('products/ai-fill', [ProductController::class, 'aiFillBatch'])->middleware('throttle:products-ai-batch')->name('products.ai-fill-batch');
+        Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+        Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::post('products/{product}/ai-fill', [ProductController::class, 'aiFill'])->middleware('throttle:products-ai')->name('products.ai-fill');
         Route::resource('clients', ClientController::class);
         Route::resource('client-people', ClientPersonController::class)->except(['index', 'show'])->parameters(['client-people' => 'clientPerson']);
         Route::post('client-people/{clientPerson}/move', [ClientPersonController::class, 'move'])->name('client-people.move');

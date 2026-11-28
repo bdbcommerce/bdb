@@ -76,6 +76,7 @@ class AdminMenuRegroupQaTest extends TestCase
             'telegramGroup' => $id('telegram_chats', ['chat_id' => '-1009001', 'type' => 'supergroup', 'title' => 'Dealers']),
             'order' => $id('orders', ['telegram_user_id' => $tg, 'status' => 'confirmed', 'items' => json_encode([['product' => 'Zebra', 'details' => '1']])]),
             'vacancy' => $vacancy,
+            'product' => $id('onec_items', ['onec_id' => 'qa-1', 'code' => 9001, 'name' => 'Xprinter XP-807']),
             'page' => 'audit',
         ];
     }
@@ -132,7 +133,8 @@ class AdminMenuRegroupQaTest extends TestCase
 
                 continue;
             }
-            $res = $this->actingAs($admin)->get(route($name, $args));
+            // With 1C items loaded a bare /admin/catalog opens their list (Products); the page itself is the price list tab.
+            $res = $this->actingAs($admin)->get(route($name, $args + ($name === 'admin.catalog.index' ? ['list' => 'prices'] : [])));
             $checked++;
             if ($res->status() !== 200) {
                 $problems[] = "$name: HTTP ".$res->status();

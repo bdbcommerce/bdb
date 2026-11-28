@@ -17,6 +17,7 @@
 
 @section('content')
 <div class="w-full space-y-6">
+    @include('admin.partials.catalog-tabs', ['active' => 'prices'])
     @if(session('error'))
         <div role="alert" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
     @endif
@@ -168,6 +169,7 @@
         <div class="flex flex-wrap items-end justify-between gap-3">
             <h2 id="products-h" class="{{ $h2 }}">{{ $hidden ? 'Hidden products' : 'Products' }}</h2>
             <form method="GET" class="flex flex-wrap gap-2">
+                <input type="hidden" name="list" value="prices">
                 @if($hidden)<input type="hidden" name="hidden" value="1">@endif
                 <label for="q" class="sr-only">Search</label>
                 <input id="q" name="q" value="{{ $search }}" placeholder="SKU, brand or model" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
@@ -179,7 +181,7 @@
                     @endforeach
                 </select>
                 <button class="text-sm rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Filter</button>
-                @if($hidden)<a href="{{ route('admin.catalog.index') }}" class="text-sm underline text-slate-600 self-center">Show products for the AI</a>@endif
+                @if($hidden)<a href="{{ route('admin.catalog.index', ['list' => 'prices']) }}" class="text-sm underline text-slate-600 self-center">Show products for the AI</a>@endif
             </form>
         </div>
         <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
